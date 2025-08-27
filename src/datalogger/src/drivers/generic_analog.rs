@@ -123,9 +123,6 @@ impl SensorDriver for GenericAnalog {
         let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
 
         // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
-        for i in 0..8 {
-            rprintln!("saving {:#b}", special_settings_bytes[i]);
-        }
         copy_config_into_partition(0, generic_settings_bytes, storage);
         copy_config_into_partition(1, special_settings_bytes, storage);
         rprintln!("saving {:X?}", storage);
