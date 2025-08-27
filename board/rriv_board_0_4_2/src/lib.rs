@@ -5,6 +5,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use alloc::format;
 use i2c_hung_fix::try_unhang_i2c;
+use one_wire_bus::crc::crc8;
 
 use core::mem;
 use core::{
@@ -197,9 +198,27 @@ impl Board {
 
 
     }
+    
+    fn disable_interrupts(&self){
+        // disable interrupts
+        cortex_m::interrupt::disable();
+    }
+
+
+    fn enable_interrupts(&self){
+        // If the interrupts were active before our `disable` call, then re-enable
+        // them. Otherwise, keep them disabled
+        let primask = cortex_m::register::primask::read();
+        if primask.is_active() {
+            unsafe { cortex_m::interrupt::enable() }
+        }
+    }
+
 }
 
 impl RRIVBoard for Board {
+
+
     fn run_loop_iteration(&mut self) {
         self.watchdog.feed();
 
@@ -609,29 +628,59 @@ impl SensorDriverServices for Board {
   
 
     fn one_wire_reset(&mut self) {
-        let _ = self.one_wire_bus.reset(&mut self.delay);
+        match self.one_wire_bus.reset(&mut self.delay) {
+            Ok(found_device) => { 
+                if !found_device {
+                    rprintln!("no one wire device found");
+                }
+                //rprintln!("found {}", found_device)
+            },
+            Err(err) => rprintln!("one_wire_reset: {:?}", err)
+        }
     }
 
     fn one_wire_skip_address(&mut self) {
-        let _ = self.one_wire_bus.skip_address(&mut self.delay);
+        match self.one_wire_bus.skip_address(&mut self.delay) {
+            Ok(_) => {},
+            Err(err) => rprintln!("one_wire_skip_address: {:?}", err)
+        }
     }
 
     fn one_wire_write_byte(&mut self, byte: u8) {
-        let _ = self.one_wire_bus.write_byte(byte, &mut self.delay);
+        match self.one_wire_bus.write_byte(byte, &mut self.delay) {
+            Ok(_) => {},
+            Err(err) => rprintln!("one_wire_write_byte: {:?}", err)
+        }
     }
 
     fn one_wire_match_address(&mut self, address: u64) {
         let address = Address(address);
-        _ = self.one_wire_bus.match_address(&address, &mut self.delay);
+        match self.one_wire_bus.match_address(&address, &mut self.delay) {
+            Ok(_) => todo!(),
+            Err(err) => rprintln!("one_wire_match_address: {:?}", err)
+        }
     }
 
+    // type OneWireGpio1 = OneWire<Pin<'B', 8, Dynamic>>; // this definitely isn't the right pin...
+
+
     fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
-        let _ = self.one_wire_bus.read_bytes(output, &mut self.delay);
-        // TODO
-        match check_crc8::<one_wire_bus::OneWireError<OneWireGpio1>>(output) {
-            Ok(_) => return,
-            Err(_) => rprintln!("1wire crc error"),
+        match self.one_wire_bus.read_bytes(output, &mut self.delay) {
+            Ok(_) => {
+                rprintln!("one_wire_read_bytes {:?}", output);
+            },
+            Err(err) => {
+                rprintln!("one_wire_read_bytes {:?}", err);
+            }
         }
+        // TODO
+        if crc8(output) != 0 {
+            rprintln!("one wire bad CRC"); // how do we tell the caller??
+        }
+        // match check_crc8::<one_wire_bus::OneWireError<OneWireGpio1>>(output) {
+        //     Ok(_) => return,
+        //     Err(err) => rprintln!("1wire crc error {}", err),
+        // }
     }
 
     fn one_wire_bus_start_search(&mut self) {
@@ -759,9 +808,15 @@ impl SensorDriverServices for Board {
             }
             _ => {}
         }
-        
+    }
   
         
+    fn disable_interrupts(&self) {
+        self.disable_interrupts();
+    }
+
+    fn enable_interrupts(&self) {
+        self.enable_interrupts();
     }
 }
 
@@ -944,6 +999,7 @@ impl BoardBuilder {
 
             let gpio5 = gpiod.pd2;
             let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
+            let _ = gpio5.set_high();
             gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
 
             let gpio5 = OneWirePin { pin: gpio5 };
@@ -959,6 +1015,7 @@ impl BoardBuilder {
 
         if one_wire_option.is_none() {
             rprintln!("bad one wire creation");
+            panic!("bad one wire bus");
         }
         let one_wire = one_wire_option.unwrap();
 

@@ -30,6 +30,7 @@ macro_rules! control_services {
         fn serial_debug(&mut self, string: &str);    
         fn delay_ms(&mut self, ms: u16);
         fn timestamp(&mut self) -> i64;
+
     };
 }
 
@@ -126,6 +127,9 @@ pub trait SensorDriverServices {
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 
     control_services!();
+
+    fn disable_interrupts(&self);
+    fn enable_interrupts(&self);
     
 }
 

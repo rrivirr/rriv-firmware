@@ -47,6 +47,10 @@ impl Resolution {
 }
 
 use rtt_target::rprintln;
+use serde_json::json;
+use util::any_as_u8_slice;
+
+use crate::registry::sensor_name_from_type_id;
 
 use super::types::*;
 
@@ -131,6 +135,20 @@ impl SensorDriver for Ds18b20 {
     }
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+       // just read from a single device
+       while true {
+        board.disable_interrupts();
+        board.one_wire_reset();
+        board.one_wire_skip_address();
+        board.one_wire_write_byte(READ_SCRATCHPAD);
+        let mut scratchpad = [0; 9];
+        board.one_wire_read_bytes(&mut scratchpad);
+        board.enable_interrupts();
+        rprintln!("tried");
+       }
+
+
+
         rprintln!("starting take measurement");
         //board.one_wire_send_command(CONVERT_TEMP, Some(&self.address), delay)?;
         //trigger simultaneous measurement
@@ -145,70 +163,116 @@ impl SensorDriver for Ds18b20 {
         let delay_ms = Resolution::Bits12.max_measurement_time_millis();
         board.delay_ms(delay_ms);
 
-        rprintln!("start bus search take measurement");
 
-        // iterate over all the devices, and report their temperature
-        board.one_wire_bus_start_search();
-        loop {
-            if let Some(device_address) = board.one_wire_bus_search() {
-                // todo: fix this so that you can check family code
-                // if device_address.family_code() != ds18b20::FAMILY_CODE {
-                //     // skip other devices
-                //     continue;
-                // }
-                // You will generally create the sensor once, and save it for later
-                // let sensor = Ds18b20::new(device_address)?;
+        // just read from a single device
+        board.one_wire_reset();
+        board.one_wire_skip_address();
+        board.one_wire_write_byte(READ_SCRATCHPAD);
+        let mut scratchpad = [0; 9];
+        board.one_wire_read_bytes(&mut scratchpad);
 
-                // // contains the read temperature, as well as config info such as the resolution used
-                // let sensor_data = sensor.read_data(one_wire_bus, delay)?;
-                // writeln!(tx, "Device at {:?} is {}°C", device_address, sensor_data.temperature);
+        let resolution = if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
+            resolution
+        } else {
+            //    return Err(OneWireError::CrcMismatch);
+            rprintln!("Problem reading resolution from scratchpad");
+            return;
+        };
+        let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
+        let temperature = match resolution {
+            Resolution::Bits12 => (raw_temp as f32) / 16.0,
+            Resolution::Bits11 => (raw_temp as f32) / 8.0,
+            Resolution::Bits10 => (raw_temp as f32) / 4.0,
+            Resolution::Bits9 => (raw_temp as f32) / 2.0,
+        };
+        rprintln!("Temp C: {}", temperature);
 
-                board.one_wire_reset();
-                board.one_wire_match_address(device_address);
-                board.one_wire_write_byte(READ_SCRATCHPAD);
+        // // iterate over all the devices, and report their temperature
+                // rprintln!("start bus search take measurement");
+        // board.one_wire_bus_start_search();
+        // rprintln!("iterate");
+        // loop {
+        //     if let Some(device_address) = board.one_wire_bus_search() {
+        //         rprintln!("found a device");
+        //         // todo: fix this so that you can check family code
+        //         // if device_address.family_code() != ds18b20::FAMILY_CODE {
+        //         //     // skip other devices
+        //         //     continue;
+        //         // }
+        //         // You will generally create the sensor once, and save it for later
+        //         // let sensor = Ds18b20::new(device_address)?;
 
-                let mut scratchpad = [0; 9];
-                board.one_wire_read_bytes(&mut scratchpad);
+        //         // // contains the read temperature, as well as config info such as the resolution used
+        //         // let sensor_data = sensor.read_data(one_wire_bus, delay)?;
+        //         // writeln!(tx, "Device at {:?} is {}°C", device_address, sensor_data.temperature);
 
-                let resolution =
-                    if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
-                        resolution
-                    } else {
-                        //    return Err(OneWireError::CrcMismatch);
-                        rprintln!("Problem reading resolution from scratchpad");
-                        return;
-                    };
-                let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
-                let temperature = match resolution {
-                    Resolution::Bits12 => (raw_temp as f32) / 16.0,
-                    Resolution::Bits11 => (raw_temp as f32) / 8.0,
-                    Resolution::Bits10 => (raw_temp as f32) / 4.0,
-                    Resolution::Bits9 => (raw_temp as f32) / 2.0,
-                };
-                rprintln!("Temp C: {}", temperature);
-            } else {
-                break;
-            }
-        }
+        //         board.one_wire_reset();
+        //         board.one_wire_match_address(device_address);
+        //         board.one_wire_write_byte(READ_SCRATCHPAD);
+
+        //         let mut scratchpad = [0; 9];
+        //         board.one_wire_read_bytes(&mut scratchpad);
+
+        //         let resolution =
+        //             if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
+        //                 resolution
+        //             } else {
+        //                 //    return Err(OneWireError::CrcMismatch);
+        //                 rprintln!("Problem reading resolution from scratchpad");
+        //                 return;
+        //             };
+        //         let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
+        //         let temperature = match resolution {
+        //             Resolution::Bits12 => (raw_temp as f32) / 16.0,
+        //             Resolution::Bits11 => (raw_temp as f32) / 8.0,
+        //             Resolution::Bits10 => (raw_temp as f32) / 4.0,
+        //             Resolution::Bits9 => (raw_temp as f32) / 2.0,
+        //         };
+        //         rprintln!("Temp C: {}", temperature);
+        //     } else {
+        //         break;
+        //     }
+        // }
     }
-    
+
     fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
+        // TODO: this can become a utility or macro function
+        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
+        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
+
+        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
+        copy_config_into_partition(0, generic_settings_bytes, storage);
+        copy_config_into_partition(1, special_settings_bytes, storage);
+    }
+
+    fn get_configuration_json(&mut self) -> serde_json::Value {
+        let mut sensor_id = self.get_id();
+        let sensor_id = match util::str_from_utf8(&mut sensor_id) {
+            Ok(sensor_id) => sensor_id,
+            Err(_) => "Invalid",
+        };
+
+        let mut sensor_name = sensor_name_from_type_id(self.get_type_id().into());
+        let sensor_name = match util::str_from_utf8(&mut sensor_name) {
+            Ok(sensor_name) => sensor_name,
+            Err(_) => "Invalid",
+        };
+
+        json!({
+           "id" : sensor_id,
+           "type" : sensor_name
+        })
+    }
+
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         // rprintln!("not implemented");
     }
-    
-    fn get_configuration_json(&mut self) -> serde_json::Value {
-        todo!()
-    }
-    
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-            rprintln!("not implemented");
-    }
-    
+
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
         todo!()
     }
-    
+
     fn clear_calibration(&mut self) {
-        rprintln!("not implemented");
+        // rprintln!("not implemented");
     }
 }

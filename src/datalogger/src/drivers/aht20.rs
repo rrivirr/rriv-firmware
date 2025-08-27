@@ -4,6 +4,8 @@ use rtt_target::rprintln;
 use serde_json::json;
 use util::any_as_u8_slice;
 
+use alloc::format;
+
 use crate::sensor_name_from_type_id;
 
 use super::types::*;
@@ -116,6 +118,7 @@ impl SensorDriver for AHT20 {
         match board.ic2_write(AHTX0_I2CADDR_DEFAULT, &[AHTX0_CMD_SOFTRESET]) {
             Ok(_) => {},
             Err(err) => {
+                board.serial_debug(format!("Failed to setup AHTX0 {:?}", err).as_str());
                 rprintln!("Failed to setup AHTX0 {:?}", err);
                 self.enabled = false;
                 return;
@@ -195,7 +198,7 @@ impl SensorDriver for AHT20 {
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
         if !self.enabled{ 
-           return Ok(-1.0f64) 
+           return Ok(-9999.0f64) 
         }
         match index {
             0 => Ok(self.humidity),
