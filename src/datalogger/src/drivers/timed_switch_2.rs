@@ -13,7 +13,7 @@ pub struct TimedSwitch2SpecialConfiguration {
     gpio_pin: u8,
     initial_state: bool, // 'on' 'off'
     // polarity // 'low_is_on', 'high_is_on'
-    _empty: [u8; 22],
+    // _empty: [u8; 22],
 }
 
 impl TimedSwitch2SpecialConfiguration {
@@ -91,7 +91,7 @@ impl TimedSwitch2SpecialConfiguration {
             off_time_s,
             gpio_pin,
             initial_state,
-            _empty: [b'\0'; 22],
+            // _empty: [b'\0'; 22],
         } )
     }
 
