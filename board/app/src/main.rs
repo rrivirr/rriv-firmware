@@ -8,11 +8,11 @@
 use core::prelude::rust_2024::*;
 use cortex_m_rt::entry;
 use rtt_target::{rtt_init_print};
-use stm32f1xx_hal::{flash::FlashExt, pac::{self, TIM3}, time::{MicroSeconds, MilliSeconds}, timer::{DelayMs, DelayUs}};
+use stm32f1xx_hal::{flash::FlashExt, pac::TIM3, timer::DelayMs};
 
 pub mod prelude;
 
-use stm32f1xx_hal::prelude::*;
+use stm32f1xx_hal::{pac, prelude::*};
 
 extern crate rriv_board;
 

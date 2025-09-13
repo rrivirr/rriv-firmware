@@ -6,7 +6,6 @@ pub mod types;
 pub mod mcp9808;
 pub mod generic_analog;
 pub mod ring_temperature;
-pub mod timed_switch;
 pub mod timed_switch_2;
 pub mod ds18b20;
 pub mod k30_co2;

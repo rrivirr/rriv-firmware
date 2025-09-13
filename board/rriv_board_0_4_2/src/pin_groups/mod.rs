@@ -67,26 +67,6 @@ pub fn build(
 
     let power = PowerPins::build(pins.enable_3v, pins.enable_5v, cr);
 
-    // power.enable_3v.set_high();
-    // delay.delay_ms(2000_u32);
-    // power.enable_3v.set_low();
-    // delay.delay_ms(2000_u32);
-    // power.enable_3v.set_high();
-    // delay.delay_ms(2000_u32);
-
-
-    // power.enable_5v.set_high();
-    // delay.delay_ms(250_u32);
-
-
-    // external_adc.enable.set_low(); // The exADC must be restarted properly again in order for it be detected
-    // delay.delay_ms(1_u32);
-    // external_adc.reset.set_low();
-    // delay.delay_ms(1_u32);
-    // external_adc.reset.set_high();
-    // delay.delay_ms(100_u32);
-
-
     let i2c1 = I2c1Pins::build(pins.i2c1_scl, pins.i2c1_sda, cr);
 
     let i2c2 = I2c2Pins::build(pins.i2c2_scl, pins.i2c2_sda, cr);

@@ -359,7 +359,7 @@ pub struct SensorCalibrateSubcommand<'a> {
 // TODO: these impls should be derived or ??
 
 impl SensorCalibrateFitPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -378,7 +378,7 @@ impl SensorCalibrateFitPayload {
 }
 
 impl SensorCalibrateClearPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -397,7 +397,7 @@ impl SensorCalibrateClearPayload {
 }
 
 impl SensorCalibrateListPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -424,7 +424,7 @@ pub struct SensorCalibrateRemove<'a> {
 }
 
 impl SensorCalibrateRemovePayload {
-    pub fn convert(&self) -> Result<SensorCalibrateRemove, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateRemove<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {

@@ -118,19 +118,6 @@ impl DataloggerSettings {
         settings
     }
 
-    pub fn get_site_name(&mut self) -> &str {
-        util::str_from_utf8(&mut self.site_name).unwrap()
-    }
-
-    pub fn get_logger_name(&mut self) -> &str {
-        util::str_from_utf8(&mut self.logger_name).unwrap()
-    }
-
-    pub fn get_deployment_identifier(&mut self) -> &str {
-        util::str_from_utf8(&mut self.deployment_identifier).unwrap()
-    }
-
-
     pub fn with_values(self, values: DataloggerSettingsValues ) -> DataloggerSettings{
         let mut settings = DataloggerSettings::new();
         settings.deployment_identifier = values.deployment_identifier.unwrap_or(self.deployment_identifier);

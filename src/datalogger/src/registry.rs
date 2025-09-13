@@ -1,8 +1,5 @@
 use alloc::boxed::Box;
-use rtt_target::rprintln;
-
 use crate::drivers::{ types::{SensorDriver, SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE}};
-use util::{any_as_u8_slice};
 
 
 const SENSOR_NAMES: [&str; 9] = [

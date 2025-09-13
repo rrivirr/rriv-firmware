@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), no_std)]
-
 use control_interface::command_recognizer::{CommandData, CommandRecognizer};
 use control_interface::command_registry::CommandType;
 use rriv_board::{RRIVBoard, RXProcessor};
@@ -47,17 +45,6 @@ pub fn setup(board: &mut impl RRIVBoard) {
     board.set_rx_processor(Box::new(char_processor));
 }
 
-/// register a command with two &strs, object and action, and a C function pointer that matches registry.register_command's second argument
-/// this calls registry.get_command_from_parts to get a Command object, then calls registry.register_command
-// pub fn register_command(
-//     &mut self,
-//     object: &str,
-//     action: &str,
-//     ffi_cb: extern "C" fn(*const c_char),
-// ) {
-//     let command = self.registry.get_command_from_parts(object, action);
-//     self.registry.register_command(command, ffi_cb);
-// }
 
 fn pending_message_count(board: &impl RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {

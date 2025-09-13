@@ -111,7 +111,8 @@ pub trait SensorDriverServices {
 
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool);
-    fn read_gpio_pin(&mut self, pin: u8) -> bool;
+    fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()>;
+
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
 
     // fn borrow_one_wire_bus(&mut self) -> &mut dyn OneWireBusInterface;

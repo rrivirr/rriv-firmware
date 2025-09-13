@@ -1,8 +1,8 @@
 pub const CONVERT_TEMP: u8 = 0x44;
-pub const WRITE_SCRATCHPAD: u8 = 0x4E;
+pub const _WRITE_SCRATCHPAD: u8 = 0x4E;
 pub const READ_SCRATCHPAD: u8 = 0xBE;
-pub const COPY_SCRATCHPAD: u8 = 0x48;
-pub const RECALL_EEPROM: u8 = 0xB8;
+pub const _COPY_SCRATCHPAD: u8 = 0x48;
+pub const _RECALL_EEPROM: u8 = 0xB8;
 
 //use embedded_hal::blocking::delay::DelayMs;
 
@@ -41,6 +41,7 @@ impl Resolution {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn to_config_register(&self) -> u8 {
         *self as u8
     }
@@ -62,14 +63,14 @@ pub struct Ds18b20SpecialConfiguration {
 }
 
 impl Ds18b20SpecialConfiguration {
-    pub fn parse_from_values(value: serde_json::Value) -> Result<Ds18b20SpecialConfiguration, &'static str> {
+    pub fn parse_from_values(_value: serde_json::Value) -> Result<Ds18b20SpecialConfiguration, &'static str> {
         Ok ( Self {
             _empty: [b'\0'; EMPTY_SIZE],
         })
     }
 
     pub fn new_from_bytes(
-        bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
+        _bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
     ) -> Ds18b20SpecialConfiguration {
         Self {
             _empty: [b'\0'; EMPTY_SIZE],
@@ -79,6 +80,7 @@ impl Ds18b20SpecialConfiguration {
 
 pub struct Ds18b20 {
     general_config: SensorDriverGeneralConfiguration,
+    #[allow(unused)]
     special_config: Ds18b20SpecialConfiguration,
     measured_parameter_values: [f64; NUMBER_OF_MEASURED_PARAMETERS],
 }
@@ -97,8 +99,10 @@ impl Ds18b20 {
 }
 
 impl SensorDriver for Ds18b20 {
+    
+    #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        // todo!()
+        
     }
 
     getters!();
@@ -192,23 +196,9 @@ impl SensorDriver for Ds18b20 {
         }
     }
     
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // rprintln!("not implemented");
-    }
-    
+
     fn get_configuration_json(&mut self) -> serde_json::Value {
         todo!()
     }
     
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-            rprintln!("not implemented");
-    }
-    
-    fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
-        todo!()
-    }
-    
-    fn clear_calibration(&mut self) {
-        rprintln!("not implemented");
-    }
 }

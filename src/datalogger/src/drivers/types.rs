@@ -2,6 +2,7 @@ use alloc::boxed::Box;
 
 use super::resources::gpio::*;
 
+
 pub const SENSOR_SETTINGS_PARTITION_SIZE: usize = 32; // partitioning is part of the driver implemention, and not meaningful at the EEPROM level
 pub type SensorGeneralSettingsSlice = [u8; SENSOR_SETTINGS_PARTITION_SIZE];
 pub type SensorSpecialSettingsSlice = [u8; SENSOR_SETTINGS_PARTITION_SIZE];
@@ -25,7 +26,7 @@ impl SensorDriverGeneralConfiguration {
     }
 
     pub fn new_from_bytes(
-        bytes: &[u8; SENSOR_SETTINGS_PARTITION_SIZE],
+        bytes: &SensorGeneralSettingsSlice,
     ) -> SensorDriverGeneralConfiguration {
         let settings = bytes.as_ptr().cast::<SensorDriverGeneralConfiguration>();
         unsafe { *settings }
@@ -70,10 +71,17 @@ pub trait SensorDriver {
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16];
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
+    
+    #[allow(unused)]
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {}
 
-    fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()>;
-    fn clear_calibration(&mut self);
+    // for fitting calibrations, for drivers that implement a calibration
+    #[allow(unused)]
+    fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> { 
+        // error if fn called without a calibration routine implemented
+        Err(()) 
+    }
+    fn clear_calibration(&mut self) {}
     // fn get_required_calibration_point_count(&self) -> usize;  // TODO
 
     fn get_requested_gpios(&self) -> GpioRequest {
@@ -82,11 +90,8 @@ pub trait SensorDriver {
 }
 
 
-pub trait TelemeterDriver {
-    fn setup(&mut self);
-}
-
 macro_rules! getters {
+
     () => {
         fn get_id(&self) -> [u8; 6] {
             self.general_config.id.clone()
@@ -94,6 +99,14 @@ macro_rules! getters {
 
         fn get_type_id(&self) -> u16 {
             self.general_config.sensor_type_id.clone()
+        }
+
+        fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
+            let generic_settings_bytes: &[u8] = unsafe { util::any_as_u8_slice(&self.general_config) };
+            let special_settings_bytes: &[u8] = unsafe { util::any_as_u8_slice(&self.special_config) };
+
+            copy_config_into_partition(0, generic_settings_bytes, storage);
+            copy_config_into_partition(1, special_settings_bytes, storage);
         }
     };
 }

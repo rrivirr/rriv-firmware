@@ -4,7 +4,7 @@ use embedded_hal::prelude::{
     _embedded_hal_blocking_i2c_WriteRead,
 };
 use crate::Board;
-use rriv_board::RRIVBoard;
+use rriv_board::{RRIVBoard};
 use rtt_target::rprintln;
 
 // implementation specific consts
@@ -96,6 +96,7 @@ pub fn read_datalogger_settings_from_eeprom(board: &mut Board, buffer: &mut [u8]
 
 struct MemoryPosition {
     pub block: u8,
+    #[allow(unused)]
     pub offset: u8,
     pub address: u8
 }

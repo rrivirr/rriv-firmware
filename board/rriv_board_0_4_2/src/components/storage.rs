@@ -63,10 +63,10 @@ static mut EPOCH_TIMESTAMP: i64 = 0;
 impl TimeSource for RrivTimeSource {
     fn get_timestamp(&self) -> embedded_sdmmc::Timestamp {
 
-      let mut naive = NaiveDateTime::default();
+      let naive: NaiveDateTime = 
       unsafe {
-        naive = NaiveDateTime::from_timestamp(EPOCH_TIMESTAMP, 0);		
-      }
+         NaiveDateTime::from_timestamp(EPOCH_TIMESTAMP, 0)	
+      };
       let time = naive.time();
       let timestamp = embedded_sdmmc::Timestamp::from_calendar(
         naive.year().try_into().unwrap(), 
@@ -85,9 +85,9 @@ impl TimeSource for RrivTimeSource {
 }
 
 
-pub trait OutputDevice {
-  fn write(data: &[u8]);
-}
+// pub trait OutputDevice {
+//   fn write(data: &[u8]);
+// }
 
 const CACHE_SIZE: usize = 100;
 
@@ -235,7 +235,7 @@ impl Storage {
     }
  
     let mut write_start = 0;
-    if let Some(file) = self.file {
+    if let Some(_file) = self.file {
 
       if self.next_position + data.len() > CACHE_SIZE {
         // flush cache

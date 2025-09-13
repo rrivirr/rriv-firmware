@@ -1,10 +1,10 @@
 use alloc::boxed::Box;
 use alloc::format;
-use rriv_board::{gpio::GpioMode, RRIVBoard};
+use rriv_board::RRIVBoard;
 use rtt_target::rprintln;
 use serde_json::{json, Value};
 
-use crate::{alloc::string::ToString, drivers::{resources::gpio::GpioRequest, types::CalibrationPair}};
+use crate::{alloc::string::ToString, drivers::types::CalibrationPair};
 
 pub fn send_command_response_message(board: &mut impl RRIVBoard, message: &str) {
     rprintln!("{}", message);

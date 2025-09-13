@@ -2,14 +2,12 @@ use alloc::format;
 use rriv_board::{RRIVBoard, EEPROM_TOTAL_SENSOR_SLOTS};
 use rtt_target::rprintln;
 use serde_json::{json, Value};
-use util::any_as_u8_slice;
 extern crate alloc;
 use crate::alloc::string::ToString;
-use crate::datalogger::bytes;
 use crate::datalogger::payloads::{
-    SensorCalibratePointPayload, SensorRemovePayload, SensorSetPayload, SensorSetPayloadValues,
+    SensorCalibratePointPayload, SensorSetPayloadValues,
 };
-use crate::drivers::types::{SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE};
+use crate::drivers::types::{SensorDriverGeneralConfiguration};
 use alloc::boxed::Box;
 
 use crate::protocol::responses;
@@ -259,7 +257,7 @@ pub fn make_unique_sensor_id(
         let sensor_id_scan = sensor_id.clone();
         while i < driver_ids.len() && changed == false {
             let mut same = true;
-            for (j, (u1, u2)) in driver_ids[i].iter().zip(sensor_id_scan.iter()).enumerate() {
+            for (_j, (u1, u2)) in driver_ids[i].iter().zip(sensor_id_scan.iter()).enumerate() {
                 // if hey are equal..
                 if u1 != u2 {
                     same = false;

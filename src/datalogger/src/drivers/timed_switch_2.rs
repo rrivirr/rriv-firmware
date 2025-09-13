@@ -1,10 +1,8 @@
-use core::time;
-
 use rriv_board::gpio::GpioMode;
 use rtt_target::rprintln;
 use serde_json::json;
 
-use crate::{any_as_u8_slice, sensor_name_from_type_id};
+use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
@@ -58,12 +56,11 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
-        let mut gpio_pin : Option<u8> = None;
-        match &value["gpio_pin"] {
+        let gpio_pin = match &value["gpio_pin"] {
             serde_json::Value::Number(number) => {
                 if let Some(number) = number.as_u64() {
                     if number >= 1 && number <= 8 { //TODO: this is annoying to have to code into each driver
-                        gpio_pin = Some(number as u8);
+                        Some(number as u8)
                     } else {
                         return Err("invalid pin");
                     }           
@@ -74,20 +71,16 @@ impl TimedSwitch2SpecialConfiguration {
             _ => {
                 return Err("gpio pin is required")
             }
-        }
+        };
 
-        let mut initial_state  = false;
-        match &value["initial_state"] {
+        let initial_state = match &value["initial_state"] {
             serde_json::Value::Bool(value) => {
-                initial_state = *value;
+                *value
             }
             _ => {
                 return Err("initial state is requiresd")
             }
-        }
-
-
-
+        };
       
         let gpio_pin = gpio_pin.unwrap_or_default();
         Ok ( Self {
@@ -155,18 +148,21 @@ impl SensorDriver for TimedSwitch2 {
         return 1;
     }
 
+    #[allow(unused)]
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
         Ok(self.state as f64)
     }
 
+    #[allow(unused)]
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8;16] {
         let mut rval = [0u8;16];
-        rval[0..7].clone_from_slice("heater\0".as_bytes());
+        rval[0..7].clone_from_slice("switch\0".as_bytes());
         return rval;
     }
 
+    #[allow(unused)]
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        //
+        // switch does not take measurement
     }
 
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
@@ -201,15 +197,6 @@ impl SensorDriver for TimedSwitch2 {
 
     }
     
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-    }
-    
     fn get_configuration_json(&mut self) -> serde_json::Value {
         
         let mut sensor_id = self.get_id();
@@ -235,11 +222,5 @@ impl SensorDriver for TimedSwitch2 {
         })
     }
     
-    fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
-        todo!()
-    }
-    
-    fn clear_calibration(&mut self) {
-        todo!()
-    }
+   
 }

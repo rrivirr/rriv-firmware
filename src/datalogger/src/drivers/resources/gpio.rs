@@ -67,6 +67,7 @@ impl GpioRequest {
         }
     }
 
+    #[allow(unused)]
     pub fn differs(&mut self, request: GpioRequest) -> bool {
         if self.gpio1 != request.gpio1 { return true }
         if self.gpio2 != request.gpio2 { return true }
@@ -160,6 +161,7 @@ impl GpioRequest {
         return self.usart
     }
 
+    #[allow(unused)]
     pub fn usart_count(&self) -> u8 {
         return self.usart_count
     }

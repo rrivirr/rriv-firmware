@@ -1,6 +1,5 @@
 use core::fmt::Write;
 
-use rriv_board::gpio::GpioMode;
 use rriv_board::RRIVBoard;
 use rtt_target::rprintln;
 use serde_json::json;
@@ -209,7 +208,10 @@ impl RakWireless3172 {
 
         let mut s = String::with_capacity(payload.len() * 2);
         for byte in payload {
-            write!(&mut s, "{:02X}", byte);
+            match write!(&mut s, "{:02X}", byte) {
+                Ok(_) => {},
+                Err(err) => rprintln!("{}", err),
+            }
         }
 
         let command = format!("AT+SEND={}:{}\r\n", payload.len(), s.as_str());

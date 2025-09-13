@@ -5,7 +5,6 @@ use crate::sensor_name_from_type_id;
 use super::types::*;
 use rtt_target::{rprintln};
 use serde_json::json;
-use util::any_as_u8_slice;
 
 pub struct K30CO2 {
     general_config: SensorDriverGeneralConfiguration,
@@ -37,6 +36,7 @@ impl SensorDriver for K30CO2 {
         })
     }
 
+    #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         self.m = self.special_config.m as f64;
         self.b = self.special_config.b as f64;
@@ -131,13 +131,8 @@ impl SensorDriver for K30CO2 {
                 self.measured_parameter_values[0] = -1 as f64
             },
         }
-
-       
     }
 
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        // no actuators
-    }
 
     fn clear_calibration(&mut self) {
         self.m = 0_f64;
@@ -173,19 +168,6 @@ impl SensorDriver for K30CO2 {
         Ok(())
     }
 
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // TODO: this can become a utility or macro function
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
-        for i in 0..8 {
-            rprintln!("saving {:#b}", special_settings_bytes[i]);
-        }
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-        rprintln!("saving {:X?}", storage);
-    }
 }
 
 impl K30CO2 {
@@ -207,15 +189,14 @@ impl K30CO2 {
 pub struct K30CO2SpecialConfiguration {
     m: f32,                                // 4
     b: f32,                                // 4
-    empty: [u8; 24],                       // 24
 }
 
 impl K30CO2SpecialConfiguration {
+    #[allow(unused)]
     pub fn parse_from_values(value: serde_json::Value) -> Result<K30CO2SpecialConfiguration, &'static str> {
         Ok( Self {
             m: 0_f32,
             b: 0_f32,
-            empty: [b'\0'; 24]
         } )
     }
 

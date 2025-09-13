@@ -1,8 +1,6 @@
 extern crate alloc;
-use alloc::format;
 use core::ffi::c_char;
 use hashbrown::HashMap;
-use alloc::boxed::Box;
 
 
 /// NOTE: Since this has a C compatible representation, it could be used in the FFI
@@ -132,12 +130,7 @@ impl CommandRegistry {
     pub fn get_action_fn(&self, command: &CommandType) -> Option<extern "C" fn(*const c_char)> {
         self.command_map.get(command).copied()
     }
-    pub fn get_command_from_parts(&self, object: &str, action: &str, subcommand: Option<Box<str>> ) -> CommandType {
-        let _ = subcommand;
-        todo!();
-        let command_str = format!("{}_{}", object, action);
-        CommandType::from_str(&command_str)
-    }
+   
 }
 
 #[cfg(test)]

@@ -479,6 +479,18 @@ macro_rules! write_gpio {
     }
 }
 
+macro_rules! read_pin {
+    ($pin: ident) => {
+        match $pin.is_high() {
+            Ok(is_high) => Ok(is_high),
+            Err(err) => {
+                rprintln!("{:?}", err);
+                Err(())
+            }
+        }
+    }
+}
+
 macro_rules! set_pin_mode {
     ($pin: ident, $cr: ident, $mode: ident) => {
         match $mode {
@@ -700,16 +712,42 @@ impl SensorDriverServices for Board {
         };
     }
     
-    fn read_gpio_pin(&mut self, pin: u8) -> bool {
+    fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             1 => {
-                match self.gpio.gpio1.is_high() {
-                    Ok(is_high) => todo!(),
-                    Err(err) => todo!(),
-                }
-            }
+                let pin =  &mut self.gpio.gpio1;
+                return read_pin!(pin);
+            },
+            2 => {
+                let pin =  &mut self.gpio.gpio2;
+                return read_pin!(pin);
+            },
+            3 => {
+                let pin =  &mut self.gpio.gpio3;
+                return read_pin!(pin);
+            },
+            4 => {
+                let pin =  &mut self.gpio.gpio4;
+                return read_pin!(pin);
+            },
+            5 => {
+                let pin =  &mut self.gpio.gpio5;
+                return read_pin!(pin);
+            },
+            6 => {
+                let pin =  &mut self.gpio.gpio6;
+                return read_pin!(pin);
+            },
+            7 => {
+                let pin =  &mut self.gpio.gpio7;
+                return read_pin!(pin);
+            },
+            8 => {
+                let pin =  &mut self.gpio.gpio8;
+                return read_pin!(pin);
+            },
             _ => {
-                todo!()
+                return Err(());
             }
         }
     }
@@ -719,7 +757,7 @@ impl SensorDriverServices for Board {
         match pin {
             1 => {
                 let cr = &mut self.gpio_cr.gpiob_crh;
-                let pin = &mut self.gpio.gpio1;
+                let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
                 set_pin_mode!(pin, cr, mode);
             }
             2 => {
@@ -932,13 +970,12 @@ impl BoardBuilder {
     }
 
     pub fn build(self) -> Board {
-        let mut one_wire_option = None;
         let mut gpio_cr = self.gpio_cr.unwrap();
         // steal the gpio5 pin to build a one wire
         // this is probably how we want to build a one wire in general
         // we don't need to worry about the unsafeness, just get the pin we want
         // the board logic can ensure the safeness, or it can be the operators responsibility
-        unsafe {
+        let one_wire_option = unsafe {
             let device_peripherals = pac::Peripherals::steal();
             let gpiod = device_peripherals.GPIOD.split();
 
@@ -948,14 +985,14 @@ impl BoardBuilder {
 
             let gpio5 = OneWirePin { pin: gpio5 };
 
-            one_wire_option = match OneWire::new(gpio5) {
+            match OneWire::new(gpio5) {
                 Ok(one_wire) => Some(one_wire),
                 Err(e) => {
                     rprintln!("{:?} bad one wire bus", e);
                     panic!("bad one wire bus");
                 }
-            };
-        }
+            }
+        };
 
         if one_wire_option.is_none() {
             rprintln!("bad one wire creation");
@@ -1021,7 +1058,6 @@ impl BoardBuilder {
 
     fn setup_serial(
         pins: pin_groups::SerialPins,
-        cr: &mut GpioCr,
         mapr: &mut MAPR,
         usart: USART2,
         clocks: &Clocks,
@@ -1098,7 +1134,6 @@ impl BoardBuilder {
 
     pub fn setup_i2c1(
         pins: pin_groups::I2c1Pins,
-        cr: &mut GpioCr,
         i2c1: I2C1,
         mapr: &mut MAPR,
         clocks: &Clocks,
@@ -1205,7 +1240,6 @@ impl BoardBuilder {
 
         BoardBuilder::setup_serial(
             serial_pins,
-            &mut gpio_cr,
             &mut afio.mapr,
             device_peripherals.USART2,
             &clocks,
@@ -1271,7 +1305,7 @@ impl BoardBuilder {
             30,
         ) {
             Ok(_) => {}
-            Err(e) => {
+            Err(_e) => {
                 rprintln!("Couln't reset i2c1");
                 usb_serial_send("{\"status\":\"i2c1 failed, restarting\"}", &mut delay);
                 loop {}
@@ -1284,7 +1318,6 @@ impl BoardBuilder {
         core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
-            &mut gpio_cr,
             device_peripherals.I2C1,
             &mut afio.mapr,
             &clocks,
@@ -1463,7 +1496,6 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
 }
 
 pub fn write_panic_to_storage(message: &str) {
-    let core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
 
     let device_peripherals = unsafe { pac::Peripherals::steal() };
     let rcc = device_peripherals.RCC.constrain();
