@@ -1322,6 +1322,7 @@ impl BoardBuilder {
                 loop {} // wait for IDWD to reset.   actually we can just hardware reset here?
             }
         }
+        panic!("i2c hung");
 
         let i2c2_pins = I2c2Pins::rebuild(scl2, sda2, &mut gpio_cr);
 
