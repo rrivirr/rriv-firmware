@@ -24,3 +24,6 @@ pub use eeprom::*;
 
 pub mod uid;
 pub use uid::*;
+
+pub mod watchdog_timer;
+pub use watchdog_timer::*;

@@ -11,7 +11,7 @@
             "chip": "STM32F103RE",
             "wireProtocol": "Swd",
             "runtimeExecutable":"probe-rs",
-            //           "probe": "1366:0101:000801023227", // Modify to match yours if needed, or keep commented
+                    //   "probe": "1366:0101:000801023227", // Modify to match yours if needed, or keep commented
             "flashingConfig": {
                 "flashingEnabled": true,
                 "haltAfterReset": false,

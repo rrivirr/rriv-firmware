@@ -37,7 +37,7 @@ fn main() -> ! {
     board.start(); // not needed, for debug only
     let mut datalogger = DataLogger::new();
     datalogger.setup(&mut board);
-    board.watchdog.feed(); // make sure we leave enough time for the panic handler
+    board.feed_watchdog();
     loop {
         board.run_loop_iteration();
         datalogger.run_loop_iteration(&mut board);
@@ -49,7 +49,7 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    rprintln!("Panicked!");
+    rprintln!("Paniced!");
     if let Some(location) = _info.location() {
         rprintln!("at {}", location);
     }
@@ -78,7 +78,9 @@ fn panic(_info: &PanicInfo) -> ! {
     rprintln!("send json panic");
 
     // we use format! here because we didn't find another good way yet.
-    rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
+    rriv_board_0_4_2::write_panic_to_storage(format!("Panic: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
 
-    loop {}
+    // loop {} // we looped here to wait for indep watchdog, but with watchdog timer we restart manually
+    cortex_m::peripheral::SCB::sys_reset(); // TODO: call board.reset()
+
 }

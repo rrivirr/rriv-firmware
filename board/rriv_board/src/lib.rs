@@ -78,6 +78,8 @@ pub trait RRIVBoard: Send {
     fn get_uid(&mut self) -> [u8; 12];
     fn set_serial_number(&mut self, serial_number: [u8;5]) -> bool;
     fn get_serial_number(&mut self) -> [u8;5];
+
+    fn feed_watchdog(&mut self);
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format
 

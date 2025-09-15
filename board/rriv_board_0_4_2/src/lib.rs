@@ -3,8 +3,11 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use alloc::sync::Arc;
+
 use alloc::format;
 use i2c_hung_fix::try_unhang_i2c;
+use stm32f1xx_hal::time::MilliSeconds;
 
 use core::mem;
 use core::{
@@ -25,14 +28,13 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::{Alternate, Pin};
-use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
     afio::MAPR,
     gpio::{Dynamic, PinModeError},
     pac::TIM3,
-    time::MilliSeconds,
     timer::CounterMs,
     watchdog::IndependentWatchdog,
 };
@@ -113,8 +115,9 @@ pub struct Board {
     pub file_epoch: i64,
     pub one_wire_bus: OneWire<OneWirePin>,
     one_wire_search_state: Option<SearchState>,
-    pub watchdog: IndependentWatchdog,
+    pub independent_watchdog: IndependentWatchdog,
     pub counter: CounterMs<TIM4>,
+    pub watchdog_timer: WatchdogTimer,
 }
 
 impl Board {
@@ -146,6 +149,7 @@ impl Board {
         NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
         NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
         NVIC::mask(pac::Interrupt::USART2);
+        NVIC::mask(pac::interrupt::TIM5);
 
         unsafe { NVIC::unmask(pac::Interrupt::RTCALARM) };
         cortex_m::asm::dsb();
@@ -164,6 +168,7 @@ impl Board {
         unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
         unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
         unsafe { NVIC::unmask(pac::Interrupt::USART2) };
+        unsafe { NVIC::unmask(pac::Interrupt::TIM5) };
 
         rprintln!("woke from sleep");
 
@@ -201,7 +206,7 @@ impl Board {
 
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
-        self.watchdog.feed();
+        self.feed_watchdog();
 
         self.file_epoch = self.epoch_timestamp();
         // TODO: implement a peek rprint here with a peeked bool
@@ -391,8 +396,8 @@ impl RRIVBoard for Board {
 
     fn sleep(&mut self) {
         // need to extend IndependentWatchdog to sleep the watch dog
-        // self.watchdog.acc
-        self.watchdog.feed();
+        // self.independent_watchdog.acc
+        self.independent_watchdog.feed();
     }
 
     fn set_debug(&mut self, debug: bool) {
@@ -439,6 +444,11 @@ impl RRIVBoard for Board {
 
     fn get_serial_number(&mut self) -> [u8;rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
+    }
+    
+    fn feed_watchdog(&mut self) {
+        self.independent_watchdog.feed();
+        self.watchdog_timer.feed();
     }
 }
 
@@ -810,6 +820,17 @@ fn USB_LP_CAN_RX0() {
     });
 }
 
+#[interrupt]
+fn TIM5() {
+    // add any status indicators to the panic
+    NVIC::unpend(pac::Interrupt::TIM5);
+    // panic!("Watchdog timer tiggered");
+    // TODO: we don't necessarily want to panic, at least in the case of i2c reset we are cycling on purpose to clear the bus
+    // TODO: implement a safe way to pass context to this interrupt for logging or panic
+    rprintln!("sys reset due to watchdog_timer");
+    cortex_m::peripheral::SCB::sys_reset();
+}
+
 fn usb_interrupt(cs: &CriticalSection) {
     let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
     let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
@@ -905,8 +926,9 @@ pub struct BoardBuilder {
     pub i2c2: Option<BoardI2c2>,
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
-    pub watchdog: Option<IndependentWatchdog>,
+    pub independent_watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterMs<TIM4>>,
+    pub watchdog_timer: Option<WatchdogTimer>
 }
 
 impl BoardBuilder {
@@ -926,8 +948,9 @@ impl BoardBuilder {
             oscillator_control: None,
             internal_rtc: None,
             storage: None,
-            watchdog: None,
+            independent_watchdog: None,
             counter: None,
+            watchdog_timer: None
         }
     }
 
@@ -991,8 +1014,9 @@ impl BoardBuilder {
             file_epoch: 0,
             one_wire_bus: one_wire,
             one_wire_search_state: None,
-            watchdog: self.watchdog.unwrap(),
+            independent_watchdog: self.independent_watchdog.unwrap(),
             counter: self.counter.unwrap(),
+            watchdog_timer: self.watchdog_timer.unwrap()
         }
     }
 
@@ -1210,11 +1234,17 @@ impl BoardBuilder {
             &clocks,
         );
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        let mut independent_watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        independent_watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        rprintln!("indepednent watchdog NOT STARTED, because we need to be able to stop it during stop mode");
+        // independent_watchdog.start(MilliSeconds::secs(10)); // Don't start it, until we can stop it during stop mode with a mosfet
+        independent_watchdog.feed();
 
-        watchdog.start(MilliSeconds::secs(6));
-        watchdog.feed();
+        let mut watchdog_timer = WatchdogTimer::new(device_peripherals.TIM5, &clocks);
+        watchdog_timer.start();
+        unsafe { NVIC::unmask(pac::interrupt::TIM5) };
+        watchdog_timer.feed();
+
 
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
@@ -1343,7 +1373,8 @@ impl BoardBuilder {
         }
         rprintln!("scan is done");
 
-        watchdog.feed();
+        independent_watchdog.feed();
+        watchdog_timer.feed();
 
         rprintln!("i2c2 scanning...");
         rprintln!();
@@ -1358,7 +1389,8 @@ impl BoardBuilder {
         }
         rprintln!("scan is done");
 
-        watchdog.feed();
+        independent_watchdog.feed();
+        watchdog_timer.feed();
 
         // configure external ADC
         self.external_adc.as_mut().unwrap().configure(&mut i2c1);
@@ -1408,9 +1440,12 @@ impl BoardBuilder {
         }
         self.counter = Some(counter);
 
-        watchdog.feed();
+        independent_watchdog.feed();
+        watchdog_timer.feed();
 
-        self.watchdog = Some(watchdog);
+        self.independent_watchdog = Some(independent_watchdog);
+        self.watchdog_timer = Some(watchdog_timer);
+
 
         rprintln!("done with setup");
     }
@@ -1422,6 +1457,14 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 
 pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
     cortex_m::interrupt::free(|_cs| {
+        unsafe {
+            if USB_SERIAL.is_none() {
+                // generally we only get here from a panic before usb serial is set up
+                rprintln!("usb not set up");
+                return;
+            }
+        }
+
         // USB
         let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
         let bytes = string.as_bytes();
