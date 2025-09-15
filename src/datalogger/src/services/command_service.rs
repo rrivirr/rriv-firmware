@@ -20,9 +20,25 @@ use crate::datalogger::payloads::*;
 
 static mut COMMAND_DATA: CommandData = CommandData::default();
 
-// pub struct CommandService {
-//     // registry: CommandRegistry,
-// }
+/// I believe the lifetimes here are generic over the lifetime of the CommandData
+pub struct CharacterProcessor {}
+
+impl<'a> CharacterProcessor {
+    pub fn new() -> CharacterProcessor {
+        CharacterProcessor {}
+    }
+}
+
+impl<'a, 'b> RXProcessor for CharacterProcessor {
+    fn process_character(&self, character: u8) {
+        unsafe {
+            let command_data = COMMAND_DATA.borrow_mut();
+            CommandRecognizer::process_character(command_data, character);
+        }
+    }
+}
+
+
 
 #[derive(Serialize, Deserialize)]
 struct CLICommand<'a> {
@@ -30,14 +46,6 @@ struct CLICommand<'a> {
     action: &'a str,
     subcommand: Option<Box<str>>
 }
-
-// impl CommandService {
-// pub fn new() -> Self {
-//     // set the static, shareable command data
-//     // CommandService {
-//     //     registry: CommandRegistry::new(),
-//     // }
-// }
 
 /// set the global rx processor
 pub fn setup(board: &mut impl RRIVBoard) {
@@ -47,20 +55,9 @@ pub fn setup(board: &mut impl RRIVBoard) {
     board.set_rx_processor(Box::new(char_processor));
 }
 
-/// register a command with two &strs, object and action, and a C function pointer that matches registry.register_command's second argument
-/// this calls registry.get_command_from_parts to get a Command object, then calls registry.register_command
-// pub fn register_command(
-//     &mut self,
-//     object: &str,
-//     action: &str,
-//     ffi_cb: extern "C" fn(*const c_char),
-// ) {
-//     let command = self.registry.get_command_from_parts(object, action);
-//     self.registry.register_command(command, ffi_cb);
-// }
-
 fn pending_message_count(board: &impl RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
+        #[allow(static_mut_refs)]
         let command_data = COMMAND_DATA.borrow_mut();
         CommandRecognizer::pending_message_count(&command_data)
     };
@@ -70,6 +67,7 @@ fn pending_message_count(board: &impl RRIVBoard) -> usize {
 
 fn take_command(board: &impl RRIVBoard) -> Result<[u8; 500], ()> {
     let do_take_command = || unsafe {
+        #[allow(static_mut_refs)]
         let command_data = COMMAND_DATA.borrow_mut();
         Ok(CommandRecognizer::take_command(command_data))
     };
@@ -247,20 +245,12 @@ fn get_command_payload(
     }
 }
 
-/// I believe the lifetimes here are generic over the lifetime of the CommandData
-pub struct CharacterProcessor {}
-
-impl<'a> CharacterProcessor {
-    pub fn new() -> CharacterProcessor {
-        CharacterProcessor {}
+// allow other services to process characters into the Command Recognizer
+pub fn process_character(character: u8){
+    unsafe {
+        let command_data = COMMAND_DATA.borrow_mut(); // TODO: is it concerning to allow another way to get to COMMAND_DATA?
+        CommandRecognizer::process_character(command_data, character);  // TODO: yes, because theoretically both interfaces could be adding at the same time, clobbering the inputs
+                                                                        // do we need to have logic to allow just one or the other?
     }
 }
 
-impl<'a, 'b> RXProcessor for CharacterProcessor {
-    fn process_character(&self, character: u8) {
-        unsafe {
-            let command_data = COMMAND_DATA.borrow_mut();
-            CommandRecognizer::process_character(command_data, character);
-        }
-    }
-}

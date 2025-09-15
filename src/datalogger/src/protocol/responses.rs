@@ -1,54 +1,59 @@
 use alloc::boxed::Box;
 use alloc::format;
-use rriv_board::{gpio::GpioMode, RRIVBoard};
+use rriv_board::{RRIVBoard};
 use rtt_target::rprintln;
 use serde_json::{json, Value};
 
-use crate::{alloc::string::ToString, drivers::{resources::gpio::GpioRequest, types::CalibrationPair}};
+use crate::{alloc::string::ToString, drivers::{types::CalibrationPair}};
+
+fn send(board: &mut impl RRIVBoard, message: &str){
+    board.usb_serial_send(message);
+    board.usart_send(message);
+}
 
 pub fn send_command_response_message(board: &mut impl RRIVBoard, message: &str) {
     rprintln!("{}", message);
-    board.usb_serial_send(json!({"message":message}).to_string().as_str());
-    board.usb_serial_send("\n");
+    send(board, json!({"message":message}).to_string().as_str());
+    send(board, "\n");
 }
 
 pub fn send_command_response_error(board: &mut impl RRIVBoard, message: &str, error: &str) {
-    board.usb_serial_send(
+    send(board, 
         json!({"status":"error", "message":message, "error": error})
             .to_string()
             .as_str(),
     );
-    board.usb_serial_send("\n");
+    send(board, "\n");
 }
 
 pub fn send_json(board: &mut impl RRIVBoard, json: Value) {
-    board.usb_serial_send(json.to_string().as_str());
-    board.usb_serial_send("\n");
+    send(board, json.to_string().as_str());
+    send(board, "\n");
 }
 
 pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[CalibrationPair]>>) {
-    board.usb_serial_send("{ pairs: [");
+    send(board, "{ pairs: [");
 
     if let Some(pairs) = pairs {
         for i in 0..pairs.len() {
             rprintln!("calib pair{:?}", i);
             let pair = &pairs[i];
-            board.usb_serial_send(format!("{{'point': {}, 'values': [", pair.point).as_str());
+            send(board, format!("{{'point': {}, 'values': [", pair.point).as_str());
             for i in 0..pair.values.len() {
-                board.usb_serial_send(format!("{}", pair.values[i]).as_str());
+                send(board, format!("{}", pair.values[i]).as_str());
                 if i < pair.values.len() - 1 {
-                    board.usb_serial_send(",");
+                    send(board, ",");
                 }
             }
 
-            board.usb_serial_send("] }");
+            send(board, "] }");
             if i < pairs.len() - 1 {
-                board.usb_serial_send(",");
+                send(board, ",");
             }
         }
     }
 
-    board.usb_serial_send("]}\n");
+    send(board, "]}\n");
 }
 
 pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]){

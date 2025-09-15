@@ -18,7 +18,8 @@ pub struct DataloggerSettingsValues {
     pub delay_between_bursts: Option<u16>,
     pub bursts_per_measurement_cycle: Option<u8>,
     pub mode: Option<u8>,
-    pub enable_telemetry: Option<bool>
+    pub enable_telemetry: Option<bool>,
+    pub usart_ctl: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,7 +34,8 @@ pub struct DataloggerSetPayload {
     pub bursts_per_cycle: Option<u8>,
     pub start_up_delay: Option<u16>,
     pub mode: Option<Value>,
-    pub enable_telemetry: Option<bool>
+    pub enable_telemetry: Option<bool>,
+    pub usart_ctl: Option<bool>,
     // pub user_note: Option<Value>, // not implemented for now
     // pub user_value: Option<i16>
 }
@@ -100,6 +102,10 @@ impl DataloggerSetPayload {
 
         if let Some(enable_telemetry) = self.enable_telemetry {
             datalogger_settings_values.enable_telemetry = Some(enable_telemetry);
+        }
+
+        if let Some(usart_ctl) = self.usart_ctl {
+            datalogger_settings_values.usart_ctl = Some(usart_ctl);
         }
 
         datalogger_settings_values
