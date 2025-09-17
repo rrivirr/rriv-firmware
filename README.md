@@ -13,8 +13,8 @@ You will need the nightly toolchain since Rust on embedded needs unstable featur
 rustup toolchain install nightly
 ```
 ```zsh
-rustup target add thumbv7m-none-eabi
 rustup default nightly
+rustup target add thumbv7m-none-eabi
 rustup update
 ```
 You can also list and set the toolchain directly like so:
