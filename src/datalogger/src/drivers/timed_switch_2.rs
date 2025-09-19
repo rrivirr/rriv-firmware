@@ -73,13 +73,16 @@ impl TimedSwitch2SpecialConfiguration {
             }
         };
 
-        let initial_state = match &value["initial_state"] {
-            serde_json::Value::Bool(value) => {
-                *value
-            }
-            _ => {
-                return Err("initial state is requiresd")
-            }
+        // initial_state must be a string "on" or "off" (case-insensitive)
+        let s = match &value["initial_state"] {
+            serde_json::Value::String(s) => s.as_str(),
+            _ => return Err("initial_state must be the string \"on\" or \"off\""),
+        };
+        
+        let initial_state: bool = match s.to_ascii_lowercase().as_str() {
+            "on" => true,
+            "off" => false,
+            _ => return Err("invalid initial state"),
         };
       
         let gpio_pin = gpio_pin.unwrap_or_default();
@@ -132,7 +135,7 @@ impl SensorDriver for TimedSwitch2 {
         board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
-
+        rprintln!("Initial state is set to {}", self.state);
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -212,13 +215,18 @@ impl SensorDriver for TimedSwitch2 {
             Err(_) => "Invalid",
         };
 
+        let initial_state_str: &str = match self.special_config.initial_state {
+            true => "ON",
+            false => "OFF"
+        };  
+
         json!({
             "id" : sensor_id,
             "type" : sensor_name,
             "on_time_s": self.special_config.on_time_s,
             "off_time_s": self.special_config.off_time_s,
             "gpio_pin": self.special_config.gpio_pin,
-            "initial_state" : self.special_config.initial_state
+            "initial_state" : initial_state_str,        
         })
     }
     
