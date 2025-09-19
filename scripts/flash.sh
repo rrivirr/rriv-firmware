@@ -4,3 +4,7 @@ probe-rs download board/target/thumbv7m-none-eabi/debug/app \
 	--allow-erase-all \
 	--chip-erase
 
+probe-rs reset \
+	--chip STM32F103RE  \
+ 	--protocol swd \
+
