@@ -1,3 +1,10 @@
+# [1.2.0-beta.1](https://github.com/rrivirr/rriv-firmware/compare/v1.1.2-beta.1...v1.2.0-beta.1) (2025-09-24)
+
+
+### Features
+
+* initial_state with on and off strings [#94](https://github.com/rrivirr/rriv-firmware/issues/94) ([a8ed638](https://github.com/rrivirr/rriv-firmware/commit/a8ed638b03920e9150292dc2aacf6174179aa467))
+
 ## [1.1.2-beta.1](https://github.com/rrivirr/rriv-firmware/compare/v1.1.1...v1.1.2-beta.1) (2025-09-13)
 
 
