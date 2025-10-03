@@ -1,3 +1,10 @@
+# [1.2.0-beta.2](https://github.com/rrivirr/rriv-firmware/compare/v1.2.0-beta.1...v1.2.0-beta.2) (2025-10-03)
+
+
+### Bug Fixes
+
+* modified I2C addresses ([9ef8c09](https://github.com/rrivirr/rriv-firmware/commit/9ef8c099f20dbaf793b45ae94f5fa6e450195e59))
+
 # [1.2.0-beta.1](https://github.com/rrivirr/rriv-firmware/compare/v1.1.2-beta.1...v1.2.0-beta.1) (2025-09-24)
 
 
