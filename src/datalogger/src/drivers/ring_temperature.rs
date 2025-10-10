@@ -221,4 +221,12 @@ impl SensorDriver for RingTemperatureDriver {
         }
         Ok(())
     }
+    
+    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
+        todo!()
+    }
+    
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+        todo!()
+    }
 }
