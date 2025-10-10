@@ -63,7 +63,7 @@ jobs:
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: board/target/thumbv7m-none-eabi/release/app
-        asset_name: rriv-firmware.bin
+        asset_name: rriv-firmware.elf
         tag: ${{ needs.release.outputs.new-release-git-tag }}
         overwrite: true
           
