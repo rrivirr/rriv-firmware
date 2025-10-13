@@ -1,3 +1,10 @@
+# [1.2.0-beta.3](https://github.com/rrivirr/rriv-firmware/compare/v1.2.0-beta.2...v1.2.0-beta.3) (2025-10-13)
+
+
+### Bug Fixes
+
+* handled ID lenght > 6 ([fa7b88e](https://github.com/rrivirr/rriv-firmware/commit/fa7b88e61be67e449160d29f2731d0df3d17f210))
+
 # [1.2.0-beta.2](https://github.com/rrivirr/rriv-firmware/compare/v1.2.0-beta.1...v1.2.0-beta.2) (2025-10-03)
 
 
