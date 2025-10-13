@@ -8,15 +8,45 @@ use super::types::*;
 #[derive(Copy, Clone)]
 pub struct MCP9808TemperatureDriverSpecialConfiguration {
     calibration_offset: i16, // TODO: This needs to get stored into the EEPROM, and we don't that yet!
+    address: u8,
+    _empty: [u8; 29], // 32 - 1 - 2 = 29
 }
 
 impl MCP9808TemperatureDriverSpecialConfiguration {
-    pub fn parse_from_values(
-        #[allow(unused)]
-        value: serde_json::Value,
-    ) -> Result<MCP9808TemperatureDriverSpecialConfiguration, &'static str>  {
+    pub fn parse_from_values(value: serde_json::Value) -> Result<MCP9808TemperatureDriverSpecialConfiguration, &'static str>  
+    {
+        let mut address: u8 = 0b0011000; // default address
+        match &value["address"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            address = match number {
+                                0 => 0b0011000,
+                                1 => 0b0011001,
+                                2 => 0b0011010,
+                                3 => 0b0011011,
+                                4 => 0b0011100,
+                                5 => 0b0011101,
+                                6 => 0b0011110,
+                                7 => 0b0011111,
+                                _ => return Err("invalid address")
+                            };
+                        }
+                        Err(_) => return Err("invalid on time")
+                    }
+                }
+            }
+            _ => {
+                return Err("on time is required");
+            }
+        }
+
         Ok(Self {
             calibration_offset: 0,
+            address: address,
+            _empty: [b'\0'; 29],
         })
     }
 
@@ -30,6 +60,8 @@ impl MCP9808TemperatureDriverSpecialConfiguration {
     pub fn new(calibration_offset: i16) -> MCP9808TemperatureDriverSpecialConfiguration {
         Self {
             calibration_offset: calibration_offset,
+            address: 0b0011000,
+            _empty: [b'\0'; 29],
         }
     }
 
@@ -175,7 +207,7 @@ impl MCP9808TemperatureDriver {
             general_config,
             special_config,
             measured_parameter_values: [0.0; NUMBER_OF_MEASURED_PARAMETERS],
-            address: 0b0011000,
+            address: special_config.address,
             calibration_offset: 0_f64 // default value, can be calculated from special_config
         }
     }
