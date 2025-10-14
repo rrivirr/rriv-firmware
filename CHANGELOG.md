@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/rrivirr/rriv-firmware/compare/v1.1.2...v1.1.3) (2025-10-14)
+
+
+### Bug Fixes
+
+* adjust setup order so that rtc clock init errors are caught by the watchdog ([6a39f26](https://github.com/rrivirr/rriv-firmware/commit/6a39f262f589c3698a243e94e194d9f4d75e73aa))
+
 ## [1.1.2](https://github.com/rrivirr/rriv-firmware/compare/v1.1.1...v1.1.2) (2025-10-14)
 
 
