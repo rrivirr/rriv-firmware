@@ -1,3 +1,13 @@
+## [1.1.2](https://github.com/rrivirr/rriv-firmware/compare/v1.1.1...v1.1.2) (2025-10-14)
+
+
+### Bug Fixes
+
+* added missing fn in ring_temp.rs ([faacce4](https://github.com/rrivirr/rriv-firmware/commit/faacce48d3a2f2b59ac5f7931a1a4dc2bec23589))
+* force release ([c34f46b](https://github.com/rrivirr/rriv-firmware/commit/c34f46b7e05cea614998f2b267261ab5be4c285f))
+* include missing implementations ([9f5cbba](https://github.com/rrivirr/rriv-firmware/commit/9f5cbbaa2e7d800b8c3957945759fc4e6dadcaa0))
+* modified I2C addresses ([2fefb06](https://github.com/rrivirr/rriv-firmware/commit/2fefb06375216fd7047ae9b2e4d4aacdc853b3f8))
+
 ## [1.1.1](https://github.com/rrivirr/rriv-firmware/compare/v1.1.0...v1.1.1) (2025-09-13)
 
 
