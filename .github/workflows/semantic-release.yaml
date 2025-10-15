@@ -43,6 +43,7 @@ jobs:
  
   build:
     name: Publish binaries
+    if: ${{ needs.release.outputs.new-release-git-tag }}
     runs-on: ubuntu-latest
     needs: release
 
