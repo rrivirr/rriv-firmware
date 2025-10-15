@@ -1,4 +1,4 @@
-name: Verify binary builds
+name: Verify Build
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     
 jobs:
   build:
-    name: Verify binary builds
+    name: Compile
     runs-on: ubuntu-latest
 
     steps:
