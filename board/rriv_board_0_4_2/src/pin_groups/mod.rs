@@ -65,7 +65,7 @@ pub fn build(
     );
 
 
-    let mut power = PowerPins::build(pins.enable_3v, pins.enable_5v, cr);
+    let power = PowerPins::build(pins.enable_3v, pins.enable_5v, cr);
 
     // power.enable_3v.set_high();
     // delay.delay_ms(2000_u32);

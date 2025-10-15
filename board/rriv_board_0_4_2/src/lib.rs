@@ -509,7 +509,7 @@ impl SensorDriverServices for Board {
         match self.internal_adc.read(channel) {
             Ok(value) => return value,
             Err(error) => {
-                let mut error_string = match error {
+                let error_string = match error {
                     AdcError::NBError(_) => "Internal ADC NBError",
                     AdcError::NotConfigured => "Internal ADC Not Configured",
                     AdcError::ReadError => "Internal ADC Read Error",
@@ -942,7 +942,7 @@ impl BoardBuilder {
             let device_peripherals = pac::Peripherals::steal();
             let gpiod = device_peripherals.GPIOD.split();
 
-            let mut gpio5 = gpiod.pd2;
+            let gpio5 = gpiod.pd2;
             let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
             gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
 

@@ -1,4 +1,4 @@
-use stm32f1xx_hal::{gpio::*, afio::MAPR};
+use stm32f1xx_hal::gpio::*;
 use crate::pins::*;
 
 
