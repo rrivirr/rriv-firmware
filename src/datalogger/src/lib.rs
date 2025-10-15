@@ -189,7 +189,15 @@ impl DataLogger {
             }
         }
 
-        self.write_column_headers_to_storage(board);
+        match self.mode {
+            DataLoggerMode::Field => {
+                // if we are launching into field mode, write column headers to a new file
+                self.write_column_headers_to_storage(board);
+            },
+            _ => {
+                // otherwise we are not logging to storage by default, so don't write any file yet
+            }
+        }
         rprintln!("done with setup");
 
         protocol::status::send_ready_status(board);
@@ -582,6 +590,8 @@ impl DataLogger {
                     }
                     "field" => {
                         self.mode = DataLoggerMode::Field;
+                        // switching into field mode should create a new file
+                        self.write_column_headers_to_storage(board);
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
