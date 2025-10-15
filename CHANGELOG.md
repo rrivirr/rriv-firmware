@@ -1,3 +1,10 @@
+## [1.1.5](https://github.com/rrivirr/rriv-firmware/compare/v1.1.4...v1.1.5) (2025-10-15)
+
+
+### Bug Fixes
+
+* Update semantic-release.yaml ([6cd03e8](https://github.com/rrivirr/rriv-firmware/commit/6cd03e87002c0ab8b2d166d52970860a735f60f3))
+
 ## [1.1.4](https://github.com/rrivirr/rriv-firmware/compare/v1.1.3...v1.1.4) (2025-10-15)
 
 
