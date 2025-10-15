@@ -124,7 +124,7 @@ impl Board {
 
         // self.internal_adc.enable(&mut self.delay);
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
-        self.storage.create_file(timestamp);
+        self.storage.create_file(timestamp); 
 
         // TODO: this is for the NOX sensor, needs to be configured by drivers
         self.gpio
@@ -404,7 +404,7 @@ impl RRIVBoard for Board {
     }
 
     fn flush_log_file(&mut self) {
-        todo!("flush_log_file");
+        self.storage.flush();
     }
 
     fn dump_eeprom(&mut self) {
