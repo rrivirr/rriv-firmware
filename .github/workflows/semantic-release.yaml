@@ -23,6 +23,8 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4
+      with:
+        ssh-key: ${{ secrets.CD_DEPLOY_KEY }}
 
     - name: Configure Node.js
       uses: actions/setup-node@v5
