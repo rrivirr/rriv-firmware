@@ -1,3 +1,10 @@
+## [1.1.7](https://github.com/rrivirr/rriv-firmware/compare/v1.1.6...v1.1.7) (2025-10-15)
+
+
+### Bug Fixes
+
+* force release ([eb188d3](https://github.com/rrivirr/rriv-firmware/commit/eb188d35a9fcbb54c9e9565472ef54397fcff26b))
+
 ## [1.1.6](https://github.com/rrivirr/rriv-firmware/compare/v1.1.5...v1.1.6) (2025-10-15)
 
 
