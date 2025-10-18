@@ -1,3 +1,10 @@
+## [1.1.10](https://github.com/rrivirr/rriv-firmware/compare/v1.1.9...v1.1.10) (2025-10-18)
+
+
+### Bug Fixes
+
+* correct path ([6b6f4ed](https://github.com/rrivirr/rriv-firmware/commit/6b6f4ed3be8a0219c69d2881ad121979f4e31087))
+
 ## [1.1.9](https://github.com/rrivirr/rriv-firmware/compare/v1.1.8...v1.1.9) (2025-10-18)
 
 
