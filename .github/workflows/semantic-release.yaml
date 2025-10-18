@@ -78,7 +78,7 @@ jobs:
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: board/target/thumbv7m-none-eabi/release/app
+        file: board/target/thumbv7m-none-eabi/debug/app
         asset_name: rriv-firmware-debug.elf
         tag: ${{ needs.release.outputs.new-release-git-tag }}
         overwrite: true
