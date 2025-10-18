@@ -71,7 +71,7 @@ jobs:
         overwrite: true
 
     - name: Cargo build debug
-      run: cargo build --debug
+      run: cargo build
       working-directory: board/app
     
     - name: Upload binaries to release
