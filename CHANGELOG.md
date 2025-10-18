@@ -1,3 +1,10 @@
+## [1.1.8](https://github.com/rrivirr/rriv-firmware/compare/v1.1.7...v1.1.8) (2025-10-18)
+
+
+### Bug Fixes
+
+* also build debug build ([a99ed6d](https://github.com/rrivirr/rriv-firmware/commit/a99ed6d19b2911664732b79e9ecb4a18419b3169))
+
 ## [1.1.7](https://github.com/rrivirr/rriv-firmware/compare/v1.1.6...v1.1.7) (2025-10-15)
 
 
