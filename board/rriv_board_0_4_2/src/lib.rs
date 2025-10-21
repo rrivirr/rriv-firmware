@@ -120,16 +120,12 @@ pub struct Board {
 impl Board {
     pub fn start(&mut self) {
         rprintln!("starting board");
-        // self.power_control.cycle_3v(&mut self.delay);
 
-        // self.internal_adc.enable(&mut self.delay);
-        let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
-        self.storage.create_file(timestamp);
-
-        // TODO: this is for the NOX sensor, needs to be configured by drivers
-        self.gpio
-            .gpio6
-            .make_push_pull_output(&mut self.gpio_cr.gpioc_crh);
+        let bytes: [u8; 64 * 4] = [0xFF; 64 * 4];
+        for block in 0..4 {
+            eeprom::write_bytes_to_eeprom(self, block, 0, &bytes);
+        }
+        rprintln!("cleared eeprom");
     }
 
     pub fn sleep_mcu(&mut self) {
@@ -1200,8 +1196,8 @@ impl BoardBuilder {
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
-        watchdog.feed();
+        // watchdog.start(MilliSeconds::secs(6));
+        // watchdog.feed();
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1345,7 +1341,7 @@ impl BoardBuilder {
         }
         rprintln!("scan is done");
 
-        watchdog.feed();
+        // watchdog.feed();
 
         rprintln!("i2c2 scanning...");
         rprintln!();
@@ -1360,7 +1356,7 @@ impl BoardBuilder {
         }
         rprintln!("scan is done");
 
-        watchdog.feed();
+        // watchdog.feed();
 
         // configure external ADC
         self.external_adc.as_mut().unwrap().configure(&mut i2c1);
@@ -1410,7 +1406,7 @@ impl BoardBuilder {
         }
         self.counter = Some(counter);
 
-        watchdog.feed();
+        // watchdog.feed();
 
         self.watchdog = Some(watchdog);
 

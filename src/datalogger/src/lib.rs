@@ -699,6 +699,7 @@ impl DataLogger {
                     responses::send_command_response_error(board, "sensor not configured", "");
                 }
             }
+
             CommandPayload::SensorGet(payload) => {
                 if let Some(index) = self.get_driver_index_by_id_value(payload.id) {
                     if let Some(driver) = &mut self.sensor_drivers[index] {
