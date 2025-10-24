@@ -202,6 +202,23 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
+    pub fn receive_usart_message(board: &mut impl RRIVBoard) ->  Option<[u8; USART_BUFFER_SIZE]> {
+        //
+        // Process incoming commands
+        //
+        let raw_message = usart_service::take_command(board);
+        let message = Option<[u8; USART_BUFFER_SIZE]> = None;
+        match raw_message {
+            Ok(received_message) => {
+                message = Some(received_message);
+            }
+            Err(raw_message) => {
+                // do nothing
+            }
+        }
+        return message;
+    }
+
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
         // Process incoming commands
@@ -240,8 +257,6 @@ impl DataLogger {
         match self.mode {
             DataLoggerMode::Interactive => {
                 // process CLI
-                // process telemetry
-                // process actuators
 
                 if board.timestamp()
                     >= self.last_interactive_log_time
@@ -250,11 +265,12 @@ impl DataLogger {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
 
-                    self.measure_sensor_values(board); // measureSensorValues(false);
-                    self.write_last_measurement_to_serial(board); //outputLastMeasurement();
-                                                                  // Serial2.print(F("CMD >> "));
-                                                                  // writeRawMeasurementToLogFile();
-                                                                  // fileSystemWriteCache->flushCache();
+                    self.measure_sensor_values(board); 
+                    let message = DataLogger::receive_usart_message(board);
+                    self.relay_message(message);
+
+                    self.write_last_measurement_to_serial(board); 
+
                     if self.interactive_logging {
                         self.write_raw_measurement_to_storage(board);
                     }
@@ -382,6 +398,17 @@ impl DataLogger {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
                 driver.take_measurement(board.get_sensor_driver_services());
+            }
+        }
+    }
+
+    fn relay_message(&mut self, message: Option<[u8; USART_BUFFER_SIZE]>) {
+        for i in 0..self.sensor_drivers.len() {
+            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                let requested_gpios = driver.get_requested_gpios();
+                if requested_gpios.usart {
+                    driver.receive_message(message);
+                }
             }
         }
     }

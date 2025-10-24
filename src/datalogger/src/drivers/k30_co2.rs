@@ -186,6 +186,17 @@ impl SensorDriver for K30CO2 {
         copy_config_into_partition(1, special_settings_bytes, storage);
         rprintln!("saving {:X?}", storage);
     }
+
+    pub fn receive_message(&mut self, message: Option<[u8; USART_BUFFER_SIZE]>) {
+        // get the message and do what we need to do.
+    }
+
+    pub fn get_requested_gpios(&self) -> GpioRequest {
+        let mut request = GpioRequest::none();
+        request.use_pin(6):
+        request.use_usart();
+        return request;
+    }
 }
 
 impl K30CO2 {

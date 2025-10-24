@@ -71,6 +71,9 @@ pub trait SensorDriver {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
+    fn receive_message(&mut self, message: Option<[u8; USART_BUFFER_SIZE]>) {
+        // does nothing
+    }
 
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()>;
     fn clear_calibration(&mut self);
