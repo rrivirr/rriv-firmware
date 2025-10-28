@@ -26,7 +26,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::{Alternate, Pin};
-use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -98,6 +98,7 @@ type BoardI2c2 = BlockingI2c<I2C2, (pin_groups::I2c2Scl, pin_groups::I2c2Sda)>;
 pub struct Board {
     pub uid: [u8; 12],
     pub delay: DelayUs<TIM3>,
+    pub precise_delay: PreciseDelayUs,
     // // pub power_control: PowerControl,
     pub gpio: DynamicGpioPins,
     pub gpio_cr: GpioCr,
@@ -131,6 +132,14 @@ impl Board {
         self.gpio
             .gpio6
             .make_push_pull_output(&mut self.gpio_cr.gpioc_crh);
+
+        self.disable_interrupts();
+        // loop {
+        //     self.gpio.gpio6.set_high();
+        //     self.delay.delay_us(15u32);
+        //     self.gpio.gpio6.set_low();
+        //     self.delay.delay_us(15u32);
+        // }
     }
 
     pub fn sleep_mcu(&mut self) {
@@ -630,7 +639,7 @@ impl SensorDriverServices for Board {
 
         match self
             .one_wire_bus
-            .send_command(command, Some(&address), &mut self.delay)
+            .send_command(command, Some(&address), &mut self.precise_delay)
         {
             Ok(_) => rprintln!("sent command ok"),
             Err(e) => rprintln!("{:?}", e),
@@ -640,7 +649,7 @@ impl SensorDriverServices for Board {
   
 
     fn one_wire_reset(&mut self) {
-        match self.one_wire_bus.reset(&mut self.delay) {
+        match self.one_wire_bus.reset(&mut self.precise_delay) {
             Ok(found_device) => { 
                 if !found_device {
                     rprintln!("no one wire device found");
@@ -652,14 +661,14 @@ impl SensorDriverServices for Board {
     }
 
     fn one_wire_skip_address(&mut self) {
-        match self.one_wire_bus.skip_address(&mut self.delay) {
+        match self.one_wire_bus.skip_address(&mut self.precise_delay) {
             Ok(_) => {},
             Err(err) => rprintln!("one_wire_skip_address: {:?}", err)
         }
     }
 
     fn one_wire_write_byte(&mut self, byte: u8) {
-        match self.one_wire_bus.write_byte(byte, &mut self.delay) {
+        match self.one_wire_bus.write_byte(byte, &mut self.precise_delay) {
             Ok(_) => {},
             Err(err) => rprintln!("one_wire_write_byte: {:?}", err)
         }
@@ -667,7 +676,7 @@ impl SensorDriverServices for Board {
 
     fn one_wire_match_address(&mut self, address: u64) {
         let address = Address(address);
-        match self.one_wire_bus.match_address(&address, &mut self.delay) {
+        match self.one_wire_bus.match_address(&address, &mut self.precise_delay) {
             Ok(_) => todo!(),
             Err(err) => rprintln!("one_wire_match_address: {:?}", err)
         }
@@ -677,7 +686,7 @@ impl SensorDriverServices for Board {
 
 
     fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
-        match self.one_wire_bus.read_bytes(output, &mut self.delay) {
+        match self.one_wire_bus.read_bytes(output, &mut self.precise_delay) {
             Ok(_) => {
                 rprintln!("one_wire_read_bytes {:?}", output);
             },
@@ -703,7 +712,7 @@ impl SensorDriverServices for Board {
         match self.one_wire_bus.device_search(
             self.one_wire_search_state.as_ref(),
             false,
-            &mut self.delay,
+            &mut self.precise_delay,
         ) {
             Ok(Some((device_address, state))) => {
                 self.one_wire_search_state = Some(state);
@@ -982,6 +991,7 @@ pub struct BoardBuilder {
 
     // chip features
     pub delay: Option<DelayUs<TIM3>>,
+    pub precise_delay: Option<PreciseDelayUs>,
 
     // pins groups
     pub gpio: Option<DynamicGpioPins>,
@@ -1009,6 +1019,7 @@ impl BoardBuilder {
             i2c1: None,
             i2c2: None,
             delay: None,
+            precise_delay: None,
             gpio: None,
             gpio_cr: None,
             internal_adc: None,
@@ -1071,6 +1082,7 @@ impl BoardBuilder {
             i2c1: self.i2c1,
             i2c2: self.i2c2.unwrap(),
             delay: self.delay.unwrap(),
+            precise_delay: self.precise_delay.unwrap(),
             gpio: gpio,
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
@@ -1101,7 +1113,7 @@ impl BoardBuilder {
         // and store the frozen frequencies in `clocks`
         let clocks = cfgr
             .use_hse(8.MHz())
-            .sysclk(48.MHz())
+            .sysclk(72.MHz())
             .pclk1(24.MHz())
             .adcclk(14.MHz())
             .freeze(flash_acr);
@@ -1277,7 +1289,7 @@ impl BoardBuilder {
             external_adc_pins,
             internal_adc_pins,
             battery_level_pins,
-            dynamic_gpio_pins,
+            mut dynamic_gpio_pins,
             i2c1_pins,
             i2c2_pins,
             mut oscillator_control_pins,
@@ -1292,8 +1304,68 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
+
+        dynamic_gpio_pins
+            .gpio6
+            .make_push_pull_output(&mut gpio_cr.gpioc_crh);
+
+        // self.disable_interrupts();
+
+
+        core_peripherals.DCB.enable_trace();
+        core_peripherals.DWT.enable_cycle_counter();  // BlockingI2c says this is required, we also use it for precise_delay
+        
+
+        // let mut high = true;
+        let precise_delay = PreciseDelayUs::new(core_peripherals.DWT);
+
+
+        // loop {
+
+        //     // rprintln!("{}", DWT::cycle_count());
+
+        //     // Example: wait for a certain number of cycles
+        //     dynamic_gpio_pins.gpio6.set_high();
+
+        //     precise__delay.delay_us(30);
+        //     // rprintln!("{}", DWT::cycle_count());
+
+        //     dynamic_gpio_pins.gpio6.set_low();
+
+        //     precise__delay.delay_us(30);
+
+        // }
+
+        // Read the current cycle count
+
+        // let per_sec = 72000000;
+        // let per_microsec = 72;
+
+        // // Use the cycle count for timing or profiling
+        // loop {
+
+        //     // rprintln!("{}", DWT::cycle_count());
+
+        //     // Example: wait for a certain number of cycles
+        //     dynamic_gpio_pins.gpio6.set_high();
+
+        //     core_peripherals.DWT.set_cycle_count(0);
+        //     while DWT::cycle_count() < 460 * per_microsec {
+        //     // Busy wait
+        //     }
+        //     // rprintln!("{}", DWT::cycle_count());
+
+        //     dynamic_gpio_pins.gpio6.set_low();
+
+        //     dwt.set_cycle_count(0);
+        //     while DWT::cycle_count() < 460 * per_microsec {
+        //     // Busy wait
+        //     }
+        // }
+
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
+    
         BoardBuilder::setup_serial(
             serial_pins,
             &mut afio.mapr,
@@ -1370,7 +1442,7 @@ impl BoardBuilder {
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
         // rprintln!("starting i2c");
-        core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required
+        // core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
             device_peripherals.I2C1,
@@ -1489,6 +1561,7 @@ impl BoardBuilder {
         self.storage = Some(storage);
 
         self.delay = Some(delay);
+        self.precise_delay = Some(precise_delay);
 
         // the millis counter
         let mut counter: CounterMs<TIM4> = device_peripherals.TIM4.counter_ms(&clocks);
