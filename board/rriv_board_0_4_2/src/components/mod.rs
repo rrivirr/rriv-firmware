@@ -24,3 +24,6 @@ pub use eeprom::*;
 
 pub mod uid;
 pub use uid::*;
+
+mod precise_delay;
+pub use precise_delay::*;
