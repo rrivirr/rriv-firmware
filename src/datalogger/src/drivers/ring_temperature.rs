@@ -52,7 +52,7 @@ impl RingTemperatureDriver {
         special_config: RingTemperatureDriverSpecialConfiguration,
     ) -> Self {
         let mut addresses: [u8; TEMPERATURE_SENSORS_ON_RING] = [
-            0b0011000, 0b0011001, 0b0011010, 0b0011110, 0b0011100, 0b0011101,
+            0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100,
         ];
         for i in 0..6 {
             addresses[i] = addresses[i] + special_config.address_offset;
@@ -112,7 +112,7 @@ impl RingTemperatureDriver {
 
 
 
-const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'0', b'1', b'2', b'3', b'4', b'5'];
+const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F'];
 
 impl SensorDriver for RingTemperatureDriver {
 
