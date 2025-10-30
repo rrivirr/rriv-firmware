@@ -60,9 +60,9 @@ fn panic(_info: &PanicInfo) -> ! {
     let mut flash = device_peripherals.FLASH.constrain();
     let clocks = rcc.cfgr
             .use_hse(8.MHz())
-            .sysclk(48.MHz())
-            .pclk1(24.MHz())
-            .adcclk(14.MHz())
+            .sysclk(72.MHz())
+            // .pclk1(36.MHz())
+            // .adcclk(14.MHz())
             .freeze(&mut flash.acr);
 
     let mut delay: DelayMs<TIM3> = device_peripherals.TIM3.delay(&clocks);
