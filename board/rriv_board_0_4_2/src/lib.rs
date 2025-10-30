@@ -6,6 +6,7 @@ use alloc::boxed::Box;
 use alloc::format;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
+use stm32f1xx_hal::timer::CounterUs;
 
 use core::mem;
 use core::{
@@ -116,7 +117,7 @@ pub struct Board {
     pub one_wire_bus: OneWire<OneWirePin>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
-    pub counter: CounterMs<TIM4>,
+    pub counter: CounterUs<TIM4>,
 }
 
 impl Board {
@@ -394,9 +395,10 @@ impl RRIVBoard for Board {
     }
 
     fn get_millis(&mut self) -> u32 {
-        let millis = self.counter.now();
-        let millis = millis.ticks();
-        millis
+        // let micros = self.counter.now();
+        // let millis = micros.ticks() / 1000;
+        // millis
+        1
     }
 
     fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices {
@@ -682,9 +684,6 @@ impl SensorDriverServices for Board {
         }
     }
 
-    // type OneWireGpio1 = OneWire<Pin<'B', 8, Dynamic>>; // this definitely isn't the right pin...
-
-
     fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
         match self.one_wire_bus.read_bytes(output, &mut self.precise_delay) {
             Ok(_) => {
@@ -960,7 +959,7 @@ impl InputPin for OneWirePin {
     type Error = PinModeError;
 
     fn is_high(&self) -> Result<bool, Self::Error> {
-        self.is_low().map(|b| !b)
+        unsafe { Ok((*crate::pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) != 0) }
     }
 
     fn is_low(&self) -> Result<bool, Self::Error> {
@@ -976,13 +975,11 @@ impl OutputPin for OneWirePin {
     type Error = PinModeError;
 
     fn set_low(&mut self) -> Result<(), Self::Error> {
-        let result = self.pin.set_low();
-        return result;
+        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().clear_bit()))}
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
-        let result = self.pin.set_high();
-        return result;
+        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().set_bit()))}
     }
 }
 
@@ -1009,7 +1006,7 @@ pub struct BoardBuilder {
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
-    pub counter: Option<CounterMs<TIM4>>,
+    pub counter: Option<CounterUs<TIM4>>,
 }
 
 impl BoardBuilder {
@@ -1050,7 +1047,12 @@ impl BoardBuilder {
             let _ = gpio5.set_high();
             gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
 
-            let gpio5 = OneWirePin { pin: gpio5 };
+            let mut gpio5 = OneWirePin { pin: gpio5 };
+
+            // loop {
+            // gpio5.set_high();
+            // gpio5.set_low();
+            // }
 
             match OneWire::new(gpio5) {
                 Ok(one_wire) => Some(one_wire),
@@ -1114,8 +1116,9 @@ impl BoardBuilder {
         let clocks = cfgr
             .use_hse(8.MHz())
             .sysclk(72.MHz())
-            .pclk1(24.MHz())
-            .adcclk(14.MHz())
+            // .hclk(36.MHz())
+            .pclk1(36.MHz())
+            // .adcclk(14.MHz())
             .freeze(flash_acr);
 
         assert!(clocks.usbclk_valid());
@@ -1565,8 +1568,8 @@ impl BoardBuilder {
         self.precise_delay = Some(precise_delay);
 
         // the millis counter
-        let mut counter: CounterMs<TIM4> = device_peripherals.TIM4.counter_ms(&clocks);
-        match counter.start((u16::MAX as u32).millis()) {
+        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        match counter.start(2.micros()) {
             Ok(_) => rprintln!("Millis counter start ok"),
             Err(err) => rprintln!("Millis counter start not ok {:?}", err),
         }
@@ -1634,9 +1637,9 @@ pub fn write_panic_to_storage(message: &str) {
     let clocks = rcc
         .cfgr
         .use_hse(8.MHz())
-        .sysclk(48.MHz())
-        .pclk1(24.MHz())
-        .adcclk(14.MHz())
+        .sysclk(72.MHz())
+        // .pclk1(24.MHz())
+        // .adcclk(14.MHz())
         .freeze(&mut flash.acr);
 
     let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
