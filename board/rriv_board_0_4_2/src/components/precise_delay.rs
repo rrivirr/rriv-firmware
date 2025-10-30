@@ -17,13 +17,6 @@ impl PreciseDelayUs {
 
 impl DelayUs<u16> for PreciseDelayUs {
     fn delay_us(&mut self, us: u16) {
-        // // could use checked_add
-        // let target = DWT::cycle_count().checked_add((us * PER_MICROSEC) as u32);
-        // while DWT::cycle_count() < target {
-        //     // Busy wait
-        // }
-
-        // cortex_m::asm::delay((us * PER_MICROSEC) as u32);
         unsafe {
             let real_cyc = (us * PER_MICROSEC) as u32 / 4;
             asm!(
