@@ -1,25 +1,39 @@
+use core::arch::asm;
+
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f1xx_hal::pac::DWT;
 
 static PER_MICROSEC: u16 = 72;
 
 pub struct PreciseDelayUs {
-    dwt: DWT
+    dwt: DWT,
 }
 
 impl PreciseDelayUs {
-    pub fn new(dwt: DWT) -> Self{
-        Self {
-            dwt
-        }
+    pub fn new(dwt: DWT) -> Self {
+        Self { dwt }
     }
 }
 
 impl DelayUs<u16> for PreciseDelayUs {
     fn delay_us(&mut self, us: u16) {
-        self.dwt.set_cycle_count(0);
-        while DWT::cycle_count() < (us * PER_MICROSEC).into() {
-            // Busy wait
+        // // could use checked_add
+        // let target = DWT::cycle_count().checked_add((us * PER_MICROSEC) as u32);
+        // while DWT::cycle_count() < target {
+        //     // Busy wait
+        // }
+
+        // cortex_m::asm::delay((us * PER_MICROSEC) as u32);
+        unsafe {
+            let real_cyc = (us * PER_MICROSEC) as u32 / 4;
+            asm!(
+                // Use local labels to avoid R_ARM_THM_JUMP8 relocations which fail on thumbv6m.
+                "1:",
+                "subs {}, #1",
+                "bne 1b",
+                inout(reg) real_cyc => _,
+                options(nomem, nostack),
+            );
         }
     }
 }
