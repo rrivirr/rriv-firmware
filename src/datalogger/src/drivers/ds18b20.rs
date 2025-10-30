@@ -165,7 +165,7 @@ impl SensorDriver for Ds18b20 {
         board.enable_interrupts();
         rprintln!("tried");
 
-            let resolution = if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
+        let resolution = if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
             resolution
         } else {
             //    return Err(OneWireError::CrcMismatch);
