@@ -114,7 +114,7 @@ pub struct Board {
     pub storage: Storage,
     pub debug: bool,
     pub file_epoch: i64,
-    pub one_wire_bus: OneWire<OneWirePin>,
+    pub one_wire_bus: OneWire<OneWirePin<Pin<'D', 2, Dynamic>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
@@ -951,11 +951,11 @@ pub fn build() -> Board {
     board
 }
 
-pub struct OneWirePin {
-    pin: Pin<'D', 2, Dynamic>,
+pub struct OneWirePin<P> {
+    pin: P
 }
 
-impl InputPin for OneWirePin {
+impl InputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
     type Error = PinModeError;
 
     fn is_high(&self) -> Result<bool, Self::Error> {
@@ -971,7 +971,7 @@ impl InputPin for OneWirePin {
     }
 }
 
-impl OutputPin for OneWirePin {
+impl OutputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
     type Error = PinModeError;
 
     fn set_low(&mut self) -> Result<(), Self::Error> {
