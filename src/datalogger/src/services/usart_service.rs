@@ -6,7 +6,7 @@ use util::str_from_utf8;
 
 
 const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
-const USART_BUFFER_SIZE: usize = 50;
+pub const USART_BUFFER_SIZE: usize = 50;
 
 static mut MESSAGE_DATA: MessageData = MessageData::default();
 
