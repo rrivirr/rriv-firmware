@@ -74,6 +74,11 @@ pub trait SensorDriver {
     
     #[allow(unused)]
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {}
+    
+    #[allow(unused)]
+    fn receive_message(&mut self, message: Option<[u8; crate::usart_service::USART_BUFFER_SIZE]>) {
+        // does nothing
+    }
 
     // for fitting calibrations, for drivers that implement a calibration
     #[allow(unused)]

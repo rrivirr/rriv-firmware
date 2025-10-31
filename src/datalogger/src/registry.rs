@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use crate::drivers::{ types::{SensorDriver, SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE}};
 
 
-const SENSOR_NAMES: [&str; 9] = [
+const SENSOR_NAMES: [&str; 10] = [
     "no_match",
     "generic_analog",
     "atlas_ec",
@@ -12,6 +12,7 @@ const SENSOR_NAMES: [&str; 9] = [
     "timed_switch_2",
     "ds18b20",
     "k30_co2",
+    "basic_evo",
 ];
 
 pub fn sensor_type_id_from_name(name: &str) -> Result<u16, ()> {
@@ -108,6 +109,10 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
     driver_create_functions[8] = Some(driver_create_functions!(
         crate::drivers::k30_co2::K30CO2, 
         crate::drivers::k30_co2::K30CO2SpecialConfiguration
+    ));
+    driver_create_functions[9] = Some(driver_create_functions!(
+        crate::drivers::basic_evo::BasicEvo,
+        crate::drivers::basic_evo::BasicEvoSpecialConfiguration
     ));
 
     driver_create_functions
