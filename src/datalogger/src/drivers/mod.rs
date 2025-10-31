@@ -11,5 +11,6 @@ pub mod ds18b20;
 pub mod k30_co2;
 // pub mod atlas_ec;
 pub mod aht20;
+pub mod basic_evo;
 pub mod resources;
 

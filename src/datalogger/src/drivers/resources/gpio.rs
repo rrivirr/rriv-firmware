@@ -46,7 +46,7 @@ pub struct GpioRequest {
     gpio6 : bool,
     gpio7 : bool,
     gpio8 : bool,
-    usart : bool,
+    pub usart : bool,
     usart_count : u8
 }
 

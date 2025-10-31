@@ -195,6 +195,23 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
+    pub fn receive_usart_message(board: &mut impl RRIVBoard) ->  Option<[u8; crate::usart_service::USART_BUFFER_SIZE]> {
+        //
+        // Process incoming commands
+        //
+        let raw_message = usart_service::take_command(board);
+        let mut message : Option<[u8; crate::usart_service::USART_BUFFER_SIZE]> = None;
+        match raw_message {
+            Ok(received_message) => {
+                message = Some(received_message);
+            }
+            Err(_) => {
+                // do nothing
+            }
+        }
+        return message;
+    }
+
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
         // Process incoming commands
@@ -242,8 +259,11 @@ impl DataLogger {
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
-
                     self.measure_sensor_values(board); // measureSensorValues(false);
+
+                    let message = DataLogger::receive_usart_message(board);
+                    self.relay_message(message);
+
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
@@ -378,7 +398,18 @@ impl DataLogger {
             }
         }
     }
-
+    
+    fn relay_message(&mut self, message: Option<[u8; crate::usart_service::USART_BUFFER_SIZE]>) {
+        for i in 0..self.sensor_drivers.len() {
+            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                let requested_gpios = driver.get_requested_gpios();
+                if requested_gpios.usart {
+                    driver.receive_message(message);
+                }
+            }
+        }
+    }
+    
     fn update_actuators(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
