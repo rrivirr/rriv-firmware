@@ -6,12 +6,11 @@ use stm32f1xx_hal::pac::DWT;
 static PER_MICROSEC: u16 = 72;
 
 pub struct PreciseDelayUs {
-    dwt: DWT,
 }
 
 impl PreciseDelayUs {
-    pub fn new(dwt: DWT) -> Self {
-        Self { dwt }
+    pub fn new() -> Self {
+        Self {  }
     }
 }
 

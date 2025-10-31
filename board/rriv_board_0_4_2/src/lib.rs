@@ -114,7 +114,7 @@ pub struct Board {
     pub storage: Storage,
     pub debug: bool,
     pub file_epoch: i64,
-    pub one_wire_bus: OneWire<OneWirePin<Pin<'D', 2, Dynamic>>>,
+    pub one_wire_bus: OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
@@ -567,12 +567,6 @@ impl SensorDriverServices for Board {
         }
     }
 
-    // fn borrow_one_wire_bus(&mut self) -> &mut dyn rriv_board::OneWireBusInterface  {
-
-    //     return &mut self.one_wire_bus;
-
-    // }
-
     fn one_wire_send_command(&mut self, command: u8, address: u64) {
         let address = Address(address);
 
@@ -791,38 +785,6 @@ pub fn build() -> Board {
     board
 }
 
-pub struct OneWirePin<P> {
-    pin: P
-}
-
-impl InputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
-    type Error = PinModeError;
-
-    fn is_high(&self) -> Result<bool, Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) != 0) }
-    }
-
-    fn is_low(&self) -> Result<bool, Self::Error> {
-        // unsafely access the pin state of GPIO B8
-        // because the hal doesn't currently implement a IO pin type later change to that
-        // this is safe because this is a one wire protocol
-        // and we don't need the mode of the pin to be checked.
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0) }
-    }
-}
-
-impl OutputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
-    type Error = PinModeError;
-
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().clear_bit()))}
-    }
-
-    fn set_high(&mut self) -> Result<(), Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().set_bit()))}
-    }
-}
-
 pub struct BoardBuilder {
     pub uid: Option<[u8; 12]>,
 
@@ -878,30 +840,47 @@ impl BoardBuilder {
         // steal the gpio5 pin to build a one wire
         // this is probably how we want to build a one wire in general
         // we don't need to worry about the unsafeness, just get the pin we want
-        // the board logic can ensure the safeness, or it can be the operators responsibility
+        // // the board logic can ensure the safeness, or it can be the operators responsibility
+        // unsafe {
+        //     let device_peripherals = pac::Peripherals::steal();
+        //     let gpiod = device_peripherals.GPIOD.split();
+
+        //     let gpio5 = gpiod.pd2;
+        //     let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
+        //     let _ = gpio5.set_high();
+        //     gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
+
+        //     let mut gpio5 = OneWirePin { pin: gpio5 };
+
+        //     // loop {
+        //     // gpio5.set_high();
+        //     // gpio5.set_low();
+        //     // }
+
+        //     one_wire_option = match OneWire::new(gpio5) {
+        //         Ok(one_wire) => Some(one_wire),
+        //         Err(e) => {
+        //             rprintln!("{:?} bad one wire bus", e);
+        //             panic!("bad one wire bus");
+        //         }
+        //     };
+        // }
+
+        let mut internal_adc = self.internal_adc.unwrap();
         unsafe {
-            let device_peripherals = pac::Peripherals::steal();
-            let gpiod = device_peripherals.GPIOD.split();
+                let pin = internal_adc.take_port_5();
+                let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
+                let _ = pin.set_high();
+                pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
+                let pin = OneWirePin {  pin };
 
-            let gpio5 = gpiod.pd2;
-            let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
-            let _ = gpio5.set_high();
-            gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
-
-            let mut gpio5 = OneWirePin { pin: gpio5 };
-
-            // loop {
-            // gpio5.set_high();
-            // gpio5.set_low();
-            // }
-
-            one_wire_option = match OneWire::new(gpio5) {
-                Ok(one_wire) => Some(one_wire),
-                Err(e) => {
-                    rprintln!("{:?} bad one wire bus", e);
-                    panic!("bad one wire bus");
-                }
-            };
+                one_wire_option = match OneWire::new(pin) {
+                    Ok(one_wire) => Some(one_wire),
+                    Err(e) => {
+                        rprintln!("{:?} bad one wire bus", e);
+                        panic!("bad one wire bus");
+                    }
+                };
         }
 
         if one_wire_option.is_none() {
@@ -916,9 +895,6 @@ impl BoardBuilder {
         let mut gpio = self.gpio.unwrap();
         gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
 
-        // let one_wire_bus_rriv = OneWireGpio1 {
-        //     one_wire
-        // };
 
         Board {
             uid: self.uid.unwrap(),
@@ -929,7 +905,7 @@ impl BoardBuilder {
             gpio: gpio,
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
-            internal_adc: self.internal_adc.unwrap(),
+            internal_adc: internal_adc,
             external_adc: self.external_adc.unwrap(),
             battery_level: self.battery_level.unwrap(),
             rgb_led: self.rgb_led.unwrap(),
@@ -956,9 +932,9 @@ impl BoardBuilder {
         // and store the frozen frequencies in `clocks`
         let clocks = cfgr
             .use_hse(8.MHz())
-            .sysclk(72.MHz())
+            .sysclk(48.MHz())
             // .hclk(36.MHz())
-            .pclk1(36.MHz())
+            .pclk1(24.MHz())
             // .adcclk(14.MHz())
             .freeze(flash_acr);
 
@@ -1153,61 +1129,11 @@ impl BoardBuilder {
 
         dynamic_gpio_pins
             .gpio6
-            .make_push_pull_output(&mut gpio_cr.gpioc_crh);
-
-        // self.disable_interrupts();
-
-
-        core_peripherals.DCB.enable_trace();
-        core_peripherals.DWT.enable_cycle_counter();  // BlockingI2c says this is required, we also use it for precise_delay
-        
+            .make_push_pull_output(&mut gpio_cr.gpioc_crh);        
 
         // let mut high = true;
-        let precise_delay = PreciseDelayUs::new(core_peripherals.DWT);
+        let precise_delay = PreciseDelayUs::new();
 
-
-        // loop {
-
-        //     // rprintln!("{}", DWT::cycle_count());
-
-        //     // Example: wait for a certain number of cycles
-        //     dynamic_gpio_pins.gpio6.set_high();
-
-        //     precise__delay.delay_us(30);
-        //     // rprintln!("{}", DWT::cycle_count());
-
-        //     dynamic_gpio_pins.gpio6.set_low();
-
-        //     precise__delay.delay_us(30);
-
-        // }
-
-        // Read the current cycle count
-
-        // let per_sec = 72000000;
-        // let per_microsec = 72;
-
-        // // Use the cycle count for timing or profiling
-        // loop {
-
-        //     // rprintln!("{}", DWT::cycle_count());
-
-        //     // Example: wait for a certain number of cycles
-        //     dynamic_gpio_pins.gpio6.set_high();
-
-        //     core_peripherals.DWT.set_cycle_count(0);
-        //     while DWT::cycle_count() < 460 * per_microsec {
-        //     // Busy wait
-        //     }
-        //     // rprintln!("{}", DWT::cycle_count());
-
-        //     dynamic_gpio_pins.gpio6.set_low();
-
-        //     dwt.set_cycle_count(0);
-        //     while DWT::cycle_count() < 460 * per_microsec {
-        //     // Busy wait
-        //     }
-        // }
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
@@ -1289,7 +1215,7 @@ impl BoardBuilder {
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
         // rprintln!("starting i2c");
-        // core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
+        core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
             &mut gpio_cr,
@@ -1340,7 +1266,7 @@ impl BoardBuilder {
         rprintln!("set up i2c2 done");
 
         rprintln!("i2c2 scanning for k30...");
-        // loop {
+
         let mut buf = [b'\0'; 1];
         let addr = 0x68; //7F - all
         if i2c2.write(addr, &mut buf).is_ok() {
@@ -1348,8 +1274,7 @@ impl BoardBuilder {
             rprintln!("{:02x} good", addr);
             delay.delay_ms(2000_u16);
         }
-        //     delay.delay_ms(50_u16);
-        // }
+  
 
         rprintln!("i2c1 scanning...");
 
