@@ -27,3 +27,6 @@ pub use uid::*;
 
 mod precise_delay;
 pub use precise_delay::*;
+
+mod one_wire;
+pub use one_wire::*;
