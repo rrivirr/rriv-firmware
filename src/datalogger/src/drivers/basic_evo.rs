@@ -28,6 +28,7 @@ pub struct BasicEvoSpecialConfiguration {
     no_of_registers: usize,
     reg_address: usize,
     reg_value: usize,
+    mode: usize,
 }
 
 impl BasicEvoSpecialConfiguration {
@@ -140,6 +141,21 @@ impl BasicEvoSpecialConfiguration {
                 return Err("register value is required");
             }
         }
+
+        // Mode
+        let s = match &value["mode"] {
+            serde_json::Value::String(s) => s.as_str(),
+            _ => return Err("command must be \"read\" or \"write\""),
+        };
+     
+        let mode: usize = match s.to_ascii_lowercase().as_str() {
+            "manual" => 0,
+            "read_conc" => 1,
+            "write_zero" => 2,
+            "write_span" => 3,
+            "device_info" => 4,
+            _ => 0,
+        };
       
         Ok ( Self {
             device_address,
@@ -148,6 +164,7 @@ impl BasicEvoSpecialConfiguration {
             no_of_registers,
             reg_address,
             reg_value,
+            mode,
         } )
     }
 
@@ -179,14 +196,45 @@ impl BasicEvo {
             register_values: [0; 16],
         }
     }
-}
 
-impl SensorDriver for BasicEvo {
-    #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        // Construct message
+    pub fn construct_message(&mut self) -> String {
+        
         let mut message  = String::from(":");
         message += &format!("{:02X}", self.special_config.device_address);
+        
+        match self.special_config.mode {
+            1 => {
+                // Read Status and Concentration Mode
+                self.special_config.command = 0x03;
+                self.special_config.start_address = 0x0009;
+                self.special_config.no_of_registers = 2;
+            }
+
+            2 => {
+                // Write Zero Point Reference Mode
+                self.special_config.command = 0x06;
+                self.special_config.reg_address = 0x0047;
+            }
+
+            3 => {
+                // Write Span Point Reference Mode
+                self.special_config.command = 0x06;
+                self.special_config.reg_address = 0x0054;
+            }
+
+            4 => {
+                // Read Device Info Mode
+                self.special_config.command = 0x03;
+                self.special_config.start_address = 0x0080;
+                self.special_config.no_of_registers = 4;
+            }
+
+            _ => {
+                // Manual Mode
+                rprintln!("Manual Mode Selected!");
+            }
+        }
+
         message += &format!("{:02X}", self.special_config.command);
         if self.special_config.command == 0x6 {
             message += &format!("{:04X}", self.special_config.reg_address);
@@ -199,7 +247,16 @@ impl SensorDriver for BasicEvo {
 
         let checksum = checksum_calculator(message.clone()[1..].to_string());
         message += &format!("{:02X}", checksum);
-        self.message = message;
+
+        return message;
+    }
+}
+
+impl SensorDriver for BasicEvo {
+    #[allow(unused)]
+    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+        // Construct message
+        self.message = self.construct_message();
     }
 
     getters!();
@@ -248,13 +305,12 @@ impl SensorDriver for BasicEvo {
             response_str.push(*b as char);
         }
         rprintln!("response => {}", response_str);
-        let trimmed_msg = response_str[1..].to_string();
-        let trimmed_msg = trimmed_msg[..(trimmed_msg.len()-2)].to_string(); 
-        rprintln!("trimmed message => {}, len: {}", trimmed_msg, trimmed_msg.len());
+        let trimmed_msg = &response_str[1..response_str.len()-2];
+        rprintln!("trimmed message => {}", trimmed_msg);
 
         let _trimmed_resp = &response[1..response.len()-2];
 
-        let crc = checksum_calculator(trimmed_msg);
+        let crc = checksum_calculator(trimmed_msg.to_string());
         let act_crc = u32::from_str_radix(&response_str[(response_str.len()-2)..], 16).unwrap_or(0);
         
         if crc != act_crc {
