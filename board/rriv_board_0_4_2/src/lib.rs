@@ -642,7 +642,7 @@ impl SensorDriverServices for Board {
         let address = Address(address);
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.match_address(&address, &mut self.precise_delay) {
-                Ok(_) => todo!(),
+                Ok(_) => {},
                 Err(err) => rprintln!("one_wire_match_address: {:?}", err),
             }
         } else {
@@ -689,7 +689,7 @@ impl SensorDriverServices for Board {
                     return Some(device_address.0);
                 }
                 Ok(None) => {
-                    rprintln!("no devices 1wire");
+                    rprintln!("no more devices 1wire");
                     return None;
                 }
                 Err(e) => {
