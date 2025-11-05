@@ -134,7 +134,7 @@ impl Board {
             .gpio6
             .make_push_pull_output(&mut self.gpio_cr.gpioc_crh);
 
-        self.disable_interrupts();
+        // self.disable_interrupts();
         // loop {
         //     self.gpio.gpio6.set_high();
         //     self.delay.delay_us(15u32);
@@ -146,9 +146,9 @@ impl Board {
     pub fn sleep_mcu(&mut self) {
 
         // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
-        // TODO: evaluate the benefit of having a separate clock source for the watch dog.  when would the main clock fail?
-        // TODO: we would disable the secondary clock input using a MOSFET, or we can just use another timer as a custom watch dog that triggers an interrupt (like the C code)
-
+        // EDIT: there is not alternative source for indep watchdog, it's always HSI
+        // EDIT: therefore field mode must restart with indep watchdog disabled
+       
         self.internal_rtc.set_alarm(5000); // 5 seconds?
         self.internal_rtc.listen_alarm();
         rprintln!("will sleep");
@@ -1531,7 +1531,7 @@ pub fn write_panic_to_storage(message: &str) {
     let clocks = rcc
         .cfgr
         .use_hse(8.MHz())
-        .sysclk(72.MHz())
+        .sysclk(48.MHz())
         // .pclk1(24.MHz())
         // .adcclk(14.MHz())
         .freeze(&mut flash.acr);
