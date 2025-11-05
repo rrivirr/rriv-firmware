@@ -25,8 +25,8 @@ impl InputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
 impl OutputPin for OneWirePin<Pin<'D', 2, Dynamic>> {
     type Error = PinModeError;
 
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().clear_bit()))}
+    fn set_low(&mut self) -> Result<(), Self::Error> { 
+        unsafe { Ok((*crate::pac::GPIOD::ptr()).odr.write(|w| w.odr2().clear_bit()))}  //ODR is the wrong thing to use
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
@@ -44,6 +44,7 @@ impl InputPin for OneWirePin<Pin<'C',0, Dynamic>> {
 
     fn is_low(&self) -> Result<bool, Self::Error> {
         unsafe { Ok((*crate::pac::GPIOC::ptr()).idr.read().bits() & (1) == 0) }
+
     }
 }
 
@@ -51,10 +52,18 @@ impl OutputPin for OneWirePin<Pin<'C', 0, Dynamic>> {
     type Error = PinModeError;
 
     fn set_low(&mut self) -> Result<(), Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOC::ptr()).odr.write(|w| w.odr0().clear_bit()))}
-    }
+
+        unsafe { Ok((*crate::pac::GPIOC::ptr()).bsrr.write(|w| w.br0().set_bit()))}
+
+        
+        // let result = self.pin.set_low();
+        // return result;   
+     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
-        unsafe { Ok((*crate::pac::GPIOC::ptr()).odr.write(|w| w.odr0().set_bit()))}
+        // let result = self.pin.set_high();
+        // return result;
+        unsafe { Ok((*crate::pac::GPIOC::ptr()).bsrr.write(|w| w.bs0().set_bit()))}
+        // Ok(())
     }
 }
