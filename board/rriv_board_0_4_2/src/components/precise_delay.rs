@@ -3,7 +3,9 @@ use core::arch::asm;
 use embedded_hal::blocking::delay::DelayUs;
 use stm32f1xx_hal::pac::DWT;
 
-static PER_MICROSEC: u16 = 72;
+use crate::SYSCLK_MHZ;
+
+static PER_MICROSEC: u16 = SYSCLK_MHZ as u16;
 
 pub struct PreciseDelayUs {
 }
