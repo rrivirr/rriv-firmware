@@ -128,22 +128,9 @@ impl Board {
         rprintln!("starting board");
         // self.power_control.cycle_3v(&mut self.delay);
 
-        // self.internal_adc.enable(&mut self.delay);
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
         self.storage.create_file(timestamp);
 
-        // TODO: this is for the NOX sensor, needs to be configured by drivers
-        self.gpio
-            .gpio6
-            .make_push_pull_output(&mut self.gpio_cr.gpioc_crh);
-
-        // self.disable_interrupts();
-        // loop {
-        //     self.gpio.gpio6.set_high();
-        //     self.delay.delay_us(15u32);
-        //     self.gpio.gpio6.set_low();
-        //     self.delay.delay_us(15u32);
-        // }
     }
 
     pub fn sleep_mcu(&mut self) {
@@ -225,17 +212,6 @@ impl RRIVBoard for Board {
         self.watchdog.feed();
 
         self.file_epoch = self.epoch_timestamp();
-        // TODO: implement a peek rprint here with a peeked bool
-        // TODO: don't interfere with other code that needs async usart
-        // if rriv_board::RRIVBoard::unread_usart_message(self) {
-        //     let mut message = [0u8; 40];
-        //     rriv_board::RRIVBoard::get_usart_response(self, &mut message);
-        //     util::remove_invalid_utf8(&mut message);
-        //     match core::str::from_utf8(&message){
-        //         Ok(message) => rprintln!("got usart message: {}", message),
-        //         Err(e) => rprintln!("{:?}", e),
-        //     }
-        // }
     }
 
     fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
@@ -489,8 +465,6 @@ macro_rules! control_services_impl {
         }
     };
 }
-
-type OneWireGpio1 = OneWire<Pin<'B', 8, Dynamic>>;
 
 #[macro_export]
 macro_rules! write_gpio {
@@ -1038,7 +1012,6 @@ impl BoardBuilder {
         let clocks = cfgr
             .use_hse(HSE_MHZ.MHz())
             .sysclk(SYSCLK_MHZ.MHz())
-            // .hclk(36.MHz())
             .pclk1(PCLK_MHZ.MHz())
             // .adcclk(14.MHz())
             .freeze(flash_acr);
@@ -1500,8 +1473,6 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
 }
 
 pub fn write_panic_to_storage(message: &str) {
-    let core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
-
     let device_peripherals = unsafe { pac::Peripherals::steal() };
     let rcc = device_peripherals.RCC.constrain();
     let mut flash = device_peripherals.FLASH.constrain();
