@@ -22,7 +22,6 @@ use cortex_m::{
     peripheral::NVIC,
 };
 
-
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
@@ -75,6 +74,10 @@ use pin_groups::*;
 
 type RedLed = gpio::Pin<'A', 9, Output<OpenDrain>>;
 
+pub const HSE_MHZ: u32 = 8;
+pub const SYSCLK_MHZ: u32 = 48;
+pub const PCLK_MHZ: u32 = 24;
+
 static WAKE_LED: Mutex<RefCell<Option<RedLed>>> = Mutex::new(RefCell::new(None));
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
@@ -114,7 +117,7 @@ pub struct Board {
     pub storage: Storage,
     pub debug: bool,
     pub file_epoch: i64,
-    pub one_wire_bus: OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>,
+    pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
@@ -144,15 +147,14 @@ impl Board {
     }
 
     pub fn sleep_mcu(&mut self) {
-
         // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
         // EDIT: there is not alternative source for indep watchdog, it's always HSI
         // EDIT: therefore field mode must restart with indep watchdog disabled
-       
+
         self.internal_rtc.set_alarm(5000); // 5 seconds?
         self.internal_rtc.listen_alarm();
         rprintln!("will sleep");
-        
+
         // disable interrupts
         NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
         NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
@@ -170,30 +172,26 @@ impl Board {
 
         cortex_m::asm::isb();
 
-
         // re-enable interrupts
         unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
         unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
         unsafe { NVIC::unmask(pac::Interrupt::USART2) };
 
         rprintln!("woke from sleep");
-
     }
 
-    pub fn enter_stop_mode(&mut self){
-
-        
+    pub fn enter_stop_mode(&mut self) {
         //           debug("setting up EXTI");
         //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
         // 	*bb_perip(&EXTI_BASE->RTSR, EXTI_RTC_ALARM_BIT) = 1;
 
         // in addition to the RTCALARM interrupt, the rtc must route through EXTI to wake the MCU up from stop mode.
         let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        device_peripherals.EXTI.imr.write(|w| w
-            .mr17().set_bit() // interrupt mask bit 17 enables RTC EXTI
+        device_peripherals.EXTI.imr.write(
+            |w| w.mr17().set_bit(), // interrupt mask bit 17 enables RTC EXTI
         );
-        device_peripherals.EXTI.rtsr.write(|w| w
-            .tr17().set_bit() // rising trigger bit 17 enables RTC EXTI
+        device_peripherals.EXTI.rtsr.write(
+            |w| w.tr17().set_bit(), // rising trigger bit 17 enables RTC EXTI
         );
 
         // clocks
@@ -205,17 +203,14 @@ impl Board {
         //     .pclk1(24.MHz())
         //     .adcclk(14.MHz())
         //     .freeze(flash_acr);
-
-
     }
-    
-    fn disable_interrupts(&self){
+
+    fn disable_interrupts(&self) {
         // disable interrupts
         cortex_m::interrupt::disable();
     }
 
-
-    fn enable_interrupts(&self){
+    fn enable_interrupts(&self) {
         // If the interrupts were active before our `disable` call, then re-enable
         // them. Otherwise, keep them disabled
         let primask = cortex_m::register::primask::read();
@@ -223,12 +218,9 @@ impl Board {
             unsafe { cortex_m::interrupt::enable() }
         }
     }
-
 }
 
 impl RRIVBoard for Board {
-
-
     fn run_loop_iteration(&mut self) {
         self.watchdog.feed();
 
@@ -308,7 +300,10 @@ impl RRIVBoard for Board {
     fn serial_debug(&mut self, string: &str) {
         rprintln!("{:?}", string);
         if self.debug {
-            rriv_board::RRIVBoard::usb_serial_send(self, format!("{{\"debug\":\"{}\"}}\n",string).as_str());
+            rriv_board::RRIVBoard::usb_serial_send(
+                self,
+                format!("{{\"debug\":\"{}\"}}\n", string).as_str(),
+            );
         }
     }
 
@@ -388,7 +383,6 @@ impl RRIVBoard for Board {
     }
 
     // also crystal time, systick?
-
 
     fn timestamp(&mut self) -> i64 {
         return self.internal_rtc.current_time().into(); // internal RTC
@@ -621,59 +615,79 @@ impl SensorDriverServices for Board {
     fn one_wire_send_command(&mut self, command: u8, address: u64) {
         let address = Address(address);
 
-        match self
-            .one_wire_bus
-            .send_command(command, Some(&address), &mut self.precise_delay)
-        {
-            Ok(_) => rprintln!("sent command ok"),
-            Err(e) => rprintln!("{:?}", e),
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.send_command(command, Some(&address), &mut self.precise_delay) {
+                Ok(_) => rprintln!("sent command ok"),
+                Err(e) => rprintln!("{:?}", e),
+            }
+        } else {
+            rprintln!("one wire bus not available")
         }
     }
 
   
 
     fn one_wire_reset(&mut self) {
-        match self.one_wire_bus.reset(&mut self.precise_delay) {
-            Ok(found_device) => { 
-                if !found_device {
-                    rprintln!("no one wire device found");
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.reset(&mut self.precise_delay) {
+                Ok(found_device) => {
+                    if !found_device {
+                        rprintln!("no one wire device found");
+                    }
                 }
-                //rprintln!("found {}", found_device)
-            },
-            Err(err) => rprintln!("one_wire_reset: {:?}", err)
+                Err(err) => rprintln!("one_wire_reset: {:?}", err),
+            }
+        } else {
+            rprintln!("one wire bus not available");
         }
     }
 
     fn one_wire_skip_address(&mut self) {
-        match self.one_wire_bus.skip_address(&mut self.precise_delay) {
-            Ok(_) => {},
-            Err(err) => rprintln!("one_wire_skip_address: {:?}", err)
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.skip_address(&mut self.precise_delay) {
+                Ok(_) => {}
+                Err(err) => rprintln!("one_wire_skip_address: {:?}", err),
+            }
+        } else {
+            rprintln!("one wire bus not available");
         }
     }
 
     fn one_wire_write_byte(&mut self, byte: u8) {
-        match self.one_wire_bus.write_byte(byte, &mut self.precise_delay) {
-            Ok(_) => {},
-            Err(err) => rprintln!("one_wire_write_byte: {:?}", err)
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.write_byte(byte, &mut self.precise_delay) {
+                Ok(_) => {}
+                Err(err) => rprintln!("one_wire_write_byte: {:?}", err),
+            }
+        } else {
+            rprintln!("one wire bus not available");
         }
     }
 
     fn one_wire_match_address(&mut self, address: u64) {
         let address = Address(address);
-        match self.one_wire_bus.match_address(&address, &mut self.precise_delay) {
-            Ok(_) => todo!(),
-            Err(err) => rprintln!("one_wire_match_address: {:?}", err)
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.match_address(&address, &mut self.precise_delay) {
+                Ok(_) => todo!(),
+                Err(err) => rprintln!("one_wire_match_address: {:?}", err),
+            }
+        } else {
+            rprintln!("one wire bus not available");
         }
     }
 
     fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
-        match self.one_wire_bus.read_bytes(output, &mut self.precise_delay) {
-            Ok(_) => {
-                rprintln!("one_wire_read_bytes {:?}", output);
-            },
-            Err(err) => {
-                rprintln!("one_wire_read_bytes {:?}", err);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.read_bytes(output, &mut self.precise_delay) {
+                Ok(_) => {
+                    rprintln!("one_wire_read_bytes {:?}", output);
+                }
+                Err(err) => {
+                    rprintln!("one_wire_read_bytes {:?}", err);
+                }
             }
+        } else {
+            rprintln!("one wire bus not available");
         }
         // TODO
         if crc8(output) != 0 {
@@ -690,23 +704,28 @@ impl SensorDriverServices for Board {
     }
 
     fn one_wire_bus_search(&mut self) -> Option<u64> {
-        match self.one_wire_bus.device_search(
-            self.one_wire_search_state.as_ref(),
-            false,
-            &mut self.precise_delay,
-        ) {
-            Ok(Some((device_address, state))) => {
-                self.one_wire_search_state = Some(state);
-                return Some(device_address.0);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.device_search(
+                self.one_wire_search_state.as_ref(),
+                false,
+                &mut self.precise_delay,
+            ) {
+                Ok(Some((device_address, state))) => {
+                    self.one_wire_search_state = Some(state);
+                    return Some(device_address.0);
+                }
+                Ok(None) => {
+                    rprintln!("no devices 1wire");
+                    return None;
+                }
+                Err(e) => {
+                    rprintln!("1wire error{:?}", e);
+                    return None;
+                }
             }
-            Ok(None) => {
-                rprintln!("no devices 1wire");
-                return None;
-            }
-            Err(e) => {
-                rprintln!("1wire error{:?}", e);
-                return None;
-            }
+        } else {
+            rprintln!("one wire bus not available");
+            return None;
         }
     }
 
@@ -957,66 +976,30 @@ impl BoardBuilder {
     }
 
     pub fn build(self) -> Board {
-        let mut one_wire_option = None;
         let mut gpio_cr = self.gpio_cr.unwrap();
-        // steal the gpio5 pin to build a one wire
-        // this is probably how we want to build a one wire in general
-        // we don't need to worry about the unsafeness, just get the pin we want
-        // // the board logic can ensure the safeness, or it can be the operators responsibility
-        // unsafe {
-        //     let device_peripherals = pac::Peripherals::steal();
-        //     let gpiod = device_peripherals.GPIOD.split();
 
-        //     let gpio5 = gpiod.pd2;
-        //     let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
-        //     let _ = gpio5.set_high();
-        //     gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
-
-        //     let mut gpio5 = OneWirePin { pin: gpio5 };
-
-        //     // loop {
-        //     // gpio5.set_high();
-        //     // gpio5.set_low();
-        //     // }
-
-        //     one_wire_option = match OneWire::new(gpio5) {
-        //         Ok(one_wire) => Some(one_wire),
-        //         Err(e) => {
-        //             rprintln!("{:?} bad one wire bus", e);
-        //             panic!("bad one wire bus");
-        //         }
-        //     };
-        // }
-
+        let mut one_wire = None;
         let mut internal_adc = self.internal_adc.unwrap();
-        unsafe {
-                let pin = internal_adc.take_port_5();
-                let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
-                let _ = pin.set_high();
-                pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
-                let pin = OneWirePin {  pin };
+        let pin = internal_adc.take_port_5();
+        let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
+        let _ = pin.set_high();
+        pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
+        let pin: OneWirePin<Pin<'C', 0, Dynamic>> = OneWirePin { pin };
 
-                one_wire_option = match OneWire::new(pin) {
-                    Ok(one_wire) => Some(one_wire),
-                    Err(e) => {
-                        rprintln!("{:?} bad one wire bus", e);
-                        panic!("bad one wire bus");
-                    }
-                };
-        }
-
-        if one_wire_option.is_none() {
-            rprintln!("bad one wire creation");
-            panic!("bad one wire bus");
-        }
-        let one_wire = one_wire_option.unwrap();
-
-        // mcu device registers
+        one_wire = match OneWire::new(pin) {
+            Ok(one_wire) => Some(one_wire),
+            Err(e) => {
+                rprintln!("{:?} bad one wire bus", e);
+                panic!("bad one wire bus");
+            }
+        };
 
         // TODO: just one GPIO pin for the moment
         let mut gpio = self.gpio.unwrap();
         gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
 
+        let mut watchdog = self.watchdog.unwrap();
+        watchdog.feed();
 
         Board {
             uid: self.uid.unwrap(),
@@ -1038,7 +1021,7 @@ impl BoardBuilder {
             file_epoch: 0,
             one_wire_bus: one_wire,
             one_wire_search_state: None,
-            watchdog: self.watchdog.unwrap(),
+            watchdog: watchdog,
             counter: self.counter.unwrap(),
         }
     }
@@ -1053,10 +1036,10 @@ impl BoardBuilder {
         // Freeze the configuration of all the clocks in the system
         // and store the frozen frequencies in `clocks`
         let clocks = cfgr
-            .use_hse(8.MHz())
-            .sysclk(48.MHz())
+            .use_hse(HSE_MHZ.MHz())
+            .sysclk(SYSCLK_MHZ.MHz())
             // .hclk(36.MHz())
-            .pclk1(24.MHz())
+            .pclk1(PCLK_MHZ.MHz())
             // .adcclk(14.MHz())
             .freeze(flash_acr);
 
@@ -1243,20 +1226,17 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
-
         dynamic_gpio_pins
             .gpio6
-            .make_push_pull_output(&mut gpio_cr.gpioc_crh);        
+            .make_push_pull_output(&mut gpio_cr.gpioc_crh);
 
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
-
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
         watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
 
@@ -1296,7 +1276,6 @@ impl BoardBuilder {
         delay.delay_ms(250_u32);
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
-
 
         // unsafe { NVIC::unmask(pac::interrupt::WWDG) }; // is this the EWI ?
         // NVIC::mask(pac::interrupt::WWDG);
@@ -1530,9 +1509,9 @@ pub fn write_panic_to_storage(message: &str) {
 
     let clocks = rcc
         .cfgr
-        .use_hse(8.MHz())
-        .sysclk(48.MHz())
-        // .pclk1(24.MHz())
+        .use_hse(HSE_MHZ.MHz())
+        .sysclk(SYSCLK_MHZ.MHz())
+        .pclk1( PCLK_MHZ.MHz())
         // .adcclk(14.MHz())
         .freeze(&mut flash.acr);
 
@@ -1567,5 +1546,4 @@ pub fn write_panic_to_storage(message: &str) {
     storage.create_file(0);
     storage.write(message.as_bytes(), 0);
     storage.flush();
-
 }

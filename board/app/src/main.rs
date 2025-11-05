@@ -7,6 +7,7 @@
 
 use core::prelude::rust_2024::*;
 use cortex_m_rt::entry;
+use rriv_board_0_4_2::{HSE_MHZ, PCLK_MHZ, SYSCLK_MHZ};
 use rtt_target::{rtt_init_print};
 use stm32f1xx_hal::{flash::FlashExt, pac::{self, TIM3}, time::{MicroSeconds, MilliSeconds}, timer::{DelayMs, DelayUs}};
 
@@ -60,9 +61,9 @@ fn panic(_info: &PanicInfo) -> ! {
     let rcc = device_peripherals.RCC.constrain();
     let mut flash = device_peripherals.FLASH.constrain();
     let clocks = rcc.cfgr
-            .use_hse(8.MHz())
-            .sysclk(48.MHz())
-            // .pclk1(36.MHz())
+            .use_hse(HSE_MHZ.MHz())
+            .sysclk(SYSCLK_MHZ.MHz())
+            .pclk1(PCLK_MHZ.MHz())
             // .adcclk(14.MHz())
             .freeze(&mut flash.acr);
 

@@ -137,12 +137,8 @@ impl SensorDriver for Ds18b20 {
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
   
         rprintln!("starting take measurement");
-        //board.one_wire_send_command(CONVERT_TEMP, Some(&self.address), delay)?;
-        //trigger simultaneous measurement
         board.one_wire_reset();
-        //onewire.reset(delay)?;
         board.one_wire_skip_address();
-        //onewire.skip_address(delay)?;
         board.one_wire_write_byte(CONVERT_TEMP);
         //onewire.write_byte(commands::CONVERT_TEMP, delay)?;
         //delay.delay_ms(self.max_measurement_time_millis());
