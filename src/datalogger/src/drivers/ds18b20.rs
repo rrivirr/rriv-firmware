@@ -47,6 +47,8 @@ impl Resolution {
     }
 }
 
+use core::f64::MAX;
+
 use rtt_target::rprintln;
 use serde_json::json;
 use util::any_as_u8_slice;
@@ -55,20 +57,24 @@ use crate::registry::sensor_name_from_type_id;
 
 use super::types::*;
 
-pub const EMPTY_SIZE: usize = 32;
+pub const EMPTY_SIZE: usize = 24;
 pub const NUMBER_OF_MEASURED_PARAMETERS: usize = 2;
 
 #[derive(Copy, Clone)]
 pub struct Ds18b20SpecialConfiguration {
+    m: f32,                                // 4
+    b: f32,                                // 4
     // calibrate data?
     // power mode
     // resolution mode
-    _empty: [u8; 32],
+    _empty: [u8; EMPTY_SIZE],
 }
 
 impl Ds18b20SpecialConfiguration {
     pub fn parse_from_values(_value: serde_json::Value) -> Result<Ds18b20SpecialConfiguration, &'static str> {
         Ok ( Self {
+            m: 0_f32,
+            b: 0_f32,
             _empty: [b'\0'; EMPTY_SIZE],
         })
     }
@@ -77,6 +83,8 @@ impl Ds18b20SpecialConfiguration {
         _bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
     ) -> Ds18b20SpecialConfiguration {
         Self {
+            m: 0_f32,
+            b: 0_f32,
             _empty: [b'\0'; EMPTY_SIZE],
         }
     }
@@ -87,6 +95,8 @@ pub struct Ds18b20 {
     #[allow(unused)]
     special_config: Ds18b20SpecialConfiguration,
     measured_parameter_values: [f64; NUMBER_OF_MEASURED_PARAMETERS],
+    m: f64,
+    b: f64,
 }
 
 impl Ds18b20 {
@@ -98,6 +108,8 @@ impl Ds18b20 {
             general_config,
             special_config,
             measured_parameter_values: [0.0; NUMBER_OF_MEASURED_PARAMETERS],
+            m: 0_f64,
+            b: 0_f64
         }
     }
 }
@@ -144,14 +156,12 @@ impl SensorDriver for Ds18b20 {
         board.one_wire_reset();
         board.one_wire_skip_address();
         board.one_wire_write_byte(CONVERT_TEMP);
-        //onewire.write_byte(commands::CONVERT_TEMP, delay)?;
-        //delay.delay_ms(self.max_measurement_time_millis());
         //Resolution::Bits12.delay_for_measurement_time(delay));
         let delay_ms = Resolution::Bits12.max_measurement_time_millis();
         board.delay_ms(delay_ms);
 
 
-        // just read from a single device
+        // This code just reads from a single one wire device
         board.one_wire_reset();
         board.one_wire_skip_address();
         board.one_wire_write_byte(READ_SCRATCHPAD);
@@ -163,6 +173,8 @@ impl SensorDriver for Ds18b20 {
         } else {
             //    return Err(OneWireError::CrcMismatch);
             rprintln!("Problem reading resolution from scratchpad");
+            self.measured_parameter_values[0] = core::f64::MAX;
+            self.measured_parameter_values[1] = core::f64::MAX;
             return;
         };
         let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
@@ -173,9 +185,12 @@ impl SensorDriver for Ds18b20 {
             Resolution::Bits9 => (raw_temp as f32) / 2.0,
         };
         rprintln!("Temp C: {}", temperature);
+        let value = temperature as f64;
+        self.measured_parameter_values[0] = value as f64;
+        self.measured_parameter_values[1] = self.m * value as f64 + self.b;
 
-        // // iterate over all the devices, and report their temperature
-                // rprintln!("start bus search take measurement");
+        // This code iterates over all the attached one wire devices
+        // rprintln!("start bus search take measurement");
         // board.one_wire_bus_start_search();
         // rprintln!("iterate");
         // loop {
@@ -246,7 +261,30 @@ impl SensorDriver for Ds18b20 {
     }
 
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
-        todo!()
+        for i in 0..pairs.len() {
+            let pair = &pairs[i];
+            rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+        }
+
+        if pairs.len() != 2 {
+            return Err(());
+        }
+
+        let cal1 = &pairs[0];
+        let cal2 = &pairs[1];
+
+        self.m = (cal2.point - cal1.point) / (cal2.values[0] - cal1.values[0]);
+        self.b = cal1.point - self.m * cal1.values[0];
+        rprintln!("calibration: {} {}", self.m, self.b);
+        self.special_config.m = self.m as f32;
+        self.special_config.b = self.b as f32;
+        rprintln!(
+            "calibration: {} {}",
+            self.special_config.m,
+            self.special_config.b
+        );
+
+        Ok(())
     }
 
     fn clear_calibration(&mut self) {
