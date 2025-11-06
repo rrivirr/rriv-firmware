@@ -1,14 +1,18 @@
-use core::borrow::BorrowMut;
+use core::{borrow::BorrowMut, char};
 use alloc::boxed::Box;
+use control_interface::command_recognizer::CommandRecognizer;
 use rriv_board::{RRIVBoard, RXProcessor};
 use rtt_target::rprintln;
 use util::str_from_utf8;
+
+use crate::services::command_service;
 
 
 const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
 const USART_BUFFER_SIZE: usize = 40;
 
 static mut MESSAGE_DATA: MessageData = MessageData::default();
+pub static mut RECEIVE_DATALOGGER_COMMANDS: bool = false;
 
 pub struct MessageData {
     buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],
@@ -38,9 +42,14 @@ impl<'a> USARTCharacterProcessor {
 
 impl<'a, 'b> RXProcessor for USARTCharacterProcessor {
     fn process_character(&self, character: u8) {
+
         unsafe {
-            let message_data = MESSAGE_DATA.borrow_mut();
-            process_character(message_data, character);
+            if RECEIVE_DATALOGGER_COMMANDS {
+                command_service::process_character(character);
+            } else {
+                let message_data = MESSAGE_DATA.borrow_mut();
+                process_character(message_data, character);
+            }
         }
     }
 }
@@ -48,10 +57,34 @@ impl<'a, 'b> RXProcessor for USARTCharacterProcessor {
 
 pub fn setup(board: &mut impl RRIVBoard) {
     let char_processor = Box::<USARTCharacterProcessor>::leak(Box::new(USARTCharacterProcessor::new()));
-
+    
     // pass a pointer to the leaked processor to Board::set_rx_processor
     board.set_usart_rx_processor(Box::new(char_processor));
 }
+
+pub fn pending_message_count(board: &impl RRIVBoard) -> usize {
+    let get_pending_message_count = || unsafe {
+        let message_data = MESSAGE_DATA.borrow_mut();
+        _pending_message_count(&message_data)
+    };
+
+    board.critical_section(get_pending_message_count)
+}
+
+pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
+    // rprintln!("pending messages {}", pending_message_count(board));
+    if pending_message_count(board) < 1 {
+        return Err(());
+    }
+
+    let do_take_command = || unsafe {
+        let message_data = MESSAGE_DATA.borrow_mut();
+        Ok(_take_command(message_data))
+    };
+
+    board.critical_section(do_take_command)
+}
+
 
 
 pub fn process_character(message_data: &mut MessageData, character: u8) {
@@ -103,25 +136,3 @@ fn _take_command(message_data: &mut MessageData) -> [u8; USART_BUFFER_SIZE] {
     return command;
 }
 
-pub fn pending_message_count(board: &impl RRIVBoard) -> usize {
-    let get_pending_message_count = || unsafe {
-        let message_data = MESSAGE_DATA.borrow_mut();
-        _pending_message_count(&message_data)
-    };
-
-    board.critical_section(get_pending_message_count)
-}
-
-pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
-    // rprintln!("pending messages {}", pending_message_count(board));
-    if pending_message_count(board) < 1 {
-        return Err(());
-    }
-
-    let do_take_command = || unsafe {
-        let message_data = MESSAGE_DATA.borrow_mut();
-        Ok(_take_command(message_data))
-    };
-
-    board.critical_section(do_take_command)
-}

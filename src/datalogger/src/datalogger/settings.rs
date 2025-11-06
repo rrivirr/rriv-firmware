@@ -23,7 +23,10 @@ pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub log_raw_data: bool,
 
-    #[bits(3)]
+    #[bits(1)]
+    pub usart_receive_datalogger_commands: bool,
+
+    #[bits(2)]
     unused: usize,
 }
 
@@ -144,6 +147,7 @@ impl DataloggerSettings {
         settings.delay_between_bursts = values.delay_between_bursts.unwrap_or(self.delay_between_bursts);
         settings.mode = values.mode.unwrap_or(self.mode);
         settings.toggles.set_enable_telemetry(values.enable_telemetry.unwrap_or(self.toggles.enable_telemetry()));
+        settings.toggles.set_usart_receive_datalogger_commands((values.usart_ctl.unwrap_or(settings.toggles.usart_receive_datalogger_commands())));
         settings
     }
 

@@ -227,7 +227,14 @@ impl RRIVBoard for Board {
     fn set_usart_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
         cortex_m::interrupt::free(|cs| {
             let mut global_rx_binding = USART_RX_PROCESSOR.borrow(cs).borrow_mut();
+            // if (*global_rx_binding).is_some() {
+            //     if let Some(old_rx_processor) = *global_rx_binding {
+            //         let owned = unsafe { Box::from_raw(old_rx_processor) };
+            //     }
+            // }
+
             *global_rx_binding = Some(processor);
+            
         });
     }
 
@@ -593,7 +600,7 @@ impl SensorDriverServices for Board {
     //     return &mut self.one_wire_bus;
 
     // }
-
+    // TODO: onewire bus needs to move out to src/ and driver, doesn't belong in board layer
     fn one_wire_send_command(&mut self, command: u8, address: u64) {
         let address = Address(address);
 
@@ -775,13 +782,7 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    rprintln!("serial rx byte: {}", c);
-                    // USART_UNREAD_MESSAGE = true;
-                    // if USART_RECEIVE_INDEX < USART_RECEIVE_SIZE - 1 {
-                    //     USART_RECEIVE[USART_RECEIVE_INDEX] = c;
-                    //     USART_RECEIVE_INDEX = USART_RECEIVE_INDEX + 1;
-                    // }
-
+                    rprintln!("rx: {}", char::from(c));
                     let r = USART_RX_PROCESSOR.borrow(cs);
                     if let Some(processor) = r.borrow_mut().deref_mut() {
                         processor.process_character(c.clone());

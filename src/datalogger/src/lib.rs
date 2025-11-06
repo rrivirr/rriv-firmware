@@ -136,6 +136,7 @@ impl DataLogger {
         // setup each service
         command_service::setup(board);
         usart_service::setup(board);
+        unsafe { usart_service::RECEIVE_DATALOGGER_COMMANDS = false };
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -189,6 +190,20 @@ impl DataLogger {
         if self.settings.toggles.enable_telemetry() {
             match self.assigned_gpios.update_or_conflict(requested_gpios) {
                 Ok(_) => {}
+                Err(_) => {
+                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
+                    responses::send_command_response_error(board, "usart pin conflict", "");
+                }
+            }
+        }
+
+        if self.settings.toggles.usart_receive_datalogger_commands() {
+            let mut request = GpioRequest::none();
+            request.use_usart();
+            match self.assigned_gpios.update_or_conflict(request) {
+                Ok(_) => {
+                    unsafe { usart_service::RECEIVE_DATALOGGER_COMMANDS = true };
+                }
                 Err(_) => {
                     // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
                     responses::send_command_response_error(board, "usart pin conflict", "");
@@ -1072,6 +1087,28 @@ impl DataLogger {
             }
         }
 
+        if let Some(usart_ctl) = &values.usart_ctl {
+            let mut request = GpioRequest::none();
+            request.use_usart();
+            if !self.settings.toggles.usart_receive_datalogger_commands() && *usart_ctl {
+                match self
+                    .assigned_gpios
+                    .update_or_conflict(self.telemeter.get_requested_gpios())
+                {
+                    Ok(_) => {
+                        unsafe { usart_service::RECEIVE_DATALOGGER_COMMANDS = true };
+                    }
+                    Err(message) => return Err(message),
+                }
+            } else if self.settings.toggles.enable_telemetry() && !*usart_ctl {
+                unsafe { usart_service::RECEIVE_DATALOGGER_COMMANDS = false };
+                self.assigned_gpios
+                    .release(self.telemeter.get_requested_gpios());
+            }
+        }
+
+
+
         let new_settings = self.settings.with_values(values);
         self.settings = new_settings;
         if let Some(mode) = mode {
@@ -1093,7 +1130,8 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
-           "enable_telemetry" : self.settings.toggles.enable_telemetry()
+           "enable_telemetry" : self.settings.toggles.enable_telemetry(),
+           "usart_ctl" : self.settings.toggles.usart_receive_datalogger_commands(),
         })
     }
 
@@ -1134,7 +1172,7 @@ impl DataLogger {
                 }
             }
         }
-        if self.settings.toggles.enable_telemetry() {
+        if self.settings.toggles.enable_telemetry() || self.settings.toggles.usart_receive_datalogger_commands(){
             let id = b"lorawn";
             assignments[6].clone_from_slice(id);
             assignments[7].clone_from_slice(id);
