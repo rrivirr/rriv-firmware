@@ -123,7 +123,7 @@ pub trait SensorDriverServices {
     fn one_wire_skip_address(&mut self);
     fn one_wire_write_byte(&mut self, byte: u8);
     fn one_wire_match_address(&mut self, address: u64);
-    fn one_wire_read_bytes(&mut self, output: &mut [u8] );
+    fn one_wire_read_bytes(&mut self, output: &mut [u8]) -> Result<(), ()>;
     fn one_wire_bus_start_search(&mut self);
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 

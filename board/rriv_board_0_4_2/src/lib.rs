@@ -8,6 +8,7 @@ use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use stm32f1xx_hal::timer::CounterUs;
 
+use core::fmt::Display;
 use core::mem;
 use core::{
     cell::RefCell,
@@ -130,7 +131,6 @@ impl Board {
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
         self.storage.create_file(timestamp);
-
     }
 
     pub fn sleep_mcu(&mut self) {
@@ -428,16 +428,19 @@ impl RRIVBoard for Board {
         return self.uid;
     }
 
-    fn set_serial_number(&mut self, serial_number: [u8;rriv_board::EEPROM_SERIAL_NUMBER_SIZE]) -> bool {
+    fn set_serial_number(
+        &mut self,
+        serial_number: [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE],
+    ) -> bool {
         let existing_serial_number = self.get_serial_number();
-        if existing_serial_number != [255,255,255,255,255] {
+        if existing_serial_number != [255, 255, 255, 255, 255] {
             return false;
         }
         eeprom::write_serial_number_to_eeprom(self, &serial_number);
         return true;
     }
 
-    fn get_serial_number(&mut self) -> [u8;rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
+    fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
     }
 }
@@ -474,7 +477,7 @@ macro_rules! write_gpio {
         } else {
             let _ = $gpio.set_low();
         }
-    }
+    };
 }
 
 macro_rules! read_pin {
@@ -492,27 +495,25 @@ macro_rules! read_pin {
 macro_rules! set_pin_mode {
     ($pin: ident, $cr: ident, $mode: ident) => {
         match $mode {
-                rriv_board::gpio::GpioMode::FloatingInput => {
-                    $pin.make_floating_input($cr);
-                },
-                rriv_board::gpio::GpioMode::PullUpInput => {
-                    $pin.make_pull_up_input($cr);
-                }
-                rriv_board::gpio::GpioMode::PullDownInput => {
-                    $pin.make_pull_down_input($cr);
-                },
-                rriv_board::gpio::GpioMode::PushPullOutput => {
-                    $pin.make_push_pull_output($cr); 
-                }
-                rriv_board::gpio::GpioMode::OpenDrainOutput => {
-                    $pin.make_open_drain_output($cr);
-                },
-                rriv_board::gpio::GpioMode::None => todo!()
+            rriv_board::gpio::GpioMode::FloatingInput => {
+                $pin.make_floating_input($cr);
             }
+            rriv_board::gpio::GpioMode::PullUpInput => {
+                $pin.make_pull_up_input($cr);
+            }
+            rriv_board::gpio::GpioMode::PullDownInput => {
+                $pin.make_pull_down_input($cr);
+            }
+            rriv_board::gpio::GpioMode::PushPullOutput => {
+                $pin.make_push_pull_output($cr);
+            }
+            rriv_board::gpio::GpioMode::OpenDrainOutput => {
+                $pin.make_open_drain_output($cr);
+            }
+            rriv_board::gpio::GpioMode::None => todo!(),
+        }
     };
 }
-
-
 
 impl SensorDriverServices for Board {
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
@@ -611,8 +612,6 @@ impl SensorDriverServices for Board {
         }
     }
 
-  
-
     fn one_wire_reset(&mut self) {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.reset(&mut self.precise_delay) {
@@ -654,7 +653,7 @@ impl SensorDriverServices for Board {
         let address = Address(address);
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.match_address(&address, &mut self.precise_delay) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => rprintln!("one_wire_match_address: {:?}", err),
             }
         } else {
@@ -662,7 +661,7 @@ impl SensorDriverServices for Board {
         }
     }
 
-    fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
+    fn one_wire_read_bytes(&mut self, output: &mut [u8]) -> Result<(), ()> {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.read_bytes(output, &mut self.precise_delay) {
                 Ok(_) => {
@@ -678,11 +677,10 @@ impl SensorDriverServices for Board {
         // TODO
         if crc8(output) != 0 {
             rprintln!("one wire bad CRC"); // how do we tell the caller??
+            return Err(());
         }
-        // match check_crc8::<one_wire_bus::OneWireError<OneWireGpio1>>(output) {
-        //     Ok(_) => return,
-        //     Err(err) => rprintln!("1wire crc error {}", err),
-        // }
+
+        Ok(())
     }
 
     fn one_wire_bus_start_search(&mut self) {
@@ -715,12 +713,12 @@ impl SensorDriverServices for Board {
         }
     }
 
-      fn write_gpio_pin(&mut self, pin: u8, value: bool) {
+    fn write_gpio_pin(&mut self, pin: u8, value: bool) {
         match pin {
             1 => {
                 let gpio = &mut self.gpio.gpio1;
                 write_gpio!(gpio, value);
-            },
+            }
             2 => {
                 let gpio = &mut self.gpio.gpio2;
                 write_gpio!(gpio, value);
@@ -795,9 +793,8 @@ impl SensorDriverServices for Board {
             }
         }
     }
-    
-    fn set_gpio_pin_mode(&mut self, pin: u8, mode: rriv_board::gpio::GpioMode) {
 
+    fn set_gpio_pin_mode(&mut self, pin: u8, mode: rriv_board::gpio::GpioMode) {
         match pin {
             1 => {
                 let cr = &mut self.gpio_cr.gpiob_crh;
@@ -842,8 +839,7 @@ impl SensorDriverServices for Board {
             _ => {}
         }
     }
-  
-        
+
     fn disable_interrupts(&self) {
         self.disable_interrupts();
     }
@@ -1262,7 +1258,6 @@ impl BoardBuilder {
         rprintln!("uid: {:X?}", uid.bytes());
         self.uid = Some(uid.bytes());
 
-
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
@@ -1516,7 +1511,7 @@ pub fn write_panic_to_storage(message: &str) {
         .cfgr
         .use_hse(HSE_MHZ.MHz())
         .sysclk(SYSCLK_MHZ.MHz())
-        .pclk1( PCLK_MHZ.MHz())
+        .pclk1(PCLK_MHZ.MHz())
         // .adcclk(14.MHz())
         .freeze(&mut flash.acr);
 
