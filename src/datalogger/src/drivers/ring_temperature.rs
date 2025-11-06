@@ -1,5 +1,6 @@
 // use alloc::fmt::format;
 
+use crate::any_as_u8_slice;
 use crate::sensor_name_from_type_id;
 
 use super::mcp9808::*;
@@ -51,7 +52,7 @@ impl RingTemperatureDriver {
         special_config: RingTemperatureDriverSpecialConfiguration,
     ) -> Self {
         let mut addresses: [u8; TEMPERATURE_SENSORS_ON_RING] = [
-            0b0011000, 0b0011001, 0b0011010, 0b0011110, 0b0011100, 0b0011101,
+            0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100,
         ];
         for i in 0..6 {
             addresses[i] = addresses[i] + special_config.address_offset;
@@ -111,7 +112,7 @@ impl RingTemperatureDriver {
 
 
 
-const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'0', b'1', b'2', b'3', b'4', b'5'];
+const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F'];
 
 impl SensorDriver for RingTemperatureDriver {
 
@@ -220,5 +221,19 @@ impl SensorDriver for RingTemperatureDriver {
             };
         }
         Ok(())
+    }
+
+    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
+        // right now this just gets the bytes
+        // but the special settings probably should be consisted as member variables and copied back to the storage struct
+
+        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
+        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
+
+        copy_config_into_partition(0, generic_settings_bytes, storage);
+        copy_config_into_partition(1, special_settings_bytes, storage);
+    }
+
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
     }
 }

@@ -4,7 +4,7 @@ use embedded_hal::prelude::{
     _embedded_hal_blocking_i2c_WriteRead,
 };
 use crate::Board;
-use rriv_board::{RRIVBoard, EEPROM_SERIAL_NUMBER_SIZE};
+use rriv_board::RRIVBoard;
 use rtt_target::rprintln;
 
 // implementation specific consts

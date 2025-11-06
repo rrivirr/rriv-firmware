@@ -23,6 +23,8 @@ jobs:
     steps:
 
     - uses: actions/checkout@v4
+      with:
+        ssh-key: ${{ secrets.CD_DEPLOY_KEY }}
 
     - name: Configure Node.js
       uses: actions/setup-node@v5
@@ -43,6 +45,7 @@ jobs:
  
   build:
     name: Publish binaries
+    if: ${{ needs.release.outputs.new-release-git-tag }}
     runs-on: ubuntu-latest
     needs: release
 
@@ -64,6 +67,19 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: board/target/thumbv7m-none-eabi/release/app
         asset_name: rriv-firmware.elf
+        tag: ${{ needs.release.outputs.new-release-git-tag }}
+        overwrite: true
+
+    - name: Cargo build debug
+      run: cargo build
+      working-directory: board/app
+    
+    - name: Upload binaries to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: board/target/thumbv7m-none-eabi/debug/app
+        asset_name: rriv-firmware-debug.elf
         tag: ${{ needs.release.outputs.new-release-git-tag }}
         overwrite: true
           

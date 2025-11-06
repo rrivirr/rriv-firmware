@@ -509,7 +509,7 @@ impl SensorDriverServices for Board {
         match self.internal_adc.read(channel) {
             Ok(value) => return value,
             Err(error) => {
-                let mut error_string = match error {
+                let error_string = match error {
                     AdcError::NBError(_) => "Internal ADC NBError",
                     AdcError::NotConfigured => "Internal ADC Not Configured",
                     AdcError::ReadError => "Internal ADC Read Error",
@@ -942,7 +942,7 @@ impl BoardBuilder {
             let device_peripherals = pac::Peripherals::steal();
             let gpiod = device_peripherals.GPIOD.split();
 
-            let mut gpio5 = gpiod.pd2;
+            let gpio5 = gpiod.pd2;
             let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
             gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
 
@@ -1160,10 +1160,6 @@ impl BoardBuilder {
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
-        let uid = Uid::fetch();
-        rprintln!("uid: {:X?}", uid.bytes());
-        self.uid = Some(uid.bytes());
-
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
         let mut flash = device_peripherals.FLASH.constrain();
@@ -1171,7 +1167,6 @@ impl BoardBuilder {
 
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
-        self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
 
         // Prepare the GPIO
         let gpioa: gpio::gpioa::Parts = device_peripherals.GPIOA.split();
@@ -1202,6 +1197,12 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(6));
+        watchdog.feed();
+
         BoardBuilder::setup_serial(
             serial_pins,
             &mut gpio_cr,
@@ -1210,11 +1211,12 @@ impl BoardBuilder {
             &clocks,
         );
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
 
-        watchdog.start(MilliSeconds::secs(6));
-        watchdog.feed();
+        let uid = Uid::fetch();
+        rprintln!("uid: {:X?}", uid.bytes());
+        self.uid = Some(uid.bytes());
+
 
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);

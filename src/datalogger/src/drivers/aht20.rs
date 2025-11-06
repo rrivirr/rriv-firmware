@@ -2,6 +2,7 @@ use core::{f64::MAX, num::Wrapping};
 
 use rtt_target::rprintln;
 use serde_json::json;
+use util::any_as_u8_slice;
 
 use crate::sensor_name_from_type_id;
 
@@ -226,7 +227,17 @@ impl SensorDriver for AHT20 {
     }
     
     fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        rprintln!("not implemented");
+        // TODO: this can become a utility or macro function
+        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
+        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
+
+        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
+        for i in 0..8 {
+            rprintln!("saving {:#b}", special_settings_bytes[i]);
+        }
+        copy_config_into_partition(0, generic_settings_bytes, storage);
+        copy_config_into_partition(1, special_settings_bytes, storage);
+        rprintln!("saving {:X?}", storage);
     }
        
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
