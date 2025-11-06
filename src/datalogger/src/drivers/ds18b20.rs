@@ -61,8 +61,8 @@ pub const NUMBER_OF_MEASURED_PARAMETERS: usize = 2;
 
 #[derive(Copy, Clone)]
 pub struct Ds18b20SpecialConfiguration {
-    m: f32,                                // 4
-    b: f32,                                // 4
+    m: f32, // 4
+    b: f32, // 4
     // calibrate data?
     // power mode
     // resolution mode
@@ -70,8 +70,10 @@ pub struct Ds18b20SpecialConfiguration {
 }
 
 impl Ds18b20SpecialConfiguration {
-    pub fn parse_from_values(value: serde_json::Value) -> Result<Ds18b20SpecialConfiguration, &'static str> {
-        Ok ( Self {
+    pub fn parse_from_values(
+        value: serde_json::Value,
+    ) -> Result<Ds18b20SpecialConfiguration, &'static str> {
+        Ok(Self {
             m: 0_f32,
             b: 0_f32,
             _empty: [b'\0'; EMPTY_SIZE],
@@ -107,7 +109,7 @@ impl Ds18b20 {
             special_config,
             measured_parameter_values: [0.0; NUMBER_OF_MEASURED_PARAMETERS],
             m: 0_f64,
-            b: 0_f64
+            b: 0_f64,
         }
     }
 }
@@ -147,7 +149,6 @@ impl SensorDriver for Ds18b20 {
     }
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-  
         rprintln!("starting take measurement");
         board.one_wire_reset();
         board.one_wire_skip_address();
@@ -156,34 +157,41 @@ impl SensorDriver for Ds18b20 {
         let delay_ms = Resolution::Bits12.max_measurement_time_millis();
         board.delay_ms(delay_ms);
 
+        // init measure parameter values
+        self.measured_parameter_values[0] = core::f64::MAX;
+        self.measured_parameter_values[1] = core::f64::MAX;
 
         // This code just reads from a single one wire device
         board.one_wire_reset();
         board.one_wire_skip_address();
         board.one_wire_write_byte(READ_SCRATCHPAD);
         let mut scratchpad = [0; 9];
-        board.one_wire_read_bytes(&mut scratchpad);
-
-        let resolution = if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
-            resolution
-        } else {
-            //    return Err(OneWireError::CrcMismatch);
-            rprintln!("Problem reading resolution from scratchpad");
-            self.measured_parameter_values[0] = core::f64::MAX;
-            self.measured_parameter_values[1] = core::f64::MAX;
-            return;
-        };
-        let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
-        let temperature = match resolution {
-            Resolution::Bits12 => (raw_temp as f32) / 16.0,
-            Resolution::Bits11 => (raw_temp as f32) / 8.0,
-            Resolution::Bits10 => (raw_temp as f32) / 4.0,
-            Resolution::Bits9 => (raw_temp as f32) / 2.0,
-        };
-        rprintln!("Temp C: {}", temperature);
-        let value = temperature as f64;
-        self.measured_parameter_values[0] = value as f64;
-        self.measured_parameter_values[1] = self.m * value as f64 + self.b;
+        match board.one_wire_read_bytes(&mut scratchpad) {
+            Ok(_) => {
+                let resolution =
+                    if let Some(resolution) = Resolution::from_config_register(scratchpad[4]) {
+                        resolution
+                    } else {
+                        //    return Err(OneWireError::CrcMismatch);
+                        rprintln!("Problem reading resolution from scratchpad");
+                        return;
+                    };
+                let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
+                let temperature = match resolution {
+                    Resolution::Bits12 => (raw_temp as f32) / 16.0,
+                    Resolution::Bits11 => (raw_temp as f32) / 8.0,
+                    Resolution::Bits10 => (raw_temp as f32) / 4.0,
+                    Resolution::Bits9 => (raw_temp as f32) / 2.0,
+                };
+                rprintln!("Temp C: {}", temperature);
+                let value = temperature as f64;
+                self.measured_parameter_values[0] = value as f64;
+                self.measured_parameter_values[1] = self.m * value as f64 + self.b;
+            }
+            Err(_) => {
+                rprintln!("Problem reading temperature");
+            }
+        }
 
         // This code iterates over all the attached one wire devices
         // rprintln!("start bus search take measurement");
