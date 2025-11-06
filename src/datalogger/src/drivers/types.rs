@@ -135,8 +135,6 @@ pub fn copy_config_into_partition(
     bytes: &[u8],
     storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE],
 ) {
-    // let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-    // let mut bytes_sized: [u8; EEPROM_SENSOR_SETTINGS_SIZE] = [0; EEPROM_SENSOR_SETTINGS_SIZE];
     let copy_size = if bytes.len() >= SENSOR_SETTINGS_PARTITION_SIZE {
         SENSOR_SETTINGS_PARTITION_SIZE
     } else {
