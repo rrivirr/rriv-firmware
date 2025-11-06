@@ -57,7 +57,6 @@ use crate::registry::sensor_name_from_type_id;
 
 use super::types::*;
 
-pub const EMPTY_SIZE: usize = 24;
 pub const NUMBER_OF_MEASURED_PARAMETERS: usize = 2;
 
 #[derive(Copy, Clone)]
@@ -67,7 +66,6 @@ pub struct Ds18b20SpecialConfiguration {
     // calibrate data?
     // power mode
     // resolution mode
-    _empty: [u8; EMPTY_SIZE],
 }
 
 impl Ds18b20SpecialConfiguration {
@@ -77,7 +75,6 @@ impl Ds18b20SpecialConfiguration {
         Ok(Self {
             m: 0_f32,
             b: 0_f32,
-            _empty: [b'\0'; EMPTY_SIZE],
         } )
     }
 
@@ -87,7 +84,6 @@ impl Ds18b20SpecialConfiguration {
         Self {
             m: 0_f32,
             b: 0_f32,
-            _empty: [b'\0'; EMPTY_SIZE],
         }
     }
 }

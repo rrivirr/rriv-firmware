@@ -9,7 +9,6 @@ use super::types::*;
 pub struct MCP9808TemperatureDriverSpecialConfiguration {
     calibration_offset: i16, // TODO: This needs to get stored into the EEPROM, and we don't that yet!
     address: u8,
-    _empty: [u8; 29], // 32 - 1 - 2 = 29
 }
 
 impl MCP9808TemperatureDriverSpecialConfiguration {
@@ -46,7 +45,6 @@ impl MCP9808TemperatureDriverSpecialConfiguration {
         Ok(Self {
             calibration_offset: 0,
             address: address,
-            _empty: [b'\0'; 29],
         })
     }
 
@@ -61,7 +59,6 @@ impl MCP9808TemperatureDriverSpecialConfiguration {
         Self {
             calibration_offset: calibration_offset,
             address: 0b0011000,
-            _empty: [b'\0'; 29],
         }
     }
 
