@@ -250,6 +250,37 @@ impl BasicEvo {
 
         return message;
     }
+
+    pub fn construct_message_manual(&self, command: usize, address:usize, no_of_registers: usize, reg_address: usize, reg_value: usize) -> String {
+        
+        let mut message  = String::from(":");
+        message += &format!("{:02X}", 0x34); // Device Address
+        
+        message += &format!("{:02X}", command);
+        if command == 0x6 {
+            message += &format!("{:04X}", reg_address);
+            message += &format!("{:04X}", reg_value);
+        }
+        else if command == 0x3 {
+            // For read command, we need to specify start address and number of registers
+            // Here we use some default values
+            message += &format!("{:04X}", address); // Start Address
+            message += &format!("{:04X}", no_of_registers); // Number of Registers
+        }
+
+        let checksum = checksum_calculator(message.clone()[1..].to_string());
+        message += &format!("{:02X}", checksum);
+
+        return message;
+    }
+
+    pub fn send_write_command(&self, board: &mut dyn rriv_board::SensorDriverServices, message: String) {
+        let prepared_message = format!("{}\r\n", message);
+        let prepared_message = prepared_message.as_str();
+        rprintln!("Sending message {}", prepared_message);
+        board.usart_send(prepared_message);
+        board.delay_ms(2000);  
+    }
 }
 
 impl SensorDriver for BasicEvo {
@@ -273,7 +304,17 @@ impl SensorDriver for BasicEvo {
 
     #[allow(unused)]
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8;16] {
-        return single_raw_or_cal_parameter_identifiers(index, Some(b'T'));
+        let mut buf = [0u8; 16];
+        let mut identifiers = ["read"; 4];
+        
+        let mut identifier = "invalid";
+        if index <= self.special_config.no_of_registers {
+            identifier = identifiers[index];
+        }
+        for i in 0..identifier.len() {
+            buf[i] = identifier.as_bytes()[i];
+        }
+        return buf;
     }
 
     #[allow(unused)]
@@ -396,6 +437,34 @@ impl SensorDriver for BasicEvo {
             
         }
     }
-    
+
+    // fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
+            
+    //     for i in 0..pairs.len() {
+    //         let pair = &pairs[i];
+    //         rprintln!("calib point{:?} {}", i, pair.point);
+    //     }
+
+    //     if pairs.len() != 2 {
+    //         return Err(());
+    //     }
+
+    //     let cal1 = &pairs[0];
+    //     let cal2 = &pairs[1];
+
+    //     // Send zero reference point
+    //     let message = self.construct_message_manual(0x6, 0, 0, 0x47, cal1.point as usize);
+    //     rprintln!("Sending zero point message: {}", message);
+    //     self.send_write_command(board, message);
+
+    //     // Send span reference point
+    //     let message = self.construct_message_manual(0x6, 0, 0, 0x54, cal2.point as usize);
+    //     rprintln!("Sending span point message: {}", message);
+    //     self.send_write_command(board, message);
+    //     Ok(())
+    // } 
    
+    // fn clear_calibration(&mut self) {
+    //     // Not implemented
+    // }
 }
