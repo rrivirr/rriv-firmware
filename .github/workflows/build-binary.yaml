@@ -1,13 +1,12 @@
-name: Publish Firmware Binary
+name: Verify Build
 
 on:
-  push:
-    tags:
-      - 'v**'
-
+  pull_request:
+    types: [opened, reopened]
+    
 jobs:
   build:
-    name: Publish binaries
+    name: Compile
     runs-on: ubuntu-latest
 
     steps:
@@ -21,15 +20,5 @@ jobs:
     - name: Cargo build
       run: cargo build --release
       working-directory: board/app
-    
-    - name: Upload binaries to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: board/target/thumbv7m-none-eabi/release/app
-        asset_name: rriv-firmware-${{ github.ref }}
-        tag: ${{ github.ref }}
-        overwrite: true
-        body: "This is my release text"
     
         
