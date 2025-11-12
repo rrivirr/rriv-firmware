@@ -299,7 +299,7 @@ impl SensorDriver for BasicEvo {
 
     #[allow(unused)]
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
-        Ok(self.register_values[index] as f64)
+        Ok(((self.register_values[index] as i16) as f64) * 0.1)
     }
 
     #[allow(unused)]
