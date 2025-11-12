@@ -1,11 +1,12 @@
 
+use core::fmt::Debug;
+
 use embedded_hal::prelude::{
     _embedded_hal_blocking_i2c_Write,
     _embedded_hal_blocking_i2c_WriteRead,
 };
 use crate::Board;
 use rriv_board::{RRIVBoard};
-use rtt_target::rprintln;
 
 // implementation specific consts
 const EEPROM_I2C_ADDRESS: u8 = 0x50;
@@ -36,12 +37,12 @@ pub fn write_bytes_to_eeprom(board: &mut crate::Board, block: u8, start_address:
                 board.delay_ms(5_u16);
             }
             Err(error) => {
-                rprintln!("write error: {:?}", error);
+                defmt::println!("write error: {:?}", defmt::Debug2Format(&error));
             }
         }
         offset = offset + 1; // Last byte will crash
     }
-    rprintln!("done with EEPROM writes");
+    defmt::println!("done with EEPROM writes");
 }
 
 pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address: u8, buffer: &mut [u8]) {

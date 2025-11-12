@@ -1,7 +1,6 @@
 use core::fmt::Write;
 
 use rriv_board::RRIVBoard;
-use rtt_target::rprintln;
 use serde_json::json;
 use util::str_from_utf8;
 
@@ -88,7 +87,7 @@ impl RakWireless3172 {
         board.usart_send(&prepared_message);
         self.usart_send_time = board.timestamp();
         self.telemetry_step = self.telemetry_step.next();
-        rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+        defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
     }
 
     fn check_ok_or_restart(&mut self, board: &mut impl RRIVBoard) {
@@ -101,12 +100,12 @@ impl RakWireless3172 {
                         Some(index) => {
                             if index == 0 {
                                 self.telemetry_step = self.telemetry_step.next();
-                                rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+                                defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
                                 return;
                             }
                         }
                         None => {
-                            rprintln!("telem not ok: {}", message);
+                            defmt::println!("telem not ok: {}", message);
                             self.telemetry_step = RakWireless3172Step::Begin;
                             return;
                         }
@@ -121,9 +120,9 @@ impl RakWireless3172 {
         }
 
         // need to check for a timeout here
-        // rprintln!("no message, checking timeout");
+        // defmt::println!("no message, checking timeout");
         if board.timestamp() - self.usart_send_time > 2 {
-            rprintln!("timed out, going to step 0");
+            defmt::println!("timed out, going to step 0");
             self.telemetry_step = RakWireless3172Step::Begin;
         }
     }
@@ -149,7 +148,7 @@ impl RakWireless3172 {
                     Some(index) => {
                         if index == 0 {
                             self.telemetry_step = self.telemetry_step.next();
-                            rprintln!("Joined!!");
+                            defmt::println!("Joined!!");
                             return;
                         }
                         true
@@ -170,7 +169,7 @@ impl RakWireless3172 {
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         match self.telemetry_step {
             RakWireless3172Step::Begin => {
-                rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+                defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
                 self.send_and_increment_step(board, "AT+JOIN=0");
             }
             RakWireless3172Step::StopJoinConfirm => {
@@ -200,7 +199,7 @@ impl RakWireless3172 {
             _ => {}
         }
 
-        // rprintln!("done setting up lorawan")
+        // defmt::println!("done setting up lorawan")
     }
 
     pub fn transmit(&mut self, board: &mut impl RRIVBoard, payload: &[u8]) {
@@ -210,7 +209,7 @@ impl RakWireless3172 {
         for byte in payload {
             match write!(&mut s, "{:02X}", byte) {
                 Ok(_) => {},
-                Err(err) => rprintln!("{}", err),
+                Err(err) => defmt::println!("{}", defmt::Debug2Format(&err)),
             }
         }
 
@@ -245,7 +244,7 @@ impl RakWireless3172 {
                 let mut message = message;
                 let message = str_from_utf8(&mut message);
                 let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan: {}", message);
+                defmt::println!("lorawan: {}", message);
 
                 // handle other events
                 if message.contains("+EVT") || message.contains("AT") || message.contains("Restricted"){
@@ -282,7 +281,7 @@ impl RakWireless3172 {
                 let mut message = message;
                 let message = str_from_utf8(&mut message);
                 let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan2: {}", message);
+                defmt::println!("lorawan2: {}", message);
 
                 let mut continuing: bool = true;
                 // handle the response we are looking for
@@ -311,7 +310,7 @@ impl RakWireless3172 {
                 let mut message = message;
                 let message = str_from_utf8(&mut message);
                 let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan2: {}", message);
+                defmt::println!("lorawan2: {}", message);
 
                 let mut continuing: bool = true;
                 // handle the response we are looking for

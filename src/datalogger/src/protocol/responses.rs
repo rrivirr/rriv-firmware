@@ -1,13 +1,12 @@
 use alloc::boxed::Box;
 use alloc::format;
 use rriv_board::RRIVBoard;
-use rtt_target::rprintln;
 use serde_json::{json, Value};
 
 use crate::{alloc::string::ToString, drivers::types::CalibrationPair};
 
 pub fn send_command_response_message(board: &mut impl RRIVBoard, message: &str) {
-    rprintln!("{}", message);
+    defmt::println!("{}", message);
     board.usb_serial_send(json!({"message":message}).to_string().as_str());
     board.usb_serial_send("\n");
 }
@@ -31,7 +30,7 @@ pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[Ca
 
     if let Some(pairs) = pairs {
         for i in 0..pairs.len() {
-            rprintln!("calib pair{:?}", i);
+            defmt::println!("calib pair{:?}", i);
             let pair = &pairs[i];
             board.usb_serial_send(format!("{{'point': {}, 'values': [", pair.point).as_str());
             for i in 0..pair.values.len() {
@@ -52,7 +51,7 @@ pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[Ca
 }
 
 pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]){
-    rprintln!("{:?}", serial_number);
+    defmt::println!("{:?}", serial_number);
     let serial_number = util::str_from_utf8(&mut serial_number).unwrap_or_default();
     let uid = format!("{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}",            
             uid[0],

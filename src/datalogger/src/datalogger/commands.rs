@@ -1,6 +1,5 @@
 use alloc::format;
 use rriv_board::{RRIVBoard, EEPROM_TOTAL_SENSOR_SLOTS};
-use rtt_target::rprintln;
 use serde_json::{json, Value};
 extern crate alloc;
 use crate::alloc::string::ToString;
@@ -23,7 +22,7 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
     if let Some(param) = payload.parameter {
         match param {
             serde_json::Value::String(param) => {
-                rprintln!("{:?}", param.as_str());
+                defmt::println!("{:?}", param.as_str());
                 match param.as_str() {
                     "epoch" => {
                         let epoch = board.epoch_timestamp();
@@ -69,7 +68,7 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
             }
             err => {
                 responses::send_command_response_message(board, "Bad param in command");
-                rprintln!("Bad epoch {:?}", err);
+                defmt::println!("Bad epoch {:?}", defmt::Debug2Format(&err));
                 return;
             }
         }
@@ -92,7 +91,7 @@ pub fn build_driver(
 ) -> Result<Box<dyn SensorDriver>, &'static str> {
    
 
-    rprintln!("looking up funcs");
+    defmt::println!("looking up funcs");
     let registry = crate::registry::get_registry();
     let create_function = registry[usize::from(payload_values.sensor_type_id)];
 
@@ -179,7 +178,7 @@ pub fn find_empty_slot(
 //         slot = empty_slot
 //     };
 
-//     rprintln!("looking up funcs");
+//     defmt::println!("looking up funcs");
 //     let registry = crate::registry::get_registry();
 //     let create_function = registry[usize::from(sensor_type_id)];
 
@@ -357,7 +356,7 @@ use alloc::string::String;
 pub fn sensor_add_calibration_point_arguments<'a>(
     payload: &'a SensorCalibratePointPayload,
 ) -> Result<(&'a String, f64), &'static str> {
-    rprintln!("Sensor calibrate point payload");
+    defmt::println!("Sensor calibrate point payload");
 
     let id = match payload.id {
         serde_json::Value::String(ref payload_id) => payload_id,
@@ -391,7 +390,7 @@ pub fn sensor_add_calibration_point_arguments<'a>(
 //             let count = driver.get_measured_parameter_count() / 2; // TODO: get_measured_parameter_count, vs get_output_parameter_count
 //             let mut values = Box::new([0_f64; 10]); // TODO: max of 10, should we make this dynamic?
 //             for j in 0..count {
-//                 rprintln!("{:?}", j);
+//                 defmt::println!("{:?}", j);
 //                 let value = match driver.get_measured_parameter_value(j * 2) {
 //                     Ok(value) => value,
 //                     Err(_) => {
