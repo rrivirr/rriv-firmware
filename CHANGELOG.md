@@ -1,3 +1,10 @@
+## [1.1.11](https://github.com/rrivirr/rriv-firmware/compare/v1.1.10...v1.1.11) (2025-11-12)
+
+
+### Bug Fixes
+
+* enable setting of interactive_logging ([49ebd40](https://github.com/rrivirr/rriv-firmware/commit/49ebd407d461529751b462a0e0afa33664d94d58))
+
 ## [1.1.10](https://github.com/rrivirr/rriv-firmware/compare/v1.1.9...v1.1.10) (2025-10-18)
 
 
