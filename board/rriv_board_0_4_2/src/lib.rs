@@ -365,10 +365,9 @@ impl RRIVBoard for Board {
     }
 
     fn get_millis(&mut self) -> u32 {
-        // let micros = self.counter.now();
-        // let millis = micros.ticks() / 1000;
-        // millis
-        1
+        let millis = self.counter.now();
+        let millis = millis.ticks();
+        millis
     }
 
     fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices {
