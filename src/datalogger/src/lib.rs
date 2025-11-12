@@ -12,6 +12,7 @@ use rriv_board::{
     RRIVBoard, EEPROM_DATALOGGER_SETTINGS_SIZE, EEPROM_SENSOR_SETTINGS_SIZE,
     EEPROM_TOTAL_SENSOR_SLOTS,
 };
+use serde::de::value;
 use util::any_as_u8_slice;
 extern crate alloc;
 use crate::datalogger::bytes;
@@ -1071,9 +1072,13 @@ impl DataLogger {
                     .release(self.telemeter.get_requested_gpios());
             }
         }
-
+        let int_logging = values.interactive_logging;
         let new_settings = self.settings.with_values(values);
         self.settings = new_settings;
+        
+        if let Some(interactive_logging) = int_logging {
+            self.interactive_logging = interactive_logging;
+        }
         if let Some(mode) = mode {
             self.set_mode(board, mode);
         }
@@ -1093,7 +1098,8 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
-           "enable_telemetry" : self.settings.toggles.enable_telemetry()
+           "enable_telemetry" : self.settings.toggles.enable_telemetry(),
+           "interactive_logging": self.interactive_logging
         })
     }
 
