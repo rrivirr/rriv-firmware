@@ -81,7 +81,10 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::generic_analog::GenericAnalog,
         crate::drivers::generic_analog::GenericAnalogSpecialConfiguration
     )); 
-    driver_create_functions[2] = None;
+    driver_create_functions[2] = Some(driver_create_functions!(
+        crate::drivers::atlas_ec::AtlasEC,
+        crate::drivers::atlas_ec::AtlasECSpecialConfiguration
+    ));
     driver_create_functions[3] = Some(driver_create_functions!(
         crate::drivers::aht20::AHT20,
         crate::drivers::aht20::AHT20SpecialConfiguration
