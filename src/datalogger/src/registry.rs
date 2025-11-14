@@ -82,14 +82,28 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::generic_analog::GenericAnalog,
         crate::drivers::generic_analog::GenericAnalogSpecialConfiguration
     )); 
-    driver_create_functions[2] = Some(driver_create_functions!(
-        crate::drivers::atlas_ec::AtlasEC,
-        crate::drivers::atlas_ec::AtlasECSpecialConfiguration
-    ));
-    driver_create_functions[3] = Some(driver_create_functions!(
-        crate::drivers::aht20::AHT20,
-        crate::drivers::aht20::AHT20SpecialConfiguration
-    ));
+    #[cfg(not(feature = "N2O"))]
+    {
+        driver_create_functions[2] = Some(driver_create_functions!(
+            crate::drivers::atlas_ec::AtlasEC,
+            crate::drivers::atlas_ec::AtlasECSpecialConfiguration
+        ));
+    }
+    #[cfg(feature = "N2O")]
+    {
+        driver_create_functions[2] = None;
+    }
+    #[cfg(not(feature = "N2O"))]
+    {
+        driver_create_functions[3] = Some(driver_create_functions!(
+            crate::drivers::aht20::AHT20,
+            crate::drivers::aht20::AHT20SpecialConfiguration
+        ));
+    }
+    #[cfg(feature = "N2O")]
+    {
+        driver_create_functions[3] = None;
+    }
     driver_create_functions[4] = Some(driver_create_functions!(
         crate::drivers::mcp9808::MCP9808TemperatureDriver,
         crate::drivers::mcp9808::MCP9808TemperatureDriverSpecialConfiguration
@@ -102,20 +116,36 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::timed_switch_2::TimedSwitch2, 
         crate::drivers::timed_switch_2::TimedSwitch2SpecialConfiguration
     ));
-    driver_create_functions[7] = Some(driver_create_functions!(
-        crate::drivers::ds18b20::Ds18b20,
-        crate::drivers::ds18b20::Ds18b20SpecialConfiguration
-    ));
-    driver_create_functions[8] = None;
-    // Some(driver_create_functions!(
-    //     crate::drivers::k30_co2::K30CO2, 
-    //     crate::drivers::k30_co2::K30CO2SpecialConfiguration
-    // ));
-    driver_create_functions[9] = Some(driver_create_functions!(
-        crate::drivers::basic_evo::BasicEvo,
-        crate::drivers::basic_evo::BasicEvoSpecialConfiguration
-    ));
+    #[cfg(not(feature = "N2O"))]
+    {
+        driver_create_functions[7] = Some(driver_create_functions!(
+            crate::drivers::ds18b20::Ds18b20,
+            crate::drivers::ds18b20::Ds18b20SpecialConfiguration
+        ));
+    }
 
+    #[cfg(feature = "N2O")]
+    {
+        driver_create_functions[7] = None;
+    }
+    #[cfg(not(feature = "N2O"))]
+    {
+        driver_create_functions[8] = Some(driver_create_functions!(
+            crate::drivers::k30_co2::K30CO2,
+            crate::drivers::k30_co2::K30CO2SpecialConfiguration
+        ));
+    }
+    #[cfg(feature = "N2O")]
+    {
+        driver_create_functions[8] = None;
+    }
+    #[cfg(feature = "N2O")]
+    {
+        driver_create_functions[9] = Some(driver_create_functions!(
+            crate::drivers::basic_evo::BasicEvo,
+            crate::drivers::basic_evo::BasicEvoSpecialConfiguration
+        ));
+    }
     driver_create_functions
 }
 

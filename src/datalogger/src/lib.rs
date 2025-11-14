@@ -333,6 +333,9 @@ impl DataLogger {
         // get next raw reading
         rprintln!("measuring sensor values in cycle");
         self.measure_sensor_values(board);
+        let message = DataLogger::receive_usart_message(board);
+        self.relay_message(message);
+
         self.readings_completed_in_current_burst = self.readings_completed_in_current_burst + 1;
         rprintln!(
             "completed reading {}",
