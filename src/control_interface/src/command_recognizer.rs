@@ -1,6 +1,6 @@
 // https://ferrous-systems.com/blog/test-embedded-app/
 
-// use rtt_target::rprintln;
+// use rtt_target::defmt::println;
 
 
 

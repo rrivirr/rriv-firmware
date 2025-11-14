@@ -12,8 +12,9 @@ util = { path = "../../src/util"}
 hashbrown = "0.14"
 serde_json = { version = "1.0.104", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-rtt-target = "0.4.0"
+rtt-target = { version = "0.6.1", features =  ["defmt"] }
 bitflags = "2.4.1"
 bitfield-struct = "0.7"
 one-wire-bus = "0.1.1"
 embedded-hal = "1.0.0"
+defmt = "1.0.1"

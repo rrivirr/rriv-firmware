@@ -8,7 +8,6 @@ use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use stm32f1xx_hal::timer::CounterUs;
 
-use core::fmt::Display;
 use core::mem;
 use core::{
     cell::RefCell,
@@ -39,7 +38,6 @@ use stm32f1xx_hal::{
     watchdog::IndependentWatchdog,
 };
 
-use rtt_target::rprintln;
 use stm32f1xx_hal::rcc::{Clocks, CFGR};
 use stm32f1xx_hal::{
     gpio::{self, OpenDrain, Output},
@@ -126,7 +124,7 @@ pub struct Board {
 
 impl Board {
     pub fn start(&mut self) {
-        rprintln!("starting board");
+        defmt::println!("starting board");
         // self.power_control.cycle_3v(&mut self.delay);
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
@@ -140,7 +138,7 @@ impl Board {
 
         self.internal_rtc.set_alarm(5000); // 5 seconds?
         self.internal_rtc.listen_alarm();
-        rprintln!("will sleep");
+        defmt::println!("will sleep");
 
         // disable interrupts
         NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
@@ -164,7 +162,7 @@ impl Board {
         unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
         unsafe { NVIC::unmask(pac::Interrupt::USART2) };
 
-        rprintln!("woke from sleep");
+        defmt::println!("woke from sleep");
     }
 
     pub fn enter_stop_mode(&mut self) {
@@ -246,7 +244,7 @@ impl RRIVBoard for Board {
             // USART
             let bytes = string.as_bytes();
             for char in bytes.iter() {
-                // rprintln!("char {}", char);
+                // defmt::println!("char {}", char);
                 let t: &RefCell<Option<Tx<USART2>>> = USART_TX.borrow(cs);
                 if let Some(tx) = t.borrow_mut().deref_mut() {
                     _ = nb::block!(tx.write(char.clone()));
@@ -274,7 +272,7 @@ impl RRIVBoard for Board {
 
     // outputs to serial and also echos to rtt
     fn serial_debug(&mut self, string: &str) {
-        rprintln!("{:?}", string);
+        defmt::println!("{:?}", string);
         if self.debug {
             rriv_board::RRIVBoard::usb_serial_send(
                 self,
@@ -329,11 +327,11 @@ impl RRIVBoard for Board {
         let millis = epoch * 1000;
         // DateTime::from_timestamp_millis(micros);
         let datetime = NaiveDateTime::from_timestamp_millis(millis);
-        // rprintln!("{:?}", datetime);
+        // defmt::println!("{:?}", datetime);
         if let Some(datetime) = datetime {
             match ds3231.set_datetime(&datetime) {
                 Ok(_) => {}
-                Err(err) => rprintln!("Error {:?}", err),
+                Err(err) => defmt::println!("Error {:?}", defmt::Debug2Format(&err)),
             }
         }
         let _result = ds3231.datetime();
@@ -348,11 +346,11 @@ impl RRIVBoard for Board {
 
         match result {
             Ok(date_time) => {
-                // rprintln!("got DS3231 time {:?}", date_time.and_utc().timestamp());
+                // defmt::println!("got DS3231 time {:?}", date_time.and_utc().timestamp());
                 date_time.and_utc().timestamp()
             }
             Err(err) => {
-                rprintln!("DS3231 error {:?}", err);
+                defmt::println!("DS3231 error {:?}", defmt::Debug2Format(&err));
                 return 0; // this could fail back to some other clock
             }
         }
@@ -484,7 +482,7 @@ macro_rules! read_pin {
         match $pin.is_high() {
             Ok(is_high) => Ok(is_high),
             Err(err) => {
-                rprintln!("{:?}", err);
+                defmt::println!("{:?}", defmt::Debug2Format(&err));
                 Err(())
             }
         }
@@ -603,11 +601,11 @@ impl SensorDriverServices for Board {
 
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.send_command(command, Some(&address), &mut self.precise_delay) {
-                Ok(_) => rprintln!("sent command ok"),
-                Err(e) => rprintln!("{:?}", e),
+                Ok(_) => defmt::println!("sent command ok"),
+                Err(e) => defmt::println!("{:?}", defmt::Debug2Format(&e)),
             }
         } else {
-            rprintln!("one wire bus not available")
+            defmt::println!("one wire bus not available")
         }
     }
 
@@ -616,13 +614,13 @@ impl SensorDriverServices for Board {
             match one_wire_bus.reset(&mut self.precise_delay) {
                 Ok(found_device) => {
                     if !found_device {
-                        rprintln!("no one wire device found");
+                        defmt::println!("no one wire device found");
                     }
                 }
-                Err(err) => rprintln!("one_wire_reset: {:?}", err),
+                Err(err) => defmt::println!("one_wire_reset: {:?}", defmt::Debug2Format(&err)),
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
         }
     }
 
@@ -630,10 +628,10 @@ impl SensorDriverServices for Board {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.skip_address(&mut self.precise_delay) {
                 Ok(_) => {}
-                Err(err) => rprintln!("one_wire_skip_address: {:?}", err),
+                Err(err) => defmt::println!("one_wire_skip_address: {:?}", defmt::Debug2Format(&err)),
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
         }
     }
 
@@ -641,10 +639,10 @@ impl SensorDriverServices for Board {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.write_byte(byte, &mut self.precise_delay) {
                 Ok(_) => {}
-                Err(err) => rprintln!("one_wire_write_byte: {:?}", err),
+                Err(err) => defmt::println!("one_wire_write_byte: {:?}", defmt::Debug2Format(&err)),
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
         }
     }
 
@@ -653,10 +651,10 @@ impl SensorDriverServices for Board {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.match_address(&address, &mut self.precise_delay) {
                 Ok(_) => {}
-                Err(err) => rprintln!("one_wire_match_address: {:?}", err),
+                Err(err) => defmt::println!("one_wire_match_address: {:?}", defmt::Debug2Format(&err)),
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
         }
     }
 
@@ -664,18 +662,18 @@ impl SensorDriverServices for Board {
         if let Some(one_wire_bus) = &mut self.one_wire_bus {
             match one_wire_bus.read_bytes(output, &mut self.precise_delay) {
                 Ok(_) => {
-                    rprintln!("one_wire_read_bytes {:?}", output);
+                    defmt::println!("one_wire_read_bytes {:?}", output);
                 }
                 Err(err) => {
-                    rprintln!("one_wire_read_bytes {:?}", err);
+                    defmt::println!("one_wire_read_bytes {:?}", defmt::Debug2Format(&err));
                 }
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
         }
         // TODO
         if crc8(output) != 0 {
-            rprintln!("one wire bad CRC"); // how do we tell the caller??
+            defmt::println!("one wire bad CRC"); // how do we tell the caller??
             return Err(());
         }
 
@@ -698,16 +696,16 @@ impl SensorDriverServices for Board {
                     return Some(device_address.0);
                 }
                 Ok(None) => {
-                    rprintln!("no more devices 1wire");
+                    defmt::println!("no more devices 1wire");
                     return None;
                 }
                 Err(e) => {
-                    rprintln!("1wire error{:?}", e);
+                    defmt::println!("1wire error{:?}", defmt::Debug2Format(&e));
                     return None;
                 }
             }
         } else {
-            rprintln!("one wire bus not available");
+            defmt::println!("one wire bus not available");
             return None;
         }
     }
@@ -859,7 +857,7 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    rprintln!("serial rx byte: {}", c);
+                    defmt::println!("serial rx byte: {}", c);
                     // USART_UNREAD_MESSAGE = true;
                     // if USART_RECEIVE_INDEX < USART_RECEIVE_SIZE - 1 {
                     //     USART_RECEIVE[USART_RECEIVE_INDEX] = c;
@@ -998,7 +996,7 @@ impl BoardBuilder {
         one_wire = match OneWire::new(pin) {
             Ok(one_wire) => Some(one_wire),
             Err(e) => {
-                rprintln!("{:?} bad one wire bus", e);
+                defmt::println!("{:?} bad one wire bus", defmt::Debug2Format(&e));
                 panic!("bad one wire bus");
             }
         };
@@ -1053,7 +1051,7 @@ impl BoardBuilder {
 
         assert!(clocks.usbclk_valid());
 
-        rprintln!("{:?}", clocks);
+        defmt::println!("{:?}", defmt::Debug2Format(&clocks));
 
         clocks
     }
@@ -1064,7 +1062,7 @@ impl BoardBuilder {
         usart: USART2,
         clocks: &Clocks,
     ) {
-        // rprintln!("initializing serial");
+        // defmt::println!("initializing serial");
 
         let mut serial = Hal_Serial::new(
             usart,
@@ -1079,7 +1077,7 @@ impl BoardBuilder {
             &clocks,
         );
 
-        // rprintln!("serial rx.listen()");
+        // defmt::println!("serial rx.listen()");
 
         serial.rx.listen();
 
@@ -1088,7 +1086,7 @@ impl BoardBuilder {
             USART_TX.borrow(cs).replace(Some(serial.tx));
             // WAKE_LED.borrow(cs).replace(Some(led)); // TODO: this needs to be updated.  entire rgb_led object needs to be shared.
         });
-        // rprintln!("unmasking USART2 interrupt");
+        // defmt::println!("unmasking USART2 interrupt");
         unsafe {
             NVIC::unmask(pac::Interrupt::USART2);
         }
@@ -1192,13 +1190,13 @@ impl BoardBuilder {
     }
 
     fn setup(&mut self) {
-        rprintln!("board new");
+        defmt::println!("board new");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
         let uid = Uid::fetch();
-        rprintln!("uid: {:X?}", uid.bytes());
+        defmt::println!("uid: {:X}", uid.bytes());
         self.uid = Some(uid.bytes());
 
         // mcu device registers
@@ -1292,7 +1290,7 @@ impl BoardBuilder {
         //
         // the IndependentWatchdog won't trigger an interrupt.  it also can't be disabled.
 
-        rprintln!("unhang I2C1 if hung");
+        defmt::println!("unhang I2C1 if hung");
 
         let mut scl1 = i2c1_pins
             .i2c1_scl
@@ -1311,7 +1309,7 @@ impl BoardBuilder {
         ) {
             Ok(_) => {}
             Err(_e) => {
-                rprintln!("Couln't reset i2c1");
+                defmt::println!("Couln't reset i2c1");
                 usb_serial_send("{\"status\":\"i2c1 failed, restarting\"}", &mut delay);
                 loop {}
             } // wait for IDWP to reset.   actually we can just hardware reset here?
@@ -1319,7 +1317,7 @@ impl BoardBuilder {
 
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
-        // rprintln!("starting i2c");
+        // defmt::println!("starting i2c");
         core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
@@ -1327,11 +1325,11 @@ impl BoardBuilder {
             &mut afio.mapr,
             &clocks,
         );
-        rprintln!("set up i2c1 done");
+        defmt::println!("set up i2c1 done");
 
-        // rprintln!("skipping unhang I2C2 if hung");
+        // defmt::println!("skipping unhang I2C2 if hung");
 
-        rprintln!("unhang I2C2 if hung");
+        defmt::println!("unhang I2C2 if hung");
 
         let mut scl2 = i2c2_pins
             .i2c2_scl
@@ -1352,7 +1350,7 @@ impl BoardBuilder {
                 match ok {
                     i2c_hung_fix::Sucess::BusNotHung => {}
                     i2c_hung_fix::Sucess::FixedHungBus => {
-                        rprintln!("Fixed hung bus");
+                        defmt::println!("Fixed hung bus");
                         loop {} // wait for IDWD to reset
                     }
                 }
@@ -1367,36 +1365,35 @@ impl BoardBuilder {
 
         let mut i2c2 =
             BoardBuilder::setup_i2c2(i2c2_pins, &mut gpio_cr, device_peripherals.I2C2, &clocks);
-        rprintln!("set up i2c2 done");
+        defmt::println!("set up i2c2 done");
 
-        rprintln!("i2c1 scanning...");
+        defmt::println!("i2c1 scanning...");
 
         for addr in 0x00_u8..0x7F {
             // Write the empty array and check the slave response.
-            // rprintln!("trying {:02x}", addr);
+            // defmt::println!("trying {:02x}", addr);
             let mut buf = [b'\0'; 1];
             if i2c1.read(addr, &mut buf).is_ok() {
-                rprintln!("{:02x} good", addr);
+                defmt::println!("{:02x} good", addr);
             }
 
             delay.delay_ms(10_u32);
         }
-        rprintln!("scan is done");
+        defmt::println!("scan is done");
 
         watchdog.feed();
 
-        rprintln!("i2c2 scanning...");
-        rprintln!();
+        defmt::println!("i2c2 scanning...");
         for addr in 0x00_u8..0x7F {
             // Write the empty array and check the slave response.
-            // rprintln!("trying {:02x}", addr);
+            // defmt::println!("trying {:02x}", addr);
             let mut buf = [b'\0'; 1];
             if i2c2.read(addr, &mut buf).is_ok() {
-                rprintln!("{:02x} good", addr);
+                defmt::println!("{:02x} good", addr);
             }
             delay.delay_ms(10_u32);
         }
-        rprintln!("scan is done");
+        defmt::println!("scan is done");
 
         watchdog.feed();
 
@@ -1444,8 +1441,8 @@ impl BoardBuilder {
         // the millis counter
         let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
         match counter.start(2.micros()) {
-            Ok(_) => rprintln!("Millis counter start ok"),
-            Err(err) => rprintln!("Millis counter start not ok {:?}", err),
+            Ok(_) => defmt::println!("Millis counter start ok"),
+            Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
         self.counter = Some(counter);
 
@@ -1453,7 +1450,7 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        rprintln!("done with setup");
+        defmt::println!("done with setup");
     }
 }
 
@@ -1472,21 +1469,21 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
         while written < bytes.len() {
             match serial.write(&bytes[written..bytes.len()]) {
                 Ok(bytes_written) => {
-                    // rprintln!("usb bytes written {}", bytes_written);
+                    // defmt::println!("usb bytes written {}", bytes_written);
                     written = written + bytes_written;
                 }
                 Err(err) => {
                     match err {
                         UsbError::WouldBlock => {
                             if would_block_count > 100 {
-                                rprintln!("USBWouldBlock limit exceeded");
+                                defmt::println!("USBWouldBlock limit exceeded");
                                 return;
                             }
                             would_block_count = would_block_count + 1; // handle hung blocking condition.  possibly caused by client not reading and buffer full.
                             delay.delay_ms(1);
                         }
                         _ => {
-                            rprintln!("{:?}", err);
+                            defmt::println!("{:?}", defmt::Debug2Format(&err));
                         } // UsbError::ParseError => todo!(),
                           // UsbError::BufferOverflow => todo!(),
                           // UsbError::EndpointOverflow => todo!(),

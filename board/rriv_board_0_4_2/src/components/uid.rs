@@ -1,6 +1,5 @@
 use core::ptr;
 
-use rtt_target::rprintln;
 
 pub struct Uid {
     off0: u16,
@@ -21,7 +20,7 @@ impl Uid {
 
         let value: u16 = unsafe { ptr::read(address0) };
 
-        rprintln!("Value at address: {}", value);
+        defmt::println!("Value at address: {}", value);
 
         Self {
             off0: unsafe { ptr::read(address0) },

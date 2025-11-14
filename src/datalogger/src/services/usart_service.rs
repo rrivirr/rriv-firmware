@@ -1,7 +1,6 @@
 use core::borrow::BorrowMut;
 use alloc::boxed::Box;
 use rriv_board::{RRIVBoard, RXProcessor};
-use rtt_target::rprintln;
 use util::str_from_utf8;
 
 
@@ -59,7 +58,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
     let pos: usize = message_data.command_pos;
 
     if message_data.cur == message_data.end {
-        rprintln!("usart circular buffer is full");
+        defmt::println!("usart circular buffer is full");
         return;
     }
 
@@ -67,7 +66,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
         // command is done
         let mut message = message_data.buffer[cur].clone();
         match str_from_utf8(&mut message)  {
-            Ok(message) =>  rprintln!("{}", message),
+            Ok(message) =>  defmt::println!("{}", message),
             Err(_) => {},
         }
        
@@ -113,7 +112,7 @@ pub fn pending_message_count(board: &impl RRIVBoard) -> usize {
 }
 
 pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
-    // rprintln!("pending messages {}", pending_message_count(board));
+    // defmt::println!("pending messages {}", pending_message_count(board));
     if pending_message_count(board) < 1 {
         return Err(());
     }

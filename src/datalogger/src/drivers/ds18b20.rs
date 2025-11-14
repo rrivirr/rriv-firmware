@@ -49,7 +49,6 @@ impl Resolution {
 
 use core::f64::MAX;
 
-use rtt_target::rprintln;
 use serde_json::json;
 use util::any_as_u8_slice;
 
@@ -149,7 +148,7 @@ impl SensorDriver for Ds18b20 {
     }
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        rprintln!("starting take measurement");
+        defmt::println!("starting take measurement");
         board.one_wire_reset();
         board.one_wire_skip_address();
         board.one_wire_write_byte(CONVERT_TEMP);
@@ -173,7 +172,7 @@ impl SensorDriver for Ds18b20 {
                         resolution
                     } else {
                         //    return Err(OneWireError::CrcMismatch);
-                        rprintln!("Problem reading resolution from scratchpad");
+                        defmt::println!("Problem reading resolution from scratchpad");
                         return;
                     };
                 let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
@@ -183,23 +182,23 @@ impl SensorDriver for Ds18b20 {
                     Resolution::Bits10 => (raw_temp as f32) / 4.0,
                     Resolution::Bits9 => (raw_temp as f32) / 2.0,
                 };
-                rprintln!("Temp C: {}", temperature);
+                defmt::println!("Temp C: {}", temperature);
                 let value = temperature as f64;
                 self.measured_parameter_values[0] = value as f64;
                 self.measured_parameter_values[1] = self.m * value as f64 + self.b;
             }
             Err(_) => {
-                rprintln!("Problem reading temperature");
+                defmt::println!("Problem reading temperature");
             }
         }
 
         // This code iterates over all the attached one wire devices
-        // rprintln!("start bus search take measurement");
+        // defmt::println!("start bus search take measurement");
         // board.one_wire_bus_start_search();
-        // rprintln!("iterate");
+        // defmt::println!("iterate");
         // loop {
         //     if let Some(device_address) = board.one_wire_bus_search() {
-        //         rprintln!("found a device");
+        //         defmt::println!("found a device");
         //         // todo: fix this so that you can check family code
         //         // if device_address.family_code() != ds18b20::FAMILY_CODE {
         //         //     // skip other devices
@@ -224,7 +223,7 @@ impl SensorDriver for Ds18b20 {
         //                 resolution
         //             } else {
         //                 //    return Err(OneWireError::CrcMismatch);
-        //                 rprintln!("Problem reading resolution from scratchpad");
+        //                 defmt::println!("Problem reading resolution from scratchpad");
         //                 return;
         //             };
         //         let raw_temp = u16::from_le_bytes([scratchpad[0], scratchpad[1]]);
@@ -234,7 +233,7 @@ impl SensorDriver for Ds18b20 {
         //             Resolution::Bits10 => (raw_temp as f32) / 4.0,
         //             Resolution::Bits9 => (raw_temp as f32) / 2.0,
         //         };
-        //         rprintln!("Temp C: {}", temperature);
+        //         defmt::println!("Temp C: {}", temperature);
         //     } else {
         //         break;
         //     }
@@ -264,7 +263,7 @@ impl SensorDriver for Ds18b20 {
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
         for i in 0..pairs.len() {
             let pair = &pairs[i];
-            rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+            defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
         }
 
         if pairs.len() != 2 {
@@ -276,10 +275,10 @@ impl SensorDriver for Ds18b20 {
 
         self.m = (cal2.point - cal1.point) / (cal2.values[0] - cal1.values[0]);
         self.b = cal1.point - self.m * cal1.values[0];
-        rprintln!("calibration: {} {}", self.m, self.b);
+        defmt::println!("calibration: {} {}", self.m, self.b);
         self.special_config.m = self.m as f32;
         self.special_config.b = self.b as f32;
-        rprintln!(
+        defmt::println!(
             "calibration: {} {}",
             self.special_config.m,
             self.special_config.b
@@ -289,6 +288,6 @@ impl SensorDriver for Ds18b20 {
     }
 
     fn clear_calibration(&mut self) {
-        // rprintln!("not implemented");
+        // defmt::println!("not implemented");
     }
 }
