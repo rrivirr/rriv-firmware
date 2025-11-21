@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use rtt_target::rprintln;
 
 use super::resources::gpio::*;
 
@@ -92,6 +93,18 @@ pub trait SensorDriver {
     fn get_requested_gpios(&self) -> GpioRequest {
         GpioRequest::none()
     }
+
+    #[allow(unused)]
+    fn send(&mut self, board: &mut dyn rriv_board::SensorDriverServices, command: [u8; 20]) {
+        rprintln!("SensorSend not implemented for this driver");
+    }
+
+    #[allow(unused)]
+    fn sensor_receive(&mut self, message: Option<[u8; crate::usart_service::USART_BUFFER_SIZE]>) -> Result<[u16; 16], &'static str> {
+        // does nothing
+        Ok([0;16])
+    }
+
 }
 
 

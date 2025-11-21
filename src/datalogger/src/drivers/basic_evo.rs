@@ -151,9 +151,6 @@ impl BasicEvoSpecialConfiguration {
         let mode: usize = match s.to_ascii_lowercase().as_str() {
             "manual" => 0,
             "read_conc" => 1,
-            "write_zero" => 2,
-            "write_span" => 3,
-            "device_info" => 4,
             _ => 0,
         };
       
@@ -204,29 +201,10 @@ impl BasicEvo {
         
         match self.special_config.mode {
             1 => {
-                // Read Status and Concentration Mode
+                // Read Concentration Mode
                 self.special_config.command = 0x03;
-                self.special_config.start_address = 0x0009;
-                self.special_config.no_of_registers = 2;
-            }
-
-            2 => {
-                // Write Zero Point Reference Mode
-                self.special_config.command = 0x06;
-                self.special_config.reg_address = 0x0047;
-            }
-
-            3 => {
-                // Write Span Point Reference Mode
-                self.special_config.command = 0x06;
-                self.special_config.reg_address = 0x0054;
-            }
-
-            4 => {
-                // Read Device Info Mode
-                self.special_config.command = 0x03;
-                self.special_config.start_address = 0x0080;
-                self.special_config.no_of_registers = 4;
+                self.special_config.start_address = 0x000A;
+                self.special_config.no_of_registers = 1;
             }
 
             _ => {
@@ -273,14 +251,6 @@ impl BasicEvo {
 
         return message;
     }
-
-    pub fn send_write_command(&self, board: &mut dyn rriv_board::SensorDriverServices, message: String) {
-        let prepared_message = format!("{}\r\n", message);
-        let prepared_message = prepared_message.as_str();
-        rprintln!("Sending message {}", prepared_message);
-        board.usart_send(prepared_message);
-        board.delay_ms(2000);  
-    }
 }
 
 impl SensorDriver for BasicEvo {
@@ -297,15 +267,13 @@ impl SensorDriver for BasicEvo {
         self.special_config.no_of_registers
     }
 
-    #[allow(unused)]
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
         Ok(((self.register_values[index] as i16) as f64) * 0.1)
     }
 
-    #[allow(unused)]
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8;16] {
         let mut buf = [0u8; 16];
-        let mut identifiers = ["read"; 4];
+        let identifiers = ["read"; 4];
         
         let mut identifier = "invalid";
         if index <= self.special_config.no_of_registers {
@@ -345,11 +313,7 @@ impl SensorDriver for BasicEvo {
         for b in response {
             response_str.push(*b as char);
         }
-        rprintln!("response => {}", response_str);
         let trimmed_msg = &response_str[1..response_str.len()-2];
-        rprintln!("trimmed message => {}", trimmed_msg);
-
-        let _trimmed_resp = &response[1..response.len()-2];
 
         let crc = checksum_calculator(trimmed_msg.to_string());
         let act_crc = u32::from_str_radix(&response_str[(response_str.len()-2)..], 16).unwrap_or(0);
@@ -438,6 +402,106 @@ impl SensorDriver for BasicEvo {
         }
     }
 
+    fn send(&mut self, board: &mut dyn rriv_board::SensorDriverServices, command: [u8; 20]) {
+        let mut cmd_str = String::new();
+        let nul_range_end = command.iter()
+            .position(|&c| c == b'\0')
+            .unwrap_or(command.len());
+        let command = &command[..nul_range_end];
+        for &b in command.iter() {
+            if b == 0 {
+                break;
+            }
+            cmd_str.push(b as char);
+        }
+        rprintln!("Received command: {}", cmd_str);
+        let mut command: usize = 0;
+        let mut no_of_registers: usize = 0;
+        let mut start_address: usize = 0;
+        let mut reg_address: usize = 0;
+        let mut reg_value: usize = 0;
+        match cmd_str.as_str() {
+            "write_zero" => {
+                command = 0x6;
+                reg_address = 0x0047;
+                reg_value = 1;
+            }
+            "write_span" => {
+                command = 0x6;
+                reg_address = 0x0054;
+                reg_value = 1;
+            }
+            "device_info" => {
+                command = 0x3;
+                start_address = 0x0080;
+                no_of_registers = 4;
+            }
+            "read_unit" => {
+                command = 0x3;
+                start_address = 0x004F;
+                no_of_registers = 1;
+            }
+            "read_status" => {
+                command = 0x3;
+                start_address = 0x0009;
+                no_of_registers = 1;
+            }
+            _ => {
+                rprintln!("Unknown command received");
+                return;
+            }
+        }
+        let message = self.construct_message_manual(command, start_address, no_of_registers, reg_address, reg_value);
+        let prepared_message = format!("{}\r\n", message);
+        let prepared_message = prepared_message.as_str();
+        rprintln!("Sending message {}", prepared_message);
+        board.usart_send(prepared_message);
+        board.delay_ms(500);
+    }
+
+    fn sensor_receive(&mut self, message: Option<[u8; crate::usart_service::USART_BUFFER_SIZE]>) -> Result<[u16; 16], &'static str> {
+        
+        let response = match message {
+            Some(message) => message,
+            None => {
+                return Err("no usart response");
+            }
+        };
+        let nul_range_end = response.iter()
+            .position(|&c| c == b'\0')
+            .unwrap_or(response.len());
+        let response = &response[..nul_range_end];
+        let mut response_str = String::new();
+        for b in response {
+            response_str.push(*b as char);
+        }
+        let trimmed_msg = &response_str[1..response_str.len()-2];
+
+        let crc = checksum_calculator(trimmed_msg.to_string());
+        let act_crc = u32::from_str_radix(&response_str[(response_str.len()-2)..], 16).unwrap_or(0);
+        
+        if crc != act_crc {
+            return Err("checksum mismatch");
+        }
+
+        let response_str = &response_str[1..response_str.len()-2]; // remove : and checksum
+        let device_address = &response_str[0..2];
+        if usize::from_str_radix(device_address, 16).unwrap_or(0) != self.special_config.device_address{
+            rprintln!("Device address mismatch!");
+            return Err("device address mismatch");
+        }
+
+        let byte_count = usize::from_str_radix(&response_str[4..6], 16).unwrap_or(0);
+        let data_bytes = &response_str[6..];
+
+        let mut register_values: [u16; 16] = [0; 16];
+        register_values[0] = byte_count as u16;
+        for i in 0..byte_count {
+            let val = &data_bytes[i*4..(i*4)+4];
+            register_values[i+1] = u16::from_str_radix(val, 16).unwrap_or(0);
+        }
+        return Ok(register_values);
+    }
     // fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
             
     //     for i in 0..pairs.len() {
