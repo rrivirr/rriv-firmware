@@ -1,6 +1,6 @@
 use core::time;
 
-use rriv_board::gpio::GpioMode;
+use rriv_board::gpio::{self, GpioMode};
 use rtt_target::rprintln;
 use serde_json::json;
 
@@ -8,6 +8,7 @@ use crate::{any_as_u8_slice, sensor_name_from_type_id};
 
 use super::types::*;
 
+const MAX_MILLIS: u32 = 7000;
 #[derive(Copy, Clone)]
 pub struct TimedSwitch2SpecialConfiguration {
     on_time_s: usize,
@@ -15,7 +16,9 @@ pub struct TimedSwitch2SpecialConfiguration {
     gpio_pin: u8,
     initial_state: bool, // 'on' 'off'
     // polarity // 'low_is_on', 'high_is_on'
-    _empty: [u8; 22],
+    period: f32,
+    ratio: f32,
+    _empty: [u8; 14],
 }
 
 impl TimedSwitch2SpecialConfiguration {
@@ -86,8 +89,41 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
+        let mut period: f32 = 10.0;
+        match &value["period"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            period = number as f32;
+                        }
+                        Err(_) => return Err("invalid period")
+                    }
+                }
+            }
+            _ => {
+                return Err("period is required")
+            }
+        } 
 
-
+        let mut ratio: f32 = 1.0;
+        match &value["ratio"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            ratio = number as f32;
+                        }
+                        Err(_) => return Err("invalid ratio")
+                    }
+                }
+            }
+            _ => {
+                return Err("ratio is invalid")
+            }
+        } 
       
         let gpio_pin = gpio_pin.unwrap_or_default();
         Ok ( Self {
@@ -95,7 +131,9 @@ impl TimedSwitch2SpecialConfiguration {
             off_time_s,
             gpio_pin,
             initial_state,
-            _empty: [b'\0'; 22],
+            period,
+            ratio,
+            _empty: [b'\0'; 14],
         } )
     }
 
@@ -112,7 +150,9 @@ pub struct TimedSwitch2 {
     general_config: SensorDriverGeneralConfiguration,
     special_config: TimedSwitch2SpecialConfiguration,
     state: u8, // 0: off, 1: on, other: invalid for now
-    last_state_updated_at: i64
+    last_state_updated_at: i64,
+    duty_cycle_state: bool,
+    last_duty_cycle_update: u32,
 }
 
 impl TimedSwitch2 {
@@ -124,7 +164,9 @@ impl TimedSwitch2 {
             general_config,
             special_config,
             state: 0,
-            last_state_updated_at: 0
+            last_state_updated_at: 0,
+            duty_cycle_state: false,
+            last_duty_cycle_update: 0,
         }
     }
 }
@@ -139,7 +181,9 @@ impl SensorDriver for TimedSwitch2 {
         board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
-
+        self.duty_cycle_state = self.state == 1;
+        let millis = board.millis();
+        self.last_duty_cycle_update = millis;
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -171,34 +215,59 @@ impl SensorDriver for TimedSwitch2 {
 
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         let timestamp = board.timestamp();
+        let millis = board.millis();
 
+        let mut gpio_state = false;
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
                 rprintln!("state is 0, toggle triggered");
                 toggle_state = true;
+                gpio_state = true;
+                self.state = 1;
+                self.last_duty_cycle_update = millis;
+                self.duty_cycle_state = true;
             }
         } else if self.state == 1 {
             // heater is on
+
+            // duty cycle implementation
+            let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
+            let mut new_elapsed: u32 = elapsed as u32;
+            if elapsed < 0 {
+                // millis overflowed
+                new_elapsed = MAX_MILLIS - self.last_duty_cycle_update + millis;
+            }
+            let duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
+            let duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - duty_cycle_on_time;
+            
+            if self.duty_cycle_state == true && new_elapsed > duty_cycle_on_time {
+                toggle_state = true;
+                gpio_state = false;
+                self.last_duty_cycle_update = millis;
+                self.duty_cycle_state  = false;
+            } else if self.duty_cycle_state == false && new_elapsed > duty_cycle_off_time {
+                toggle_state = true;
+                gpio_state = true;
+                self.last_duty_cycle_update = millis;
+                self.duty_cycle_state  = true;
+            } 
+
+            // end of on_time (outer cycle)
             if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
                 rprintln!("state is 1, toggle triggered");
                 toggle_state = true;
+                gpio_state = false;
+                self.state = 0;
             }
         }
 
         if toggle_state { 
-            rprintln!("toggle state timed switch");
-            self.state = match self.state {
-                0 => 1,
-                1 => 0,
-                _ => 0,
-            };
-            rprintln!("toggled to {}", self.state );
-            board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+            rprintln!("toggled to {}", gpio_state);
+            board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
             self.last_state_updated_at = timestamp;
         }
-
     }
     
     fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
