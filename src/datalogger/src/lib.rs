@@ -231,6 +231,7 @@ impl DataLogger {
         if self.settings.toggles.enable_telemetry() {
             self.telemeter.run_loop_iteration(board);
         }
+        telemetry::telemeters::serial::run_loop_iteration(board);
 
         self.update_actuators(board);
 
