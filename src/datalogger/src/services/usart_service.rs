@@ -6,7 +6,7 @@ use util::str_from_utf8;
 
 
 const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
-const USART_BUFFER_SIZE: usize = 40;
+const USART_BUFFER_SIZE: usize = 50;
 
 static mut MESSAGE_DATA: MessageData = MessageData::default();
 
@@ -63,7 +63,10 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
         return;
     }
 
-    if character == b'\n' && pos > 0 && message_data.buffer[cur][pos - 1] == b'\r' {
+    let end_of_string =  character == b'\n' && pos > 0 && message_data.buffer[cur][pos - 1] == b'\r';
+    let overflow = pos >= USART_BUFFER_SIZE - 1;
+
+    if end_of_string || overflow {
         // command is done
         let mut message = message_data.buffer[cur].clone();
         match str_from_utf8(&mut message)  {
@@ -71,14 +74,16 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
             Err(_) => {},
         }
        
-        message_data.buffer[cur][pos - 1] = 0; // remove the carriage return
+        if end_of_string {
+            message_data.buffer[cur][pos - 1] = 0; // remove the carriage return
+        }
         message_data.command_pos = 0;
         message_data.cur = (message_data.cur + 1) % USART_BUFFER_NUM;
         return;
     }
 
     message_data.buffer[cur][pos] = character;
-    if pos < USART_BUFFER_SIZE - 1 {
+    if pos < USART_BUFFER_SIZE - 1 { 
         message_data.command_pos = message_data.command_pos + 1;
     }
 }

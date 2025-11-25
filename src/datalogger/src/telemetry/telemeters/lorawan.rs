@@ -88,7 +88,7 @@ impl RakWireless3172 {
         board.usart_send(&prepared_message);
         self.usart_send_time = board.timestamp();
         self.telemetry_step = self.telemetry_step.next();
-        rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+        rprintln!("trying telemetry step {}",   self.telemetry_step as u8);
     }
 
     fn check_ok_or_restart(&mut self, board: &mut impl RRIVBoard) {
@@ -103,15 +103,22 @@ impl RakWireless3172 {
                                 self.telemetry_step = self.telemetry_step.next();
                                 rprintln!("trying telemetry step {}", self.telemetry_step as u8);
                                 return;
+                            } else {
+                                board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str());
+                                rprintln!("telem not ok: {}", message);
+                                self.telemetry_step = RakWireless3172Step::Begin;
+                                return;
                             }
                         }
                         None => {
+                            board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str());
                             rprintln!("telem not ok: {}", message);
                             self.telemetry_step = RakWireless3172Step::Begin;
                             return;
                         }
                     },
-                    Err(_) => {
+                    Err(e) => {
+                        rprintln!("telem message not ok: {:?}", e);
                         self.telemetry_step = RakWireless3172Step::Begin; // bad message
                         return;
                     }
