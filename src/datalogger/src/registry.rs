@@ -105,10 +105,11 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::ds18b20::Ds18b20,
         crate::drivers::ds18b20::Ds18b20SpecialConfiguration
     ));
-    driver_create_functions[8] = Some(driver_create_functions!(
-        crate::drivers::k30_co2::K30CO2, 
-        crate::drivers::k30_co2::K30CO2SpecialConfiguration
-    ));
+    driver_create_functions[8] = None;
+    // Some(driver_create_functions!(
+    //     crate::drivers::k30_co2::K30CO2, 
+    //     crate::drivers::k30_co2::K30CO2SpecialConfiguration
+    // ));
 
     driver_create_functions
 }

@@ -231,7 +231,6 @@ impl DataLogger {
         if self.settings.toggles.enable_telemetry() {
             self.telemeter.run_loop_iteration(board);
         }
-        telemetry::telemeters::serial::run_loop_iteration(board);
 
         self.update_actuators(board);
 
@@ -264,6 +263,7 @@ impl DataLogger {
                     if self.settings.toggles.enable_telemetry() {
                         self.process_telemetry(board); // telemeterize the measured values
                     }
+
 
                     self.last_interactive_log_time = board.timestamp();
                 }
@@ -339,9 +339,10 @@ impl DataLogger {
     }
 
     fn process_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
+
         self.telemeter.process_events(board);
 
-        if !self.telemeter.ready_to_transmit(board) {
+        if !self.telemeter.ready_to_transmit(board) && false { // support both telemeters
             return;
         }
 
@@ -352,12 +353,14 @@ impl DataLogger {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
                 // TODO: iterate values
-                match driver.get_measured_parameter_value(0) {
-                    Ok(value) => {
-                        values[j] = value as f32;
-                        j = j + 1;
+                for k in 0..driver.get_measured_parameter_count() {
+                    match driver.get_measured_parameter_value(k) {
+                        Ok(value) => {
+                            values[j] = value as f32;
+                            j = j + 1;
+                        }
+                        Err(_) => rprintln!("error reading value"),
                     }
-                    Err(_) => rprintln!("error reading value"),
                 }
 
                 // TODO: returning bits instead of full f64 is a way to use less space in the payload
@@ -377,7 +380,12 @@ impl DataLogger {
         // stateful deltas codec
         // let payload = telemetry::codecs::first_differences_codec::encode(timestamp_hour_offset, values, bits);let p
 
-        self.telemeter.transmit(board, &payload);
+        if self.telemeter.ready_to_transmit(board) {
+            self.telemeter.transmit(board, &payload);
+        } 
+
+        telemetry::telemeters::rs485::transmit(board, payload); // for now
+
     }
 
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
