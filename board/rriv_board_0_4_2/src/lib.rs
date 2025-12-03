@@ -447,6 +447,17 @@ impl RRIVBoard for Board {
     fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
     }
+
+    fn take_serialb_message(&mut self, buffer: &mut [u8; 100]) -> bool {
+        cortex_m::interrupt::free(|cs| {
+            match SERIALB.borrow(cs).try_borrow_mut(){
+                Ok(mut serial) => {
+                    return serial.take_message(buffer);
+                },
+                Err(_) => {}
+            }
+        });
+    }
 }
 
 macro_rules! control_services_impl {
@@ -856,74 +867,6 @@ impl SensorDriverServices for Board {
 
 impl TelemetryDriverServices for Board {
     control_services_impl!();
-}
-
-#[interrupt]
-unsafe fn UART5() {
-    cortex_m::interrupt::free(|cs| {
-
-        // rx.is_rx_not_empty
-        if ! unsafe { (*UART5::ptr()).sr.read().rxne().bit_is_set() } {
-            return;
-        }
-
-
-        // rx.read
-        let usart = unsafe { &*UART5::ptr() };
-        let sr = usart.sr.read();
-
-        // Check for any errors
-        let err = if sr.pe().bit_is_set() {
-            Some(stm32f1xx_hal::serial::Error::Parity)
-        } else if sr.fe().bit_is_set() {
-            Some(stm32f1xx_hal::serial::Error::Framing)
-        } else if sr.ne().bit_is_set() {
-            Some(stm32f1xx_hal::serial::Error::Noise)
-        } else if sr.ore().bit_is_set() {
-            Some(stm32f1xx_hal::serial::Error::Overrun)
-        } else {
-            None
-        };
-
-        if let Some(err) = err {
-            // Some error occurred. In order to clear that error flag, you have to
-            // do a read from the sr register followed by a read from the dr register.
-            let _ = usart.sr.read();
-            let _ = usart.dr.read();
-            rprintln!("uart5 error {:?}", err);
-            // Err(nb::Error::Other(err))
-        } else {
-            // Check if a byte is available
-            if sr.rxne().bit_is_set() {
-                // Read the received byte
-                // Ok(
-                let byte = usart.dr.read().dr().bits();
-                rprintln!("uart5  rx byte: {}", byte as u8 as char); 
-                // )
-            } else {
-                // Err(nb::Error::WouldBlock)
-            }
-        }
-
-
-//     //     // if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
-//     //     //     if rx.is_rx_not_empty() {
-//     //     //         if let Ok(c) = nb::block!(rx.read()) {
-//     //     //             rprintln!("serial rx byte: {}", c);
-//     //     //             // USART_UNREAD_MESSAGE = true;
-//     //     //             // if USART_RECEIVE_INDEX < USART_RECEIVE_SIZE - 1 {
-//     //     //             //     USART_RECEIVE[USART_RECEIVE_INDEX] = c;
-//     //     //             //     USART_RECEIVE_INDEX = USART_RECEIVE_INDEX + 1;
-//     //     //             // }
-
-//     //     //             // let r = USART_RX_PROCESSOR.borrow(cs);
-//     //     //             // if let Some(processor) = r.borrow_mut().deref_mut() {
-//     //     //             //     processor.process_character(c.clone());
-//     //     //             // }
-//     //     //         }
-//     //     //     }
-//     //     // }
-    })
 }
 
 #[interrupt]
