@@ -1,3 +1,10 @@
+## [1.1.12](https://github.com/rrivirr/rriv-firmware/compare/v1.1.11...v1.1.12) (2025-12-03)
+
+
+### Bug Fixes
+
+* run build automation with ref ([5693c82](https://github.com/rrivirr/rriv-firmware/commit/5693c82297daf72d62c82debd698cade1a725909))
+
 ## [1.1.11](https://github.com/rrivirr/rriv-firmware/compare/v1.1.10...v1.1.11) (2025-11-12)
 
 
