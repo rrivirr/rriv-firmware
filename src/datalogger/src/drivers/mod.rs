@@ -12,4 +12,5 @@ pub mod ds18b20;
 pub mod atlas_ec;
 pub mod aht20;
 pub mod resources;
+pub mod rs485;
 

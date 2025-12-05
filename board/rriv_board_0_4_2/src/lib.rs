@@ -454,9 +454,9 @@ impl RRIVBoard for Board {
                 Ok(mut serial) => {
                     return serial.take_message(buffer);
                 },
-                Err(_) => {}
+                Err(_) => { return false }
             }
-        });
+        })
     }
 }
 
