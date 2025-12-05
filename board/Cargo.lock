@@ -198,6 +198,7 @@ dependencies = [
  "control_interface",
  "embedded-hal 1.0.0",
  "hashbrown",
+ "modbus-core",
  "one-wire-bus",
  "rriv_board",
  "rtt-target",
@@ -362,6 +363,15 @@ name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
+
+[[package]]
+name = "modbus-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60040f846a5440a37a3f2deb113ab80924ce672428e94b0a419d95c31a84802a"
+dependencies = [
+ "byteorder",
+]
 
 [[package]]
 name = "nb"

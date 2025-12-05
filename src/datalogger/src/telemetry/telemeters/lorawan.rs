@@ -238,6 +238,7 @@ impl RakWireless3172 {
         }
     }
 
+    // return binary command request here, if we got one.
     pub fn process_events(&mut self, board: &mut impl RRIVBoard) {
         
         match self.telemetry_step {

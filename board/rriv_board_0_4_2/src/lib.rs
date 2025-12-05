@@ -26,8 +26,8 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Pin};
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::gpio::{Alternate, Pin, PushPull};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, UART5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -131,6 +131,11 @@ impl Board {
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
         self.storage.create_file(timestamp);
+
+        // setting the pin for receiving telemetry on UART5
+        self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
+        self.get_sensor_driver_services().write_gpio_pin(2, false);
+
     }
 
     pub fn sleep_mcu(&mut self) {
@@ -238,7 +243,7 @@ impl RRIVBoard for Board {
     // // use this to talk out on serial to other UART modules, RS 485, etc
     fn usart_send(&mut self, string: &str) {
         // set control bit for sending
-        let _ = self.gpio.gpio6.set_high(); // origi
+        // let _ = self.gpio.gpio6.set_high(); // origi
                                             // self.gpio.gpio6.set_low();
                                             // rriv_board::RRIVBoard::delay_ms(self, 100);
 
@@ -261,7 +266,7 @@ impl RRIVBoard for Board {
         });
 
         rriv_board::RRIVBoard::delay_ms(self, 2);
-        let _ = self.gpio.gpio6.set_low(); // origi
+        // let _ = self.gpio.gpio6.set_low(); // origi
                                            // self.gpio.gpio6.set_high();
 
         // set control bit for receiving
@@ -441,6 +446,17 @@ impl RRIVBoard for Board {
 
     fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
+    }
+
+    fn take_serialb_message(&mut self, buffer: &mut [u8; 100]) -> bool {
+        cortex_m::interrupt::free(|cs| {
+            match SERIALB.borrow(cs).try_borrow_mut(){
+                Ok(mut serial) => {
+                    return serial.take_message(buffer);
+                },
+                Err(_) => { return false }
+            }
+        })
     }
 }
 
@@ -1452,6 +1468,9 @@ impl BoardBuilder {
         watchdog.feed();
 
         self.watchdog = Some(watchdog);
+
+        rprintln!("setting up RS485 serial b");
+        setup_serialb(device_peripherals.UART5, &clocks);
 
         rprintln!("done with setup");
     }

@@ -30,3 +30,6 @@ pub use precise_delay::*;
 
 mod one_wire;
 pub use one_wire::*;
+
+mod uartb;
+pub use uartb::*;

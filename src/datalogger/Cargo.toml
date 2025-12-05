@@ -17,3 +17,5 @@ bitflags = "2.4.1"
 bitfield-struct = "0.7"
 one-wire-bus = "0.1.1"
 embedded-hal = "1.0.0"
+modbus-core = { version = "*", default-features = false, features = ["rtu"] }
+
