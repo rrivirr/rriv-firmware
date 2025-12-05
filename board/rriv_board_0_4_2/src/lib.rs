@@ -371,6 +371,10 @@ impl RRIVBoard for Board {
         millis
     }
 
+    fn millis(&mut self) -> u32 {
+        return self.get_millis();
+    }
+
     fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices {
         return self;
     }
@@ -462,6 +466,10 @@ macro_rules! control_services_impl {
 
         fn timestamp(&mut self) -> i64 {
             rriv_board::RRIVBoard::timestamp(self)
+        }
+
+        fn millis(&mut self) -> u32 {
+            rriv_board::RRIVBoard::get_millis(self)
         }
     };
 }

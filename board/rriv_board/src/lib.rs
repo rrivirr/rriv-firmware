@@ -30,6 +30,7 @@ macro_rules! control_services {
         fn serial_debug(&mut self, string: &str);    
         fn delay_ms(&mut self, ms: u16);
         fn timestamp(&mut self) -> i64;
+        fn millis(&mut self) -> u32;
     };
 }
 
