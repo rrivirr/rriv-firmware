@@ -92,31 +92,25 @@ impl TimedSwitch2SpecialConfiguration {
         let mut period: f32 = 10.0;
         match &value["period"] {
             serde_json::Value::Number(number) => {
-                if let Some(number) = number.as_u64() {
-                    let number: Result<usize, _> = number.try_into();
-                    match number {
-                        Ok(number) => {
-                            period = number as f32;
-                        }
-                        Err(_) => return Err("invalid period")
+                if let Some(number) = number.as_f64() {
+                    period = number as f32;
+                    if period <= 0.0 {
+                        return Err("period is invalid")
                     }
                 }
             }
             _ => {
                 return Err("period is required")
             }
-        } 
+        }
 
         let mut ratio: f32 = 1.0;
         match &value["ratio"] {
             serde_json::Value::Number(number) => {
-                if let Some(number) = number.as_u64() {
-                    let number: Result<usize, _> = number.try_into();
-                    match number {
-                        Ok(number) => {
-                            ratio = number as f32;
-                        }
-                        Err(_) => return Err("invalid ratio")
+                if let Some(number) = number.as_f64() {
+                    ratio = number as f32;
+                    if ratio < 0.0 || ratio > 1.0 {
+                        return Err("ratio is invalid")
                     }
                 }
             }
@@ -124,7 +118,7 @@ impl TimedSwitch2SpecialConfiguration {
                 return Err("ratio is invalid")
             }
         } 
-      
+
         let gpio_pin = gpio_pin.unwrap_or_default();
         Ok ( Self {
             on_time_s,
@@ -153,6 +147,8 @@ pub struct TimedSwitch2 {
     last_state_updated_at: i64,
     duty_cycle_state: bool,
     last_duty_cycle_update: u32,
+    duty_cycle_on_time: u32,
+    duty_cycle_off_time: u32,
 }
 
 impl TimedSwitch2 {
@@ -167,6 +163,8 @@ impl TimedSwitch2 {
             last_state_updated_at: 0,
             duty_cycle_state: false,
             last_duty_cycle_update: 0,
+            duty_cycle_on_time: 0,
+            duty_cycle_off_time: 0,
         }
     }
 }
@@ -184,6 +182,8 @@ impl SensorDriver for TimedSwitch2 {
         self.duty_cycle_state = self.state == 1;
         let millis = board.millis();
         self.last_duty_cycle_update = millis;
+        self.duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
+        self.duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - self.duty_cycle_on_time;
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -239,15 +239,13 @@ impl SensorDriver for TimedSwitch2 {
                 // millis overflowed
                 new_elapsed = MAX_MILLIS - self.last_duty_cycle_update + millis;
             }
-            let duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
-            let duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - duty_cycle_on_time;
             
-            if self.duty_cycle_state == true && new_elapsed > duty_cycle_on_time {
+            if self.duty_cycle_state == true && new_elapsed > self.duty_cycle_on_time {
                 toggle_state = true;
                 gpio_state = false;
                 self.last_duty_cycle_update = millis;
                 self.duty_cycle_state  = false;
-            } else if self.duty_cycle_state == false && new_elapsed > duty_cycle_off_time {
+            } else if self.duty_cycle_state == false && new_elapsed > self.duty_cycle_off_time {
                 toggle_state = true;
                 gpio_state = true;
                 self.last_duty_cycle_update = millis;
@@ -265,6 +263,7 @@ impl SensorDriver for TimedSwitch2 {
 
         if toggle_state { 
             rprintln!("toggled to {}", gpio_state);
+            // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
             board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
             self.last_state_updated_at = timestamp;
         }
