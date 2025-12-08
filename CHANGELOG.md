@@ -1,3 +1,15 @@
+# [1.2.0](https://github.com/rrivirr/rriv-firmware/compare/v1.1.12...v1.2.0) (2025-12-08)
+
+
+### Bug Fixes
+
+* period and ratio parsing ([49c3751](https://github.com/rrivirr/rriv-firmware/commit/49c3751dfac14739f6ef59fe2cb65cf57b016470))
+
+
+### Features
+
+* duty_cycle implementation for timed_switch ([4adf22e](https://github.com/rrivirr/rriv-firmware/commit/4adf22e2b7c6c73d35cd750eb5a63774f8216619))
+
 ## [1.1.12](https://github.com/rrivirr/rriv-firmware/compare/v1.1.11...v1.1.12) (2025-12-03)
 
 
