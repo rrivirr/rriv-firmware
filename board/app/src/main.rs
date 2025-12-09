@@ -34,13 +34,9 @@ fn main() -> ! {
     prelude::init();
 
     let mut board = rriv_board_0_4_2::build();
-    board.start(); // not needed, for debug only
-    // let mut datalogger = DataLogger::new();
-    // datalogger.setup(&mut board);
-    // board.watchdog.feed(); // make sure we leave enough time for the panic handler
-    loop {
-        // board.run_loop_iteration();
-        // datalogger.run_loop_iteration(&mut board);
+    board.start(); // for this build, just clears the eeprom
+    loop {    
+        board.delay.delay_ms(1000_u32);
     }
 }
 

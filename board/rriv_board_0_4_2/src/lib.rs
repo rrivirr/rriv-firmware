@@ -100,21 +100,9 @@ pub struct Board {
     // // pub power_control: PowerControl,
     pub gpio: DynamicGpioPins,
     pub gpio_cr: GpioCr,
-    pub internal_adc: InternalAdc,
-    pub external_adc: ExternalAdc,
-    pub battery_level: BatteryLevel,
-    pub rgb_led: RgbLed,
-    pub oscillator_control: OscillatorControl,
     pub i2c1: Option<BoardI2c1>,
     pub i2c2: BoardI2c2,
-    pub internal_rtc: Rtc,
-    pub storage: Storage,
-    pub debug: bool,
-    pub file_epoch: i64,
-    pub one_wire_bus: OneWire<OneWirePin>,
-    one_wire_search_state: Option<SearchState>,
-    pub watchdog: IndependentWatchdog,
-    pub counter: CounterMs<TIM4>,
+    
 }
 
 impl Board {
@@ -126,91 +114,16 @@ impl Board {
             eeprom::write_bytes_to_eeprom(self, block, 0, &bytes);
         }
         rprintln!("cleared eeprom");
-    }
-
-    pub fn sleep_mcu(&mut self) {
-
-        // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
-        // TODO: evaluate the benefit of having a separate clock source for the watch dog.  when would the main clock fail?
-        // TODO: we would disable the secondary clock input using a MOSFET, or we can just use another timer as a custom watch dog that triggers an interrupt (like the C code)
-
-        self.internal_rtc.set_alarm(5000); // 5 seconds?
-        self.internal_rtc.listen_alarm();
-        rprintln!("will sleep");
-        
-        // disable interrupts
-        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
-        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
-        NVIC::mask(pac::Interrupt::USART2);
-
-        unsafe { NVIC::unmask(pac::Interrupt::RTCALARM) };
-        cortex_m::asm::dsb();
-
-        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
-        core_peripherals.SYST.disable_interrupt();
-
-        cortex_m::asm::wfi();
-
-        core_peripherals.SYST.enable_interrupt();
-
-        cortex_m::asm::isb();
-
-
-        // re-enable interrupts
-        unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
-        unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
-        unsafe { NVIC::unmask(pac::Interrupt::USART2) };
-
-        rprintln!("woke from sleep");
-
-    }
-
-    pub fn enter_stop_mode(&mut self){
 
         
-        //           debug("setting up EXTI");
-        //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
-        // 	*bb_perip(&EXTI_BASE->RTSR, EXTI_RTC_ALARM_BIT) = 1;
-
-        // in addition to the RTCALARM interrupt, the rtc must route through EXTI to wake the MCU up from stop mode.
-        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        device_peripherals.EXTI.imr.write(|w| w
-            .mr17().set_bit() // interrupt mask bit 17 enables RTC EXTI
-        );
-        device_peripherals.EXTI.rtsr.write(|w| w
-            .tr17().set_bit() // rising trigger bit 17 enables RTC EXTI
-        );
-
-        // clocks
-        // steal and use raw the same function sin cfgr to switch to hsi and wait for stabilization
-        // and the same thing to switch back.
-        // let clocks = cfgr
-        //     .use_hse(8.MHz())
-        //     .sysclk(48.MHz())
-        //     .pclk1(24.MHz())
-        //     .adcclk(14.MHz())
-        //     .freeze(flash_acr);
-
-
     }
+
+
 }
 
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
-        self.watchdog.feed();
-
-        self.file_epoch = self.epoch_timestamp();
-        // TODO: implement a peek rprint here with a peeked bool
-        // TODO: don't interfere with other code that needs async usart
-        // if rriv_board::RRIVBoard::unread_usart_message(self) {
-        //     let mut message = [0u8; 40];
-        //     rriv_board::RRIVBoard::get_usart_response(self, &mut message);
-        //     util::remove_invalid_utf8(&mut message);
-        //     match core::str::from_utf8(&message){
-        //         Ok(message) => rprintln!("got usart message: {}", message),
-        //         Err(e) => rprintln!("{:?}", e),
-        //     }
-        // }
+       
     }
 
     fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
@@ -274,9 +187,7 @@ impl RRIVBoard for Board {
     // outputs to serial and also echos to rtt
     fn serial_debug(&mut self, string: &str) {
         rprintln!("{:?}", string);
-        if self.debug {
-            rriv_board::RRIVBoard::usb_serial_send(self, format!("{{\"debug\":\"{}\"}}\n",string).as_str());
-        }
+        
     }
 
     fn store_datalogger_settings(
@@ -358,13 +269,11 @@ impl RRIVBoard for Board {
 
 
     fn timestamp(&mut self) -> i64 {
-        return self.internal_rtc.current_time().into(); // internal RTC
+        return 0;// internal RTC
     }
 
     fn get_millis(&mut self) -> u32 {
-        let millis = self.counter.now();
-        let millis = millis.ticks();
-        millis
+        0
     }
 
     fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices {
@@ -376,27 +285,18 @@ impl RRIVBoard for Board {
     }
 
     fn get_battery_level(&mut self) -> i16 {
-        match self
-            .battery_level
-            .measure_battery_level(&mut self.internal_adc, &mut self.delay)
-        {
-            Ok(value) => return value as i16,
-            Err(err) => return -1,
-        }
+       0
     }
 
     fn sleep(&mut self) {
         // need to extend IndependentWatchdog to sleep the watch dog
         // self.watchdog.acc
-        self.watchdog.feed();
     }
 
     fn set_debug(&mut self, debug: bool) {
-        self.debug = debug;
     }
 
     fn write_log_file(&mut self, data: &str) {
-        self.storage.write(data.as_bytes(), self.file_epoch);
     }
 
     fn flush_log_file(&mut self) {
@@ -502,26 +402,11 @@ macro_rules! set_pin_mode {
 
 impl SensorDriverServices for Board {
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
-        match self.internal_adc.read(channel) {
-            Ok(value) => return value,
-            Err(error) => {
-                let error_string = match error {
-                    AdcError::NBError(_) => "Internal ADC NBError",
-                    AdcError::NotConfigured => "Internal ADC Not Configured",
-                    AdcError::ReadError => "Internal ADC Read Error",
-                };
-                rriv_board::RRIVBoard::usb_serial_send(self, &error_string);
-                return 0;
-            }
-        }
+        0
     }
 
     fn query_external_adc(&mut self, channel: u8) -> u16 {
-        let i2c1 = mem::replace(&mut self.i2c1, None);
-        let mut i2c1 = i2c1.unwrap();
-        let value = self.external_adc.read_single_channel(&mut i2c1, channel);
-        self.i2c1 = Some(i2c1);
-        return value;
+       0
     }
 
     control_services_impl!();
@@ -593,66 +478,31 @@ impl SensorDriverServices for Board {
     fn one_wire_send_command(&mut self, command: u8, address: u64) {
         let address = Address(address);
 
-        match self
-            .one_wire_bus
-            .send_command(command, Some(&address), &mut self.delay)
-        {
-            Ok(_) => rprintln!("sent command ok"),
-            Err(e) => rprintln!("{:?}", e),
-        }
+        
     }
 
   
 
     fn one_wire_reset(&mut self) {
-        let _ = self.one_wire_bus.reset(&mut self.delay);
     }
 
     fn one_wire_skip_address(&mut self) {
-        let _ = self.one_wire_bus.skip_address(&mut self.delay);
     }
 
     fn one_wire_write_byte(&mut self, byte: u8) {
-        let _ = self.one_wire_bus.write_byte(byte, &mut self.delay);
     }
 
     fn one_wire_match_address(&mut self, address: u64) {
-        let address = Address(address);
-        _ = self.one_wire_bus.match_address(&address, &mut self.delay);
     }
 
     fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
-        let _ = self.one_wire_bus.read_bytes(output, &mut self.delay);
-        // TODO
-        match check_crc8::<one_wire_bus::OneWireError<OneWireGpio1>>(output) {
-            Ok(_) => return,
-            Err(_) => rprintln!("1wire crc error"),
-        }
     }
 
     fn one_wire_bus_start_search(&mut self) {
-        self.one_wire_search_state = None;
     }
 
     fn one_wire_bus_search(&mut self) -> Option<u64> {
-        match self.one_wire_bus.device_search(
-            self.one_wire_search_state.as_ref(),
-            false,
-            &mut self.delay,
-        ) {
-            Ok(Some((device_address, state))) => {
-                self.one_wire_search_state = Some(state);
-                return Some(device_address.0);
-            }
-            Ok(None) => {
-                rprintln!("no devices 1wire");
-                return None;
-            }
-            Err(e) => {
-                rprintln!("1wire error{:?}", e);
-                return None;
-            }
-        }
+        None
     }
 
       fn write_gpio_pin(&mut self, pin: u8, value: bool) {
@@ -975,20 +825,6 @@ impl BoardBuilder {
             delay: self.delay.unwrap(),
             gpio: gpio,
             gpio_cr: gpio_cr,
-            // // power_control: self.power_control.unwrap(),
-            internal_adc: self.internal_adc.unwrap(),
-            external_adc: self.external_adc.unwrap(),
-            battery_level: self.battery_level.unwrap(),
-            rgb_led: self.rgb_led.unwrap(),
-            oscillator_control: self.oscillator_control.unwrap(),
-            internal_rtc: self.internal_rtc.unwrap(),
-            storage: self.storage.unwrap(),
-            debug: true,
-            file_epoch: 0,
-            one_wire_bus: one_wire,
-            one_wire_search_state: None,
-            watchdog: self.watchdog.unwrap(),
-            counter: self.counter.unwrap(),
         }
     }
 
@@ -1193,32 +1029,13 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        // watchdog.start(MilliSeconds::secs(6));
-        // watchdog.feed();
-
-        BoardBuilder::setup_serial(
-            serial_pins,
-            &mut gpio_cr,
-            &mut afio.mapr,
-            device_peripherals.USART2,
-            &clocks,
-        );
-
-        self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
-
         let uid = Uid::fetch();
         rprintln!("uid: {:X?}", uid.bytes());
         self.uid = Some(uid.bytes());
 
 
-        BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
-        usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
@@ -1359,7 +1176,6 @@ impl BoardBuilder {
         // watchdog.feed();
 
         // configure external ADC
-        self.external_adc.as_mut().unwrap().configure(&mut i2c1);
 
         self.i2c1 = Some(i2c1);
         self.i2c2 = Some(i2c2);
@@ -1371,30 +1187,9 @@ impl BoardBuilder {
         let mut power_control = Some(PowerControl::new(power_pins)).unwrap();
         power_control.cycle_5v(&mut delay);
 
-        // build the internal adc
-        let internal_adc_configuration =
-            InternalAdcConfiguration::new(internal_adc_pins, device_peripherals.ADC1);
-        let mut internal_adc = internal_adc_configuration.build(&clocks);
-        internal_adc.disable();
-        delay.delay_ms(1000_u32);
-        internal_adc.enable(&mut delay);
-        self.internal_adc = Some(internal_adc);
-
-        self.rgb_led = Some(build_rgb_led(
-            rgb_led_pins,
-            device_peripherals.TIM1,
-            &mut afio.mapr,
-            &clocks,
-        ));
-
-        self.battery_level = Some(BatteryLevel::new(battery_level_pins));
-
-        self.oscillator_control = Some(OscillatorControl::new(oscillator_control_pins));
-
         self.gpio = Some(dynamic_gpio_pins);
         self.gpio_cr = Some(gpio_cr);
 
-        self.storage = Some(storage);
 
         self.delay = Some(delay);
 
@@ -1408,7 +1203,6 @@ impl BoardBuilder {
 
         // watchdog.feed();
 
-        self.watchdog = Some(watchdog);
 
         rprintln!("done with setup");
     }
