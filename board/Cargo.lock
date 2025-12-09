@@ -199,6 +199,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "hashbrown",
  "modbus-core",
+ "modbus_buffer",
  "one-wire-bus",
  "rriv_board",
  "rtt-target",
@@ -372,6 +373,12 @@ checksum = "60040f846a5440a37a3f2deb113ab80924ce672428e94b0a419d95c31a84802a"
 dependencies = [
  "byteorder",
 ]
+
+[[package]]
+name = "modbus_buffer"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5d31dcf7e83c2dbadc84c83f035db00474c66413ad5ac270a18064800d5c449"
 
 [[package]]
 name = "nb"

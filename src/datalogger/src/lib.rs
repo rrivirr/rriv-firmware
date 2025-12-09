@@ -129,6 +129,7 @@ impl DataLogger {
         // setup each service
         command_service::setup(board);
         usart_service::setup(board);
+        modbus_service::setup(board);
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -347,7 +348,7 @@ impl DataLogger {
         }
 
         // TODO: this book-keeping to get the sensor values is not correct / robust / fully functional
-        let mut values: [f32; 12] = [0_f32; 12];
+        let mut values: [f32; 12] = [f32::MAX; 12];
         // let mut bits: [u8; 12] = [0_u8; 12];
         let mut j = 0; // index of value into the values array
         for i in 0..self.sensor_drivers.len() {
@@ -375,6 +376,7 @@ impl DataLogger {
         // let timestamp_hour_offset = 0; // TODO get the timestamp offset from the beginning of the utc hour
         // let bits = [13_u8; 12];
 
+  
         let payload = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values);
 
         // stateful deltas codec
@@ -384,7 +386,12 @@ impl DataLogger {
             self.telemeter.transmit(board, &payload);
         } 
 
-        telemetry::telemeters::rs485::transmit(board, payload); // for now
+        let mut values_i16 = [i16::MAX; telemetry::telemeters::rs485::MAX_DATA_VALUES];
+        for i in 0..telemetry::telemeters::rs485::MAX_DATA_VALUES {
+            values_i16[i] = (values[i] * 10.0) as i16;
+        }
+
+        telemetry::telemeters::rs485::send_input_registers_response(board, values_i16);
 
     }
 

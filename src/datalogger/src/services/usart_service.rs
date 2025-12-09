@@ -37,7 +37,7 @@ impl<'a> USARTCharacterProcessor {
 }
 
 impl<'a, 'b> RXProcessor for USARTCharacterProcessor {
-    fn process_character(&self, character: u8) {
+    fn process_byte(&mut self, character: u8) {
         unsafe {
             let message_data = MESSAGE_DATA.borrow_mut();
             process_character(message_data, character);
@@ -50,7 +50,7 @@ pub fn setup(board: &mut impl RRIVBoard) {
     let char_processor = Box::<USARTCharacterProcessor>::leak(Box::new(USARTCharacterProcessor::new()));
 
     // pass a pointer to the leaked processor to Board::set_rx_processor
-    board.set_usart_rx_processor(Box::new(char_processor));
+    board.set_serial_rx_processor(rriv_board::SerialRxPeripheral::SerialPeripheral1, Box::new(char_processor));
 }
 
 

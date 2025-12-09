@@ -15,6 +15,9 @@ pub struct SensorDriverGeneralConfiguration {
     pub readings_per_burst: u8,
 }
 
+#[derive(Copy, Clone)]
+pub struct EmptySpecialConfiguration {}
+
 impl SensorDriverGeneralConfiguration {
     pub fn new(id: [u8; 6], sensor_type_id: u16) -> SensorDriverGeneralConfiguration {
         Self {

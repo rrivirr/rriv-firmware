@@ -18,7 +18,13 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
 pub trait RXProcessor: Send + Sync {
-    fn process_character(&'static self, character: u8);
+    fn process_byte(&mut self, byte: u8);
+}
+
+pub enum SerialRxPeripheral{
+    CommandSerial,
+    SerialPeripheral1,
+    SerialPeripheral2
 }
 
 // Board Services Used by Control Logic and Drivers
@@ -27,6 +33,7 @@ macro_rules! control_services {
         fn usb_serial_send(&mut self, string: &str); // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
                                                  // maybe rrivctl_send
         fn usart_send(&mut self, string: &str);
+        fn rs485_send(&mut self, message : &[u8]);
         fn serial_debug(&mut self, string: &str);    
         fn delay_ms(&mut self, ms: u16);
         fn timestamp(&mut self) -> i64;
@@ -40,8 +47,7 @@ pub trait RRIVBoard: Send {
     fn run_loop_iteration(&mut self);
 
     // Core Services
-    fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>);
-    fn set_usart_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>);
+    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral, processor: Box<&'static mut dyn RXProcessor>);
     fn critical_section<T, F>(&self, f: F) -> T where F: Fn() -> T;
 
     // Storage Services

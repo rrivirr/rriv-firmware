@@ -42,7 +42,7 @@ pub fn setup(board: &mut impl RRIVBoard) {
     let char_processor = Box::<CharacterProcessor>::leak(Box::new(CharacterProcessor::new()));
 
     // pass a pointer to the lleaked processor to Board::set_rx_processor
-    board.set_rx_processor(Box::new(char_processor));
+    board.set_serial_rx_processor( rriv_board::SerialRxPeripheral::CommandSerial, Box::new(char_processor));
 }
 
 
@@ -244,7 +244,7 @@ impl<'a> CharacterProcessor {
 }
 
 impl<'a, 'b> RXProcessor for CharacterProcessor {
-    fn process_character(&self, character: u8) {
+    fn process_byte(&mut self, character: u8) {
         unsafe {
             let command_data = COMMAND_DATA.borrow_mut();
             CommandRecognizer::process_character(command_data, character);

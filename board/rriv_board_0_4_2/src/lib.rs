@@ -56,8 +56,7 @@ use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rriv_board::{
-    RRIVBoard, RXProcessor, SensorDriverServices, TelemetryDriverServices,
-    EEPROM_TOTAL_SENSOR_SLOTS,
+    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SensorDriverServices, SerialRxPeripheral, TelemetryDriverServices
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
@@ -87,8 +86,10 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 static USART_RX: Mutex<RefCell<Option<Rx<pac::USART2>>>> = Mutex::new(RefCell::new(None));
 static USART_TX: Mutex<RefCell<Option<Tx<pac::USART2>>>> = Mutex::new(RefCell::new(None));
 
-static RX_PROCESSOR: Mutex<RefCell<Option<Box<&dyn RXProcessor>>>> = Mutex::new(RefCell::new(None));
-static USART_RX_PROCESSOR: Mutex<RefCell<Option<Box<&dyn RXProcessor>>>> =
+static RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> = Mutex::new(RefCell::new(None));
+static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
+    Mutex::new(RefCell::new(None));
+static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
 #[repr(C)]
@@ -212,6 +213,8 @@ impl Board {
     }
 }
 
+
+
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
         self.watchdog.feed();
@@ -219,17 +222,23 @@ impl RRIVBoard for Board {
         self.file_epoch = self.epoch_timestamp();
     }
 
-    fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
+    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral,  processor: Box<&mut 'static dyn RXProcessor>) {
         cortex_m::interrupt::free(|cs| {
-            let mut global_rx_binding = RX_PROCESSOR.borrow(cs).borrow_mut();
-            *global_rx_binding = Some(processor);
-        });
-    }
 
-    fn set_usart_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
-        cortex_m::interrupt::free(|cs| {
-            let mut global_rx_binding = USART_RX_PROCESSOR.borrow(cs).borrow_mut();
+            let mut global_rx_binding  = match peripheral {
+                SerialRxPeripheral::CommandSerial => {
+                    RX_PROCESSOR.borrow(cs).borrow_mut()
+                },
+                SerialRxPeripheral::SerialPeripheral1 => {
+                    USART2_RX_PROCESSOR.borrow(cs).borrow_mut()
+                }
+                SerialRxPeripheral::SerialPeripheral2 => {
+                    UART5_RX_PROCESSOR.borrow(cs).borrow_mut()
+                }
+            };
+                            
             *global_rx_binding = Some(processor);
+
         });
     }
 
@@ -242,10 +251,6 @@ impl RRIVBoard for Board {
 
     // // use this to talk out on serial to other UART modules, RS 485, etc
     fn usart_send(&mut self, string: &str) {
-        // set control bit for sending
-        // let _ = self.gpio.gpio6.set_high(); // origi
-                                            // self.gpio.gpio6.set_low();
-                                            // rriv_board::RRIVBoard::delay_ms(self, 100);
 
         cortex_m::interrupt::free(|cs| {
             // USART
@@ -258,19 +263,10 @@ impl RRIVBoard for Board {
                 }
             }
 
-            // let c = 0b00001101;
-            // let t: &RefCell<Option<Tx<USART2>>> = USART_TX.borrow(cs);
-            // if let Some(tx) = t.borrow_mut().deref_mut() {
-            //     _ = nb::block!(tx.write(c.clone()));
-            // }
         });
 
         rriv_board::RRIVBoard::delay_ms(self, 2);
-        // let _ = self.gpio.gpio6.set_low(); // origi
-                                           // self.gpio.gpio6.set_high();
-
-        // set control bit for receiving
-        // rriv_board::RRIVBoard::delay_ms(self, 70);
+        
     }
 
     fn usb_serial_send(&mut self, string: &str) {
@@ -450,13 +446,27 @@ impl RRIVBoard for Board {
 
     fn take_serialb_message(&mut self, buffer: &mut [u8; 100]) -> bool {
         cortex_m::interrupt::free(|cs| {
-            match SERIALB.borrow(cs).try_borrow_mut(){
+            match unsafe { SERIALB.borrow(cs).try_borrow_mut() }{
                 Ok(mut serial) => {
                     return serial.take_message(buffer);
                 },
                 Err(_) => { return false }
             }
         })
+    }
+    
+    fn rs485_send(&mut self, message: &[u8]) {
+        cortex_m::interrupt::free(|cs| {
+            match unsafe { SERIALB.borrow(cs).try_borrow_mut() }{
+                Ok(mut serial) => {
+                     for char in message.iter() {
+                        // rprintln!("char {}", char);
+                        _ = nb::block!( serial.write(char.clone()));   
+                     }
+                },
+                Err(_) => {}
+            }
+        });
     }
 }
 
@@ -468,6 +478,10 @@ macro_rules! control_services_impl {
 
         fn usart_send(&mut self, string: &str) {
             rriv_board::RRIVBoard::usart_send(self, string);
+        }
+
+        fn rs485_send(&mut self, message: &[u8]) {
+            rriv_board::RRIVBoard::rs485_send(self, message);
         }
 
         fn serial_debug(&mut self, string: &str) {
@@ -863,6 +877,7 @@ impl SensorDriverServices for Board {
     fn enable_interrupts(&self) {
         self.enable_interrupts();
     }
+    
 }
 
 impl TelemetryDriverServices for Board {
@@ -876,15 +891,11 @@ unsafe fn USART2() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
                     rprintln!("serial rx byte: {}", c);
-                    // USART_UNREAD_MESSAGE = true;
-                    // if USART_RECEIVE_INDEX < USART_RECEIVE_SIZE - 1 {
-                    //     USART_RECEIVE[USART_RECEIVE_INDEX] = c;
-                    //     USART_RECEIVE_INDEX = USART_RECEIVE_INDEX + 1;
-                    // }
 
-                    let r = USART_RX_PROCESSOR.borrow(cs);
+                    let r = USART2_RX_PROCESSOR.borrow(cs);
+
                     if let Some(processor) = r.borrow_mut().deref_mut() {
-                        processor.process_character(c.clone());
+                        processor.process_byte(c.clone());
                     }
                 }
             }
@@ -926,7 +937,7 @@ fn usb_interrupt(cs: &CriticalSection) {
             for c in buf[0..count].iter() {
                 let r = RX_PROCESSOR.borrow(cs);
                 if let Some(processor) = r.borrow_mut().deref_mut() {
-                    processor.process_character(c.clone());
+                    processor.process_byte(c.clone());
                 }
                 // use PA9 to flash RGB led
                 if let Some(led) = WAKE_LED.borrow(cs).borrow_mut().deref_mut() {

@@ -1,5 +1,6 @@
 
 use core::{cell::RefCell, ffi::FromBytesUntilNulError};
+use core::convert::Infallible;
 
 use cortex_m::interrupt::Mutex;
 use rtt_target::rprintln;
@@ -10,7 +11,7 @@ use crate::{interrupt, pin_groups};
 use crate::pac::uart5 as uart_base;
 use stm32f1xx_hal::rcc::{Enable, Reset};
 
-const BUFFER_SIZE: usize = 500;
+const BUFFER_SIZE: usize = 100;
 
 
 pub struct SerialB
@@ -33,6 +34,11 @@ impl SerialB {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.cur = 0;
+        self.buffer = [0; BUFFER_SIZE];
+    }
+
     pub fn process_byte(&mut self, byte : u8){
         if self.cur != self.end {
             self.buffer[self.cur] = byte;
@@ -41,6 +47,7 @@ impl SerialB {
     }
 
     pub fn take_message(&mut self, buffer: &mut [u8; 100]) -> bool {
+        
         let delimeter = b'\r';
         // TODO: the next line require reordering
         if self.cur < self.end {
@@ -55,6 +62,23 @@ impl SerialB {
             }
         }
         return false;
+    }
+
+    pub fn write(&mut self, character: u8) -> nb::Result<(), Infallible>{
+        // TODO: if we are sending, for now we always reset the receive buffer
+        // later, implement a circular buffer, probably this: https://github.com/pythcoiner/modbus_buffer
+        // the suggested library appears to simply look for a frame validated by CRC in a circular buffer
+        self.reset();
+
+
+        let usart = unsafe { &*UART5::ptr() };
+
+        if usart.sr.read().txe().bit_is_set() {
+            usart.dr.write(|w| w.dr().bits(character as u16));
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
     }
 }
 
