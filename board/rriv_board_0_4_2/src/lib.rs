@@ -222,7 +222,7 @@ impl RRIVBoard for Board {
         self.file_epoch = self.epoch_timestamp();
     }
 
-    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral,  processor: Box<&mut 'static dyn RXProcessor>) {
+    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral,  processor: Box<&'static mut dyn RXProcessor>) {
         cortex_m::interrupt::free(|cs| {
 
             let mut global_rx_binding  = match peripheral {
