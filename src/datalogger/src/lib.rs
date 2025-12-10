@@ -203,6 +203,23 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
+    pub fn receive_usart_message(board: &mut impl RRIVBoard) ->  Option<[u8; crate::usart_service::USART_BUFFER_SIZE]> {
+        //
+        // Process incoming commands
+        //
+        let raw_message = usart_service::take_command(board);
+        let mut message : Option<[u8; crate::usart_service::USART_BUFFER_SIZE]> = None;
+        match raw_message {
+            Ok(received_message) => {
+                message = Some(received_message);
+            }
+            Err(_) => {
+                // do nothing
+            }
+        }
+        return message;
+    }
+
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
         // Process incoming commands
@@ -250,8 +267,11 @@ impl DataLogger {
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
-
                     self.measure_sensor_values(board); // measureSensorValues(false);
+
+                    let message = DataLogger::receive_usart_message(board);
+                    self.relay_message(message);
+
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
@@ -313,6 +333,9 @@ impl DataLogger {
         // get next raw reading
         rprintln!("measuring sensor values in cycle");
         self.measure_sensor_values(board);
+        let message = DataLogger::receive_usart_message(board);
+        self.relay_message(message);
+
         self.readings_completed_in_current_burst = self.readings_completed_in_current_burst + 1;
         rprintln!(
             "completed reading {}",
@@ -386,7 +409,18 @@ impl DataLogger {
             }
         }
     }
-
+    
+    fn relay_message(&mut self, message: Option<[u8; crate::usart_service::USART_BUFFER_SIZE]>) {
+        for i in 0..self.sensor_drivers.len() {
+            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                let requested_gpios = driver.get_requested_gpios();
+                if requested_gpios.usart {
+                    driver.receive_message(message);
+                }
+            }
+        }
+    }
+    
     fn update_actuators(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
@@ -701,6 +735,43 @@ impl DataLogger {
                 } else {
                     responses::send_command_response_error(board, "sensor not configured", "");
                 }
+            }
+            CommandPayload::SensorSend(payload) => {
+                let command = match payload.command {
+                    serde_json::Value::String(ref command) => command,
+                    _ => {
+                        responses::send_command_response_message(board, "bad command");
+                        return;
+                    }
+                };
+
+                let mut command_bytes = [0u8; 20];
+                command_bytes[0..command.len()].clone_from_slice(&command.as_bytes()[0..command.len()]);
+                
+                if let Some(index) = self.get_driver_index_by_id_value(payload.id) {
+                    if let Some(driver) = &mut self.sensor_drivers[index] {
+                        driver.send(board.get_sensor_driver_services(), command_bytes);
+                        let requested_gpios = driver.get_requested_gpios();
+                        if requested_gpios.usart {
+                            let message = DataLogger::receive_usart_message(board);
+                            let reg_values = driver.sensor_receive(message);
+                            match reg_values {
+                                Ok(reg_values) => {
+                                    for i in 0..reg_values[0] as usize {
+                                        let reply = format!("Register {}: {}\n", i, reg_values[i + 1]);
+                                        responses::send_command_response_message(board, reply.as_str());
+                                    }
+                                },
+                                Err(message) => {
+                                    responses::send_command_response_message(board, message);
+                                    return;
+                                }
+                            }
+                        }
+                        return;
+                    }
+                }
+                responses::send_command_response_message(board, "didn't find the sensor");
             }
             CommandPayload::SensorGet(payload) => {
                 if let Some(index) = self.get_driver_index_by_id_value(payload.id) {

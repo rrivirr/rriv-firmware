@@ -456,6 +456,14 @@ impl SensorCalibrateRemovePayload {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct SensorSendPayload {
+    pub object: Value,
+    pub action: Value,
+    pub id: Value, // option
+    pub command: Value,     // option
+}
+
+#[derive(Serialize, Deserialize)]
 pub enum CommandPayload {
     DataloggerSet(DataloggerSetPayload),
     DataloggerGet(DataloggerGetPayload),
@@ -469,6 +477,7 @@ pub enum CommandPayload {
     SensorCalibrateRemove(SensorCalibrateRemovePayload),
     SensorCalibrateFit(SensorCalibrateFitPayload),
     SensorCalibrateClear(SensorCalibrateClearPayload),
+    SensorSend(SensorSendPayload),
     BoardRtcSet(BoardRtcSetPayload),
     BoardGet(BoardGetPayload),
     BoardSerialSend(BoardSerialSendPayload),

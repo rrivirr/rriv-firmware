@@ -19,7 +19,7 @@ unwrap-infallible = "0.1.5"
 rtt-target = "0.4.0"
 embedded-alloc = "0.5.0"
 rriv_board_0_4_2 = { path = "../rriv_board_0_4_2" }
-datalogger = { path = "../../src/datalogger" }
+datalogger = { path = "../../src/datalogger", features = ["N2O"] }
 rriv_board = { path = "../rriv_board", features = ["24LC08"]}
 
 [dependencies.stm32f1xx-hal]
