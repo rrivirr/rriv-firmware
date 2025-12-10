@@ -31,5 +31,5 @@ pub use precise_delay::*;
 mod one_wire;
 pub use one_wire::*;
 
-mod uartb;
-pub use uartb::*;
+pub mod uart5;
+pub use uart5::*;

@@ -5,13 +5,13 @@ use rtt_target::rprintln;
 use util::str_from_utf8;
 
 
-const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
+const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, which is a total waste!
 const USART_BUFFER_SIZE: usize = 50;
 
-static mut MESSAGE_DATA: MessageData = MessageData::default();
+static mut MESSAGE_DATA: MessageData = MessageData::default();  // TODO: This can be owned by USARTCharacterProcessor, doesn't need to be static
 
 pub struct MessageData {
-    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],
+    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],  // The buffer can just be contiguous memory, we can raise command avialable by detected \r
     cur: usize,
     end: usize,
     command_pos: usize,

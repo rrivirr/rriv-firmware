@@ -443,28 +443,12 @@ impl RRIVBoard for Board {
     fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
     }
-
-    fn take_serialb_message(&mut self, buffer: &mut [u8; 100]) -> bool {
-        cortex_m::interrupt::free(|cs| {
-            match unsafe { SERIALB.borrow(cs).try_borrow_mut() }{
-                Ok(mut serial) => {
-                    return serial.take_message(buffer);
-                },
-                Err(_) => { return false }
-            }
-        })
-    }
     
     fn rs485_send(&mut self, message: &[u8]) {
         cortex_m::interrupt::free(|cs| {
-            match unsafe { SERIALB.borrow(cs).try_borrow_mut() }{
-                Ok(mut serial) => {
-                     for char in message.iter() {
-                        // rprintln!("char {}", char);
-                        _ = nb::block!( serial.write(char.clone()));   
-                     }
-                },
-                Err(_) => {}
+            for char in message.iter() {
+            // rprintln!("char {}", char);
+            _ = nb::block!( components::uart5::write(char.clone()));   
             }
         });
     }

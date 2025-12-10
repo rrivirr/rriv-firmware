@@ -1,84 +1,27 @@
 
 use core::{cell::RefCell, ffi::FromBytesUntilNulError};
 use core::convert::Infallible;
+use core::ops::DerefMut;
 
 use cortex_m::interrupt::Mutex;
 use rtt_target::rprintln;
 use stm32f1xx_hal::{afio::MAPR, gpio, pac::{self, NVIC, RCC, UART5}, prelude::*, rcc::{BusClock, Clocks}, serial::{Config, Parity, Serial, StopBits, WordLength}};
 
-use crate::{interrupt, pin_groups};
+use crate::{UART5_RX_PROCESSOR, interrupt, pin_groups};
 
 use crate::pac::uart5 as uart_base;
 use stm32f1xx_hal::rcc::{Enable, Reset};
 
-const BUFFER_SIZE: usize = 100;
 
+pub fn write(character: u8) -> nb::Result<(), Infallible>{
 
-pub struct SerialB
-{
-    cur: usize,
-    end: usize,
-    buffer: [u8; BUFFER_SIZE]
-}
+    let usart = unsafe { &*UART5::ptr() };
 
-pub static mut SERIALB: Mutex<RefCell<SerialB>> = Mutex::new(RefCell::new(SerialB::default()));
-
-
-impl SerialB {
-    pub const fn default() -> Self {
-        Self {
-            cur: 0,
-            end: BUFFER_SIZE - 1,
-            buffer: [0; BUFFER_SIZE]
-
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.cur = 0;
-        self.buffer = [0; BUFFER_SIZE];
-    }
-
-    pub fn process_byte(&mut self, byte : u8){
-        if self.cur != self.end {
-            self.buffer[self.cur] = byte;
-            self.cur = self.cur + 1;
-        }
-    }
-
-    pub fn take_message(&mut self, buffer: &mut [u8; 100]) -> bool {
-        
-        let delimeter = b'\r';
-        // TODO: the next line require reordering
-        if self.cur < self.end {
-            //no wrapping
-            if self.buffer[self.cur..self.end].contains(&delimeter) {
-                let pos = match self.buffer[self.cur..self.end].into_iter().position( |&byte| byte == delimeter){
-                    Some(pos) => pos,
-                    None => { return false},
-                };
-                buffer.copy_from_slice(&self.buffer[self.cur..(self.cur+pos+1)]);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    pub fn write(&mut self, character: u8) -> nb::Result<(), Infallible>{
-        // TODO: if we are sending, for now we always reset the receive buffer
-        // later, implement a circular buffer, probably this: https://github.com/pythcoiner/modbus_buffer
-        // the suggested library appears to simply look for a frame validated by CRC in a circular buffer
-        self.reset();
-
-
-        let usart = unsafe { &*UART5::ptr() };
-
-        if usart.sr.read().txe().bit_is_set() {
-            usart.dr.write(|w| w.dr().bits(character as u16));
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
+    if usart.sr.read().txe().bit_is_set() {
+        usart.dr.write(|w| w.dr().bits(character as u16));
+        Ok(())
+    } else {
+        Err(nb::Error::WouldBlock)
     }
 }
 
@@ -193,12 +136,13 @@ unsafe fn UART5() {
             if sr.rxne().bit_is_set() {
                 // Read the received byte
                 // Ok(
-                let byte = usart.dr.read().dr().bits();
-                rprintln!("uart5  rx byte: {}", byte as u8 as char); 
+                let byte = usart.dr.read().dr().bits() as u8;
+                rprintln!("uart5  rx byte: {}", byte as char); 
                 cortex_m::interrupt::free(|cs| {
-                    match SERIALB.borrow(cs).try_borrow_mut(){
-                        Ok(mut serial) => {serial.process_byte(byte as u8);}
-                        Err(_) => {}
+                    let r = UART5_RX_PROCESSOR.borrow(cs);
+
+                    if let Some(processor) = r.borrow_mut().deref_mut() {
+                        processor.process_byte(byte.clone());
                     }
                 });
             } else {

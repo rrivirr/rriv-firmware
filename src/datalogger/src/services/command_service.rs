@@ -55,7 +55,7 @@ fn pending_message_count(board: &impl RRIVBoard) -> usize {
     board.critical_section(get_pending_message_count)
 }
 
-fn take_command(board: &impl RRIVBoard) -> Result<[u8; 500], ()> {
+fn take_command(board: &impl RRIVBoard) -> Result<[u8; 200], ()> {
     let do_take_command = || unsafe {
         let command_data = COMMAND_DATA.borrow_mut();
         Ok(CommandRecognizer::take_command(command_data))

@@ -88,8 +88,6 @@ pub trait RRIVBoard: Send {
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format
 
-    fn take_serialb_message(&mut self, buffer: &mut [u8; 100]) -> bool;
-
 }
 
 

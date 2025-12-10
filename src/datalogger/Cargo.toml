@@ -14,9 +14,9 @@ serde_json = { version = "1.0.104", default-features = false, features = ["alloc
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 rtt-target = "0.4.0"
 bitflags = "2.4.1"
-bitfield-struct = "0.7"
+bitfield-struct = "0.11.0"
 one-wire-bus = "0.1.1"
-embedded-hal = "1.0.0"
+# embedded-hal = "1.0.0"
 modbus-core = { version = "*", default-features = false, features = ["rtu"] }
 modbus_buffer = "0.0.2"
 
