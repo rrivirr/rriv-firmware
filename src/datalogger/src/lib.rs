@@ -48,6 +48,7 @@ pub struct DataLogger {
     calibration_point_values: [Option<Box<[CalibrationPair]>>; EEPROM_TOTAL_SENSOR_SLOTS],
 
     telemeter: telemetry::telemeters::lorawan::RakWireless3172,
+    modbus_service: Option<modbus_service::ModbusByteProcessor>,
 
     // measurement cycle
     completed_bursts: u8,
@@ -71,6 +72,7 @@ impl DataLogger {
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
             interactive_logging: false,
+            modbus_service: None
         }
     }
 
@@ -129,6 +131,7 @@ impl DataLogger {
         // setup each service
         command_service::setup(board);
         usart_service::setup(board);
+        self.modbus_service = Some(modbus_service::ModbusByteProcessor::new());
         modbus_service::setup(board);
 
         // read all the sensors from EEPROM
@@ -204,6 +207,25 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
+    pub fn relay_modbus_message(&mut self, board: &mut impl RRIVBoard) {
+        if let Some(modbus_service) = &mut self.modbus_service {
+            match modbus_service.take_message(board) {
+                Ok(adu) => {
+                    // relay this to the modbus driver, if configured
+                    for i in 0..self.sensor_drivers.len() {
+                        if let Some(ref mut driver) = self.sensor_drivers[i] {
+                            let requested_gpios = driver.get_requested_gpios();
+                            if requested_gpios.rs485() {
+                                driver.receive_modbus(adu);
+                            }
+                        }
+                    }
+                },
+                Err(_) => {},
+            }
+        }
+    }
+
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
         // Process incoming commands
@@ -233,6 +255,19 @@ impl DataLogger {
             self.telemeter.run_loop_iteration(board);
         }
 
+        //
+        // receive serialb (modbus) message
+        //
+
+        if let Some(modbus_service) = &mut self.modbus_service {
+            match modbus_service.take_message(board) {
+                Ok(adu) => {
+                    // relay this to the modbus driver, if configured
+                },
+                Err(_) => {},
+            }
+        }
+
         self.update_actuators(board);
 
         //
@@ -253,6 +288,12 @@ impl DataLogger {
                     // is this called a 'single measurement cycle' ?
 
                     self.measure_sensor_values(board); // measureSensorValues(false);
+
+                    self.relay_modbus_message(board);
+
+                    
+
+
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();

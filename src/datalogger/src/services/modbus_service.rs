@@ -10,13 +10,13 @@ const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marke
 const USART_BUFFER_SIZE: usize = 50;
 
 static BUFFER_SIZE: usize = 64usize;
-static mut MODBUS_BUFFER : Option<ModbusBuffer<BUFFER_SIZE>> = None;
 
 
 
 pub struct ModbusByteProcessor {
+    modbus_buffer: ModbusBuffer<BUFFER_SIZE>,
     message: [u8; 64],
-    pending_message: bool
+    pending_message_size: usize
 }
 
 impl<'a> ModbusByteProcessor {
@@ -28,31 +28,56 @@ impl<'a> ModbusByteProcessor {
 
         ModbusByteProcessor {
             message: [u8::MAX; 64],
-            pending_message: false
+            pending_message_size: 0usize,
+            modbus_buffer
         }
     }
+
+    pub fn take_message(&mut self, board: &impl RRIVBoard) -> Result< modbus_core::rtu::ResponseAdu<'_>, ()> {
+
+        if self.pending_message_size > 0 {
+            match modbus_core::rtu::client::decode_response(&self.message){
+                Ok(option) => {
+                    match option {
+                        Some(adu) => {
+                            Ok(adu.clone())
+
+                            // we got a message
+                            // need to mark self.message as empty
+                            // this probably needs to happen in a critical section
+                        },
+                        None => Err(()),
+                    }
+                    
+                },
+                Err(err) => Err(())
+            }
+        } else {
+            Err(())
+        }
+
+    }
+
+
 }
 
 impl<'a, 'b> RXProcessor for ModbusByteProcessor {
     fn process_byte(&mut self, byte: u8) {
-        unsafe { 
-            MODBUS_BUFFER.as_mut().unwrap().push(byte);
-            let mut buffer = [u8::MAX; BUFFER_SIZE];
-            if let Some(message_size) = MODBUS_BUFFER.as_mut().unwrap().try_decode_frame(&mut buffer){
-                self.message.copy_from_slice(&buffer[0..message_size]);
-                self.pending_message = true;
-            }
-
-        };
+        if self.pending_message_size > 0 {
+            // we have a pending message, can't accept any more in the buffer
+            return;
+        }
+        self.modbus_buffer.push(byte);
+        let mut buffer = [u8::MAX; BUFFER_SIZE];
+        if let Some(message_size) = self.modbus_buffer.try_decode_frame(&mut buffer){
+            self.message.copy_from_slice(&buffer[0..message_size]);
+            self.pending_message_size = message_size;
+        }
     }
 }
 
 
 pub fn setup(board: &mut impl RRIVBoard) {
-
-    unsafe { MODBUS_BUFFER = Some(ModbusBuffer::<64>::new()
-        .min_frame_len(3)
-        .overwrite(true)) };
 
     let byte_processor = Box::<ModbusByteProcessor>::leak(Box::new(ModbusByteProcessor::new()));
 
@@ -60,16 +85,3 @@ pub fn setup(board: &mut impl RRIVBoard) {
     board.set_serial_rx_processor(rriv_board::SerialRxPeripheral::SerialPeripheral2, Box::new(byte_processor));
 }
 
-pub fn take_message(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
-    // // rprintln!("pending messages {}", pending_message_count(board));
-    // if pending_message_count(board) < 1 {
-    //     return Err(());
-    // }
-
-    // let do_take_command = || unsafe {
-    //     let message_data = MESSAGE_DATA.borrow_mut();
-    //     Ok(_take_command(message_data))
-    // };
-
-    // board.critical_section(do_take_command)
-}

@@ -90,6 +90,11 @@ pub trait SensorDriver {
     fn get_requested_gpios(&self) -> GpioRequest {
         GpioRequest::none()
     }
+
+    fn receive_modbus(&mut self, adu: modbus_core::rtu::ResponseAdu){
+        // most drivers don't need to receive modbus
+    }
+
 }
 
 
