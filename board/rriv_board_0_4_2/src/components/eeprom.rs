@@ -58,7 +58,7 @@ pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address
                     buffer[i] = b[0];
                 }
                 Err(_) => {
-                    board.usb_serial_send("EEPROM read failure, restarting");
+                    board.usb_serial_send(format_args!("EEPROM read failure, restarting"));
                     // board.restart();
                     return;
                 } // what do we do if we fail?  panic?  retry?  restart the board?

@@ -3,12 +3,12 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use alloc::format;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
+use stm32f1xx_hal::time::MilliSeconds;
 use stm32f1xx_hal::timer::CounterUs;
 
-use core::fmt::Display;
+use core::fmt::{self, Display};
 use core::mem;
 use core::{
     cell::RefCell,
@@ -26,16 +26,14 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Pin, PushPull};
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, UART5, USART2, USB};
+use stm32f1xx_hal::gpio::Pin;
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
     afio::MAPR,
-    gpio::{Dynamic, PinModeError},
+    gpio::Dynamic,
     pac::TIM3,
-    time::MilliSeconds,
-    timer::CounterMs,
     watchdog::IndependentWatchdog,
 };
 
@@ -269,19 +267,42 @@ impl RRIVBoard for Board {
         
     }
 
-    fn usb_serial_send(&mut self, string: &str) {
-        usb_serial_send(string, &mut self.delay);
+    fn usb_serial_send(&mut self, arg: fmt::Arguments) { // TODO: ok so the formatter doesn't below in the board level, it can go into a util in the datalogger app level
+        let mut buf = [0u8; 64];
+        match format_no_std::show(
+            &mut buf,
+            arg
+        ) {
+            Ok(message) => {
+                usb_serial_send(message, &mut self.delay);
+                rprintln!("{}", message); // TODO: this uses format!
+            }
+            Err(e) => {
+                rprintln!("{}", e);
+            },
+        }
+
     }
 
-    // outputs to serial and also echos to rtt
-    fn serial_debug(&mut self, string: &str) {
-        rprintln!("{:?}", string);
-        if self.debug {
-            rriv_board::RRIVBoard::usb_serial_send(
-                self,
-                format!("{{\"debug\":\"{}\"}}\n", string).as_str(),
-            );
+    // outputs to serial (which also echos to rtt)
+    fn serial_debug(&mut self, args: fmt::Arguments) {
+
+        let mut buf = [0u8; 64];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(string) => {
+                if self.debug {
+                    rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{{\"debug\":\"{}\"}}\n", string));
+                } else {
+                    rprintln!("{}", string);
+                }
+            }
+            Err(_) => {},
         }
+
+        
     }
 
     fn store_datalogger_settings(
@@ -385,7 +406,7 @@ impl RRIVBoard for Board {
             .measure_battery_level(&mut self.internal_adc, &mut self.delay)
         {
             Ok(value) => return value as i16,
-            Err(err) => return -1,
+            Err(_err) => return -1,
         }
     }
 
@@ -399,8 +420,21 @@ impl RRIVBoard for Board {
         self.debug = debug;
     }
 
-    fn write_log_file(&mut self, data: &str) {
-        self.storage.write(data.as_bytes(), self.file_epoch);
+    fn write_log_file(&mut self, args: fmt::Arguments) {
+        // self.storage.write(data.as_bytes(), self.file_epoch);
+
+        let mut buf = [0u8; 100];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(string) => {
+                self.storage.write(string.as_bytes(), self.file_epoch);
+            }
+            Err(_) => {
+                rprintln!("format error writing log file")
+            },
+        }
     }
 
     fn flush_log_file(&mut self) {
@@ -416,12 +450,12 @@ impl RRIVBoard for Board {
             if i % rriv_board::EEPROM_SENSOR_SETTINGS_SIZE == 0 {
                 rriv_board::RRIVBoard::usb_serial_send(
                     self,
-                    format!("\n{}:", i / rriv_board::EEPROM_SENSOR_SETTINGS_SIZE).as_str(),
+                    format_args!("\n{}:", i / rriv_board::EEPROM_SENSOR_SETTINGS_SIZE),
                 );
             }
-            rriv_board::RRIVBoard::usb_serial_send(self, format!("{}", &buffer[i]).as_str());
+            rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{}", &buffer[i]));
         }
-        rriv_board::RRIVBoard::usb_serial_send(self, "}\n"); // } ends the transmissions
+        rriv_board::RRIVBoard::usb_serial_send(self, format_args!("}}\n")); // } ends the transmissions
     }
 
     fn get_uid(&mut self) -> [u8; 12] {
@@ -445,7 +479,7 @@ impl RRIVBoard for Board {
     }
     
     fn rs485_send(&mut self, message: &[u8]) {
-        cortex_m::interrupt::free(|cs| {
+        cortex_m::interrupt::free(|_cs| {
             for char in message.iter() {
             // rprintln!("char {}", char);
             _ = nb::block!( components::uart5::write(char.clone()));   
@@ -456,8 +490,8 @@ impl RRIVBoard for Board {
 
 macro_rules! control_services_impl {
     () => {
-        fn usb_serial_send(&mut self, string: &str) {
-            rriv_board::RRIVBoard::usb_serial_send(self, string);
+        fn usb_serial_send(&mut self, args : fmt::Arguments ) {
+            rriv_board::RRIVBoard::usb_serial_send(self, args);
         }
 
         fn usart_send(&mut self, string: &str) {
@@ -468,8 +502,8 @@ macro_rules! control_services_impl {
             rriv_board::RRIVBoard::rs485_send(self, message);
         }
 
-        fn serial_debug(&mut self, string: &str) {
-            rriv_board::RRIVBoard::serial_debug(self, string);
+        fn serial_debug(&mut self, args: fmt::Arguments) {
+            rriv_board::RRIVBoard::serial_debug(self, args);
         }
 
         fn delay_ms(&mut self, ms: u16) {
@@ -538,7 +572,7 @@ impl SensorDriverServices for Board {
                     AdcError::NotConfigured => "Internal ADC Not Configured",
                     AdcError::ReadError => "Internal ADC Read Error",
                 };
-                rriv_board::RRIVBoard::usb_serial_send(self, &error_string);
+                rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{}", &error_string));
                 return 0;
             }
         }
@@ -560,7 +594,7 @@ impl SensorDriverServices for Board {
             Err(e) => {
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem reading I2C2 {:X?} {:?}", addr, e),
+                    format_args!("Problem reading I2C2 {:X?} {:?}", addr, e),
                 );
                 for i in 0..buffer.len() {
                     buffer[i] = 0b11111111; // error value
@@ -584,7 +618,7 @@ impl SensorDriverServices for Board {
                 };
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem writing I2C2 {:X?} {}", addr, kind),
+                    format_args!("Problem writing I2C2 {:X?} {}", addr, kind),
                 );
                 return Err(());
             }
@@ -605,7 +639,7 @@ impl SensorDriverServices for Board {
                 };
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem writing I2C2 {:X?} {}", addr, kind),
+                    format_args!("Problem writing I2C2 {:X?} {}", addr, kind),
                 );
                 return Err(());
             }

@@ -11,12 +11,12 @@ rriv_board = { path = "../rriv_board" }
 util = { path = " ../../../../src/util" }
 embedded-hal = "0.2.7"
 nb = "1"
-cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
-cortex-m-rt = "0.7.3"
+cortex-m = { version = "0.7.6",  default-features = false,  features = ["critical-section-single-core"] }
+cortex-m-rt = { version = "0.7.3", default-features = false }
 # Panic behaviour, see https://crates.io/keywords/panic-impl for alternatives
 panic-halt = "0.2.0"
 unwrap-infallible = "0.1.5"
-stm32f1xx-hal = { version = "0.10", features = ["rt", "stm32f103", "high"] }
+stm32f1xx-hal = { version = "0.10", default-features = false, features = ["rt", "stm32f103", "high"] }
 rtt-target = "0.4.0"
 usb-device = "0.2.9"
 usbd-serial = "0.1.1"
@@ -25,3 +25,4 @@ ds323x = "0.5.1"
 one-wire-bus = "0.1.1"
 i2c_hung_fix = "0.1.0"
 bitfield-struct = "0.11.0"
+format_no_std = "1.2.0"

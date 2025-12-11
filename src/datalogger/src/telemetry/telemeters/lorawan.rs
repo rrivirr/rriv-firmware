@@ -8,7 +8,6 @@ use util::str_from_utf8;
 use crate::drivers::resources::gpio::GpioRequest;
 use crate::services::usart_service;
 use alloc::string::{String,ToString};
-use alloc::format;
 
 #[derive(Clone, Copy)]
 enum RakWireless3172Step {
@@ -84,8 +83,8 @@ impl RakWireless3172 {
     }
 
     fn send_and_increment_step(&mut self, board: &mut impl RRIVBoard, message: &str) {
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);        
         self.usart_send_time = board.timestamp();
         self.telemetry_step = self.telemetry_step.next();
         rprintln!("trying telemetry step {}",   self.telemetry_step as u8);
@@ -104,14 +103,14 @@ impl RakWireless3172 {
                                 rprintln!("trying telemetry step {}", self.telemetry_step as u8);
                                 return;
                             } else {
-                                board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str());
+                                board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
                                 rprintln!("telem not ok: {}", message);
                                 self.telemetry_step = RakWireless3172Step::Begin;
                                 return;
                             }
                         }
                         None => {
-                            board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str());
+                            board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
                             rprintln!("telem not ok: {}", message);
                             self.telemetry_step = RakWireless3172Step::Begin;
                             return;
@@ -148,7 +147,7 @@ impl RakWireless3172 {
 
                 if message.contains("+EVT") || message.contains("AT+") || message.contains("Restricted"){
                     if self.watch {
-                        board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str())
+                        board.usb_serial_send(format_args!("LoRaWAN: {}\n", message))
                     }
                 }
 
@@ -221,8 +220,8 @@ impl RakWireless3172 {
             }
         }
 
-        let command = format!("AT+SEND={}:{}\r\n", payload.len(), s.as_str());
-        board.usart_send(command.as_str());
+        let args = format_args!("AT+SEND={}:{}\r\n", payload.len(), s.as_str()); 
+        usart_service::format_and_send(board, args);
         self.last_transmission = board.timestamp();
     }
 
@@ -258,7 +257,7 @@ impl RakWireless3172 {
                 // handle other events
                 if message.contains("+EVT") || message.contains("AT") || message.contains("Restricted"){
                     if self.watch {
-                        board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str())
+                        board.usb_serial_send(format_args!("LoRaWAN: {}\n", message))
                     }
                     if message.starts_with("AT_NO_NETWORK_JOINED") {
                         self.telemetry_step = RakWireless3172Step::Begin;
@@ -282,8 +281,8 @@ impl RakWireless3172 {
         let mut join_eui: String = String::new();
 
         let message = "AT+DEVEUI=?";
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);
         board.delay_ms(1000); // let the chip respond
         while match usart_service::take_command(board) { // because other async stuff could happen in the meantime
             Ok(message) => {
@@ -311,8 +310,8 @@ impl RakWireless3172 {
         } {}
 
         let message = "AT+APPEUI=?";
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);
         board.delay_ms(1000); // let the chip respond
         while match usart_service::take_command(board) { // because other async stuff could happen in the meantime
             Ok(message) => {

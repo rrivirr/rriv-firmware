@@ -25,9 +25,6 @@ use datalogger::DataLogger;
 
 use rtt_target::rprintln;
 
-extern crate alloc;
-use alloc::format;
-
 
 #[entry]
 fn main() -> ! {
@@ -79,7 +76,7 @@ fn panic(_info: &PanicInfo) -> ! {
     rprintln!("send json panic");
 
     // we use format! here because we didn't find another good way yet.
-    rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
+    // rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
 
     loop {}
 }

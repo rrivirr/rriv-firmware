@@ -4,9 +4,10 @@ use modbus_core::{Data, ResponsePdu};
 use modbus_core::rtu::{Header, ResponseAdu};
 use rriv_board::RRIVBoard;
 
-use alloc::format;
 use alloc::boxed::Box;
 use rtt_target::rprint;
+
+use crate::services::usart_service;
 
 
 pub const MAX_DATA_VALUES : usize = 16usize;
@@ -27,7 +28,8 @@ pub fn transmit(board: &mut impl RRIVBoard, payload: &[u8] ) {
 
     let _ = board.get_sensor_driver_services().write_gpio_pin(1, true);
     for i in 0..payload.len() {
-        board.usart_send(format!("{}", payload[i]).as_str() ); // just  using the normal usart right now
+        let prepared_message = format_args!("{}\r\n", payload[i]);
+        usart_service::format_and_send(board, prepared_message); // just  using the normal usart right now
     }
     let _ = board.get_sensor_driver_services().write_gpio_pin(1, false);
 }

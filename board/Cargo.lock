@@ -92,18 +92,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "bitflags"
-version = "2.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
-
-[[package]]
 name = "bxcan"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40ac3d0c0a542d0ab5521211f873f62706a7136df415676f676d347e5a41dd80"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "embedded-hal",
  "nb 1.1.0",
  "vcell",
@@ -183,8 +177,8 @@ name = "datalogger"
 version = "0.1.0"
 dependencies = [
  "bitfield-struct",
- "bitflags 2.10.0",
  "control_interface",
+ "format_no_std",
  "hashbrown",
  "modbus-core",
  "modbus_buffer",
@@ -246,6 +240,12 @@ dependencies = [
  "heapless",
  "log",
 ]
+
+[[package]]
+name = "format_no_std"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ae45e32b0bfe2c62c805f8e87027b5aa08562000326edbc5b421ab6d92873a7"
 
 [[package]]
 name = "fugit"
@@ -438,6 +438,7 @@ dependencies = [
  "ds323x",
  "embedded-hal",
  "embedded-sdmmc",
+ "format_no_std",
  "i2c_hung_fix",
  "nb 1.1.0",
  "one-wire-bus",
@@ -608,7 +609,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30845662b9ce46a2ec04da97666a2b32458bee5032bb0452d0caf1536a96a542"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags",
  "bxcan",
  "cortex-m",
  "cortex-m-rt",
@@ -671,6 +672,10 @@ dependencies = [
 [[package]]
 name = "util"
 version = "0.1.0"
+dependencies = [
+ "format_no_std",
+ "rtt-target",
+]
 
 [[package]]
 name = "vcell"

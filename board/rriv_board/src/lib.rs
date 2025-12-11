@@ -1,6 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 extern crate alloc;
 use alloc::boxed::Box;
+use core::fmt;
+
 
 pub mod gpio;
 
@@ -30,11 +32,12 @@ pub enum SerialRxPeripheral{
 // Board Services Used by Control Logic and Drivers
 macro_rules! control_services {
     () => {
-        fn usb_serial_send(&mut self, string: &str); // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
+        fn usb_serial_send(&mut self, arg: fmt::Arguments);
+                // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
                                                  // maybe rrivctl_send
         fn usart_send(&mut self, string: &str);
         fn rs485_send(&mut self, message : &[u8]);
-        fn serial_debug(&mut self, string: &str);    
+        fn serial_debug(&mut self, args: fmt::Arguments);
         fn delay_ms(&mut self, ms: u16);
         fn timestamp(&mut self) -> i64;
 
@@ -60,7 +63,7 @@ pub trait RRIVBoard: Send {
     fn set_debug(&mut self, debug: bool);
 
     // Data Logging
-    fn write_log_file(&mut self, data: &str);
+    fn write_log_file(&mut self, args: fmt::Arguments);
     fn flush_log_file(&mut self);
 
 

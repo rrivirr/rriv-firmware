@@ -1,4 +1,3 @@
-use alloc::format;
 use rriv_board::{RRIVBoard, EEPROM_TOTAL_SENSOR_SLOTS};
 use rtt_target::rprintln;
 use serde_json::{json, Value};
@@ -27,7 +26,7 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
                 match param.as_str() {
                     "epoch" => {
                         let epoch = board.epoch_timestamp();
-                        board.usb_serial_send(format!("{:}\n", epoch).as_str());
+                        board.usb_serial_send(format_args!("{:}\n", epoch));
                     }
                     "version" => {
                         let mut branch = "none";
@@ -51,9 +50,11 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
                             "br":branch,
                             "ref":gitref
                         });
+
+
                         responses::send_command_response_message(
                             board,
-                            format!("{}\n", response).as_str(),
+                            response.to_string().as_str(),
                         );
                     }
                     "eeprom" => {
@@ -75,7 +76,7 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
         }
     } else {
         let epoch = board.epoch_timestamp();
-        board.usb_serial_send(format!("{:}", epoch).as_str());
+        board.usb_serial_send(format_args!("{:}", epoch));
     }
 }
 
@@ -286,7 +287,7 @@ pub fn list_sensors(
     board: &mut impl RRIVBoard,
     drivers: &[Option<Box<dyn SensorDriver>>; rriv_board::EEPROM_TOTAL_SENSOR_SLOTS],
 ) {
-    board.usb_serial_send("{\"sensors\":[");
+    board.usb_serial_send(format_args!("{{\"sensors\":["));
     let mut first = true;
     for i in 0..drivers.len() {
         // create json and output it
@@ -294,7 +295,7 @@ pub fn list_sensors(
             if first {
                 first = false
             } else {
-                board.usb_serial_send(",");
+                board.usb_serial_send(format_args!(","));
             }
 
             let mut id_bytes = driver.get_id();
@@ -316,11 +317,10 @@ pub fn list_sensors(
             });
             let string = json.to_string();
             let str = string.as_str();
-            board.usb_serial_send(str);
+            board.usb_serial_send(format_args!("{}", str));
         }
     }
-    board.usb_serial_send("]}");
-    board.usb_serial_send("\n");
+    board.usb_serial_send(format_args!("]}}\n"));
 }
 
 fn value_length(target: &[u8], value: &[u8]) -> usize {

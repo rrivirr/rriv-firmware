@@ -1,13 +1,11 @@
 
-use core::{cell::RefCell, ffi::FromBytesUntilNulError};
 use core::convert::Infallible;
 use core::ops::DerefMut;
 
-use cortex_m::interrupt::Mutex;
 use rtt_target::rprintln;
-use stm32f1xx_hal::{afio::MAPR, gpio, pac::{self, NVIC, RCC, UART5}, prelude::*, rcc::{BusClock, Clocks}, serial::{Config, Parity, Serial, StopBits, WordLength}};
+use stm32f1xx_hal::{pac::{self, NVIC, RCC, UART5}, rcc::{BusClock, Clocks}, serial::{Config, Parity, StopBits, WordLength}, time::U32Ext};
 
-use crate::{UART5_RX_PROCESSOR, interrupt, pin_groups};
+use crate::{UART5_RX_PROCESSOR, interrupt};
 
 use crate::pac::uart5 as uart_base;
 use stm32f1xx_hal::rcc::{Enable, Reset};
@@ -42,7 +40,7 @@ pub fn setup_serialb(
                 .parity_none()
                 .stopbits(StopBits::STOP1);
 
-    let rcc = unsafe { &(*RCC::ptr()) };
+    let _rcc = unsafe { &(*RCC::ptr()) };
     
     // Configure baud rate
     let brr = UART5::clock(clocks).raw() / config.baudrate.0;
@@ -99,7 +97,7 @@ pub fn setup_serialb(
 
 #[interrupt]
 unsafe fn UART5() {
-    cortex_m::interrupt::free(|cs| {
+    cortex_m::interrupt::free(|_cs| {
 
         // rx.is_rx_not_empty
         if ! unsafe { (*UART5::ptr()).sr.read().rxne().bit_is_set() } {

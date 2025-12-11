@@ -1,10 +1,9 @@
-use alloc::format;
 
 use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 use pac::SPI2;
-use stm32f1xx_hal::spi::Spi2NoRemap;
+use stm32f1xx_hal::{gpio::Alternate, spi::Spi2NoRemap};
 // use embedded_sdmmc::{File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 
 use crate::*;
@@ -197,11 +196,26 @@ impl Storage {
             timestamp
         };
         // let timestamp = timestamp > 1704067200 ? timestamp - 1704067200 : timestamp; // the RRIV epoch starts on Jan 1 2024, necessary to support short file names
-        let filename = format!("{:0>7}.csv", timestamp);
-        let filename = filename.as_bytes();
-        rprintln!("file: {:?}", core::str::from_utf8(filename));
+        let args = format_args!("{:0>7}.csv", timestamp);
         let mut filename_bytes: [u8; 11] = [b'\0'; 11];
-        filename_bytes[0..filename.len()].clone_from_slice(filename);
+        let mut buffer = [b'\0'; 11];
+        match format_no_std::show(&mut buffer, args){
+            Ok(str) => {
+                let bytes = str.as_bytes();
+                let len = if bytes.len() < 11 {
+                    bytes.len()
+                } else {
+                    11
+                };
+                filename_bytes[0..bytes.len()].clone_from_slice(bytes);
+            } 
+            Err(err) => {
+               let bytes = [u8::MAX; 11];
+                filename_bytes[0..bytes.len()].clone_from_slice(&bytes); 
+            }
+        }
+        // let filename = filename.as_bytes();
+        // rprintln!("file: {:?}", core::str::from_utf8(filename));
         self.filename = filename_bytes;
 
     }

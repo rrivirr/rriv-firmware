@@ -18,8 +18,8 @@ use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
 use crate::{protocol::responses, services::*, telemetry::telemeters::lorawan::RakWireless3172};
 use alloc::boxed::Box;
-use alloc::format;
 use rtt_target::rprintln;
+use core::fmt::Display;
 
 mod drivers;
 use drivers::{resources::gpio::*, types::*, *};
@@ -237,10 +237,13 @@ impl DataLogger {
                     self.execute_command(board, command_payload);
                 }
                 Err(error) => {
+
+                    let mut buf = [0u8; 64];
+                    
                     responses::send_command_response_error(
                         board,
                         "Error processing command",
-                        format!("{:?}\n", error).as_str(),
+                        util::format_error(&error, &mut buf)
                     );
                 }
             }
@@ -453,7 +456,7 @@ impl DataLogger {
     }
 
     fn write_column_headers_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
-        board.usb_serial_send("timestamp,");
+        board.usb_serial_send(format_args!("{}", "timestamp,"));
 
         let mut first = true;
         for i in 0..self.sensor_drivers.len() {
@@ -461,7 +464,7 @@ impl DataLogger {
                 if first {
                     first = false;
                 } else {
-                    board.usb_serial_send(",");
+                    board.usb_serial_send(format_args!("{}", ",") );
                 }
 
                 let prefix = helper::get_prefix(&mut driver.get_id());
@@ -469,19 +472,19 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     let mut identifier = driver.get_measured_parameter_identifier(j);
                     let identifier_str = util::str_from_utf8(&mut identifier).unwrap_or_default();
-                    board.usb_serial_send(&prefix);
-                    board.usb_serial_send(identifier_str);
+                    board.usb_serial_send(format_args!("{}",&prefix));
+                    board.usb_serial_send(format_args!("{}",identifier_str));
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.usb_serial_send(",");
+                        board.usb_serial_send(format_args!("{}",","));
                     }
                 }
             }
         }
-        board.usb_serial_send("\n");
+        board.usb_serial_send(format_args!("{}","\n"));
     }
 
     fn write_column_headers_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {
-        board.write_log_file("type,site,logger,deployment,deployed_at,uid,time.s,battery.V,");
+        board.write_log_file(format_args!("type,site,logger,deployment,deployed_at,uid,time.s,battery.V,"));
 
         let mut first = true;
         for i in 0..self.sensor_drivers.len() {
@@ -489,7 +492,7 @@ impl DataLogger {
                 if first {
                     first = false;
                 } else {
-                    board.write_log_file(",");
+                    board.write_log_file(format_args!(","));
                 }
 
                 let prefix = helper::get_prefix(&mut driver.get_id());
@@ -497,23 +500,22 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     let mut identifier = driver.get_measured_parameter_identifier(j);
                     let identifier_str = util::str_from_utf8(&mut identifier).unwrap_or_default();
-                    board.write_log_file(&prefix);
-                    board.write_log_file(identifier_str);
+                    board.write_log_file(format_args!("{}{}", &prefix, identifier_str));
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.write_log_file(",");
+                        board.write_log_file(format_args!(","));
                     }
                 }
             }
         }
-        board.write_log_file("\n");
+        board.write_log_file(format_args!("\n"));
     }
 
     // TODO: this function and the next one can be DRY by passing a closure
     fn write_measured_parameters_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         let epoch = board.epoch_timestamp();
         let millis = board.get_millis() % 1000;
-        let output = format!("{}.{},", epoch, millis);
-        board.usb_serial_send(&output);
+        let output = format_args!("{}.{},", epoch, millis);
+        board.usb_serial_send(format_args!("{}",&output));
 
         let mut first = true;
         for i in 0..self.sensor_drivers.len() {
@@ -521,29 +523,29 @@ impl DataLogger {
                 if first {
                     first = false;
                 } else {
-                    board.usb_serial_send(",");
+                    board.usb_serial_send(format_args!("{}",",") );
                 }
 
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let output = format!("{:.4}", value);
+                            let output = format_args!("{:.4}", value);
                             rprintln!("{}", value);
-                            board.usb_serial_send(&output);
+                            board.usb_serial_send(format_args!("{}",&output));
                         }
                         Err(_) => {
                             rprintln!("{}", "Error");
-                            board.usb_serial_send("Error");
+                            board.usb_serial_send(format_args!("{}","Error"));
                         }
                     }
 
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.usb_serial_send(",");
+                        board.usb_serial_send(format_args!("{}",","));
                     }
                 }
             }
         }
-        board.usb_serial_send("\n");
+        board.usb_serial_send(format_args!("{}","\n"));
     }
 
     fn write_raw_measurement_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {
@@ -553,7 +555,7 @@ impl DataLogger {
 
         // TODO: find a better way to print this uid, or generate and use a UUID that doesn't come from the MCU's uid
         let uid = board.get_uid();
-        let output = format!(
+        let output = format_args!(
             "raw,{},{},{},-,{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?},{}.{},{},",
             util::str_from_utf8(&mut self.settings.site_name).unwrap_or_default(),
             util::str_from_utf8(&mut self.settings.logger_name).unwrap_or_default(),
@@ -574,7 +576,7 @@ impl DataLogger {
             millis,
             board.get_battery_level()
         );
-        board.write_log_file(&output);
+        board.write_log_file(output);
 
         let mut first = true;
         for i in 0..self.sensor_drivers.len() {
@@ -582,29 +584,29 @@ impl DataLogger {
                 if first {
                     first = false;
                 } else {
-                    board.write_log_file(",");
+                    board.write_log_file(format_args!(","));
                 }
 
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let output = format!("{:.4}", value);
+                            let output = format_args!("{:.4}", value );
                             rprintln!("{}", value);
-                            board.write_log_file(&output);
+                            board.write_log_file(output);
                         }
                         Err(_) => {
                             rprintln!("{}", "Error");
-                            board.write_log_file("Error");
+                            board.write_log_file(format_args!("Error"));
                         }
                     }
 
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.write_log_file(",");
+                        board.write_log_file(format_args!(","));
                     }
                 }
             }
         }
-        board.write_log_file("\n");
+        board.write_log_file(format_args!("\n"));
     }
 
     fn write_last_measurement_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
@@ -815,10 +817,11 @@ impl DataLogger {
                         }
                     }
                     err => {
+                        let mut buffer = [0u8;64];
                         responses::send_command_response_error(
                             board,
                             "Bad epoch in command",
-                            format!("{:?}", err).as_str(),
+                            util::format_error(&err, &mut buffer),
                         );
                         return;
                     }
@@ -894,7 +897,7 @@ impl DataLogger {
                     Err(message) => {
                         responses::send_command_response_message(
                             board,
-                            format!("{}", message).as_str(),
+                            message,
                         );
                         return;
                     }
@@ -942,7 +945,7 @@ impl DataLogger {
                     Err(message) => {
                         responses::send_command_response_message(
                             board,
-                            format!("{}", message).as_str(),
+                            message,
                         );
                         return;
                     }
@@ -989,7 +992,7 @@ impl DataLogger {
                 let payload_values = match payload.convert() {
                     Ok(payload_values) => payload_values,
                     Err(message) => {
-                        board.usb_serial_send(format!("{}", message).as_str());
+                        board.usb_serial_send(format_args!("{}", message));
                         return;
                     }
                 };
@@ -1019,19 +1022,18 @@ impl DataLogger {
                 ) {
                     Ok(message) => message,
                     Err(error) => {
+                        let mut buffer = [0u8;64];
                         responses::send_command_response_error(
                             board,
                             "Problem sending message",
-                            format!(" {} \n", error).as_str(),
+                            util::format_error(&error, &mut buffer)
                         );
                         return;
                     }
                 };
 
-                let prepared_message = format!("{}\r\n", message);
-                let prepared_message = prepared_message.as_str();
-                rprintln!("message {}", prepared_message);
-                board.usart_send(prepared_message);
+                board.usart_send(message);
+                board.usart_send("\r\n");
                 // rprintln!("{}", "\r\n");
                 // board.usart_send("\r\n");
                 // rprintln!("just line feed");
@@ -1068,10 +1070,11 @@ impl DataLogger {
                         responses::send_command_response_message(board, response);
                     }
                     Err(error) => {
+                        let mut buffer = [0u8; 64];
                         responses::send_command_response_error(
                             board,
                             "Problem receiving message",
-                            format!(" {} \n", error).as_str(),
+                            util::format_error(&error, &mut buffer)
                         );
                     }
                 };
@@ -1080,7 +1083,7 @@ impl DataLogger {
             }
             CommandPayload::TelemeterGet => match self.telemeter.get_identity(board) {
                 Ok(message) => {
-                    board.usb_serial_send(format!("{}\n", message.as_str()).as_str());
+                    board.usb_serial_send(format_args!("{}\n", message.as_str()));
                 }
                 Err(_) => {
                     responses::send_command_response_message(board, "Failed to get identifiers");

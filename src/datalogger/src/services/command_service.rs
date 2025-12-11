@@ -4,7 +4,6 @@ use rriv_board::{RRIVBoard, RXProcessor};
 
 extern crate alloc;
 use alloc::boxed::Box;
-use alloc::format;
 use serde_json::Value;
 
 use core::borrow::BorrowMut;
@@ -18,9 +17,7 @@ use crate::datalogger::payloads::*;
 
 static mut COMMAND_DATA: CommandData = CommandData::default();
 
-// pub struct CommandService {
-//     // registry: CommandRegistry,
-// }
+
 
 #[derive(Serialize, Deserialize)]
 struct CLICommand<'a> {
@@ -29,13 +26,6 @@ struct CLICommand<'a> {
     subcommand: Option<Box<str>>
 }
 
-// impl CommandService {
-// pub fn new() -> Self {
-//     // set the static, shareable command data
-//     // CommandService {
-//     //     registry: CommandRegistry::new(),
-//     // }
-// }
 
 /// set the global rx processor
 pub fn setup(board: &mut impl RRIVBoard) {
@@ -89,13 +79,9 @@ pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPaylo
 
 pub fn get_command_from_parts(object: &str, action: &str, subcommmand: Option<Box<str>>) -> CommandType {
     if let Some(subcommand) = subcommmand {
-        let command_str = format!("{}_{}_{}", object, action, subcommand);
-        rprintln!("{:?}", command_str);
-        CommandType::from_str(&command_str)
+        CommandType::from((object, action, subcommand.as_ref()) )
     } else {
-        let command_str = format!("{}_{}", object, action);
-        rprintln!("{:?}", command_str);
-        CommandType::from_str(&command_str)
+        CommandType::from((object, action, ""))
     }
 }
 

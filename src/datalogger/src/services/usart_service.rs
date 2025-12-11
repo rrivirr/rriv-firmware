@@ -1,4 +1,4 @@
-use core::borrow::BorrowMut;
+use core::{borrow::BorrowMut, fmt};
 use alloc::boxed::Box;
 use rriv_board::{RRIVBoard, RXProcessor};
 use rtt_target::rprintln;
@@ -129,4 +129,20 @@ pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], (
     };
 
     board.critical_section(do_take_command)
+}
+
+
+pub fn format_and_send(board: &mut impl RRIVBoard, args: fmt::Arguments){
+     let mut buf = [0u8;50];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(message) => {
+                board.usart_send(message);
+            }
+            Err(e) => {
+                rprintln!("{}", e);
+            },
+        }
 }
