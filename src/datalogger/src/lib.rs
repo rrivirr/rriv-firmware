@@ -18,7 +18,6 @@ use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
 use crate::{protocol::responses, services::*, telemetry::telemeters::lorawan::RakWireless3172};
 use alloc::boxed::Box;
-use rtt_target::rprintln;
 use core::fmt::Display;
 
 mod drivers;
@@ -80,7 +79,7 @@ impl DataLogger {
         let mut bytes: [u8; EEPROM_DATALOGGER_SETTINGS_SIZE] =
             [b'\0'; EEPROM_DATALOGGER_SETTINGS_SIZE];
         board.retrieve_datalogger_settings(&mut bytes);
-        rprintln!("retrieved {:?}", bytes);
+        defmt::println!("retrieved {:?}", bytes);
         let settings: DataloggerSettings = DataloggerSettings::new_from_bytes(bytes); // convert the bytes pack into a DataloggerSettings
 
         let settings = settings.configure_defaults();
@@ -91,7 +90,7 @@ impl DataLogger {
     fn store_settings(&mut self, board: &mut impl RRIVBoard) {
         let bytes = self.settings.get_bytes();
         board.store_datalogger_settings(&bytes);
-        rprintln!("stored {:?}", bytes);
+        defmt::println!("stored {:?}", bytes);
     }
 
     fn get_driver_slot_by_id(&self, id: &str) -> Option<usize> {
@@ -123,9 +122,9 @@ impl DataLogger {
     pub fn setup(&mut self, board: &mut impl RRIVBoard) {
         // enable power to the eeprom and bring i2bufferc online
 
-        // rprintln!("retrieving settings");
+        // defmt::println!("retrieving settings");
         self.settings = self.retrieve_settings(board);
-        // rprintln!("retrieved settings {:?}", self.settings);
+        // defmt::println!("retrieved settings {:?}", self.settings);
         self.mode = DataLoggerMode::from_u8(self.settings.mode);
 
         // setup each service
@@ -180,7 +179,7 @@ impl DataLogger {
                 self.sensor_drivers[i] = Some(driver);
             }
         }
-        rprintln!("done loading sensors");
+        defmt::println!("done loading sensors");
 
         let requested_gpios = self.telemeter.get_requested_gpios();
         if self.settings.toggles.enable_telemetry() {
@@ -202,7 +201,7 @@ impl DataLogger {
                 // otherwise we are not logging to storage by default, so don't write any file yet
             }
         }
-        rprintln!("done with setup");
+        defmt::println!("done with setup");
 
         protocol::status::send_ready_status(board);
     }
@@ -319,7 +318,7 @@ impl DataLogger {
 
                 self.run_measurement_cycle(board);
                 if self.measurement_cycle_completed() {
-                    rprintln!("Measurement cycle completed");
+                    defmt::println!("Measurement cycle completed");
                     //     // go to sleep until the next in interval (in minutes)
                     let mut slept = 0u64;
                     while slept < (self.settings.sleep_interval as u64) * 1000u64 * 60u64 {
@@ -357,10 +356,10 @@ impl DataLogger {
         let readings_per_burst: u8 = 10; // TODO get it from settings (need to be added there)
 
         // get next raw reading
-        rprintln!("measuring sensor values in cycle");
+        defmt::println!("measuring sensor values in cycle");
         self.measure_sensor_values(board);
         self.readings_completed_in_current_burst = self.readings_completed_in_current_burst + 1;
-        rprintln!(
+        defmt::println!(
             "completed reading {}",
             self.readings_completed_in_current_burst
         );
@@ -377,10 +376,10 @@ impl DataLogger {
 
         // check on progress
         if self.readings_completed_in_current_burst >= readings_per_burst {
-            rprintln!("completed burst {}", self.completed_bursts);
+            defmt::println!("completed burst {}", self.completed_bursts);
             self.completed_bursts = self.completed_bursts + 1;
         }
-        rprintln!("run_measurement_cycle done");
+        defmt::println!("run_measurement_cycle done");
     }
 
     fn process_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
@@ -404,7 +403,7 @@ impl DataLogger {
                             values[j] = value as f32;
                             j = j + 1;
                         }
-                        Err(_) => rprintln!("error reading value"),
+                        Err(_) => defmt::println!("error reading value"),
                     }
                 }
 
@@ -530,11 +529,11 @@ impl DataLogger {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
                             let output = format_args!("{:.4}", value);
-                            rprintln!("{}", value);
+                             defmt::println!("{}", value);
                             board.usb_serial_send(format_args!("{}",&output));
                         }
                         Err(_) => {
-                            rprintln!("{}", "Error");
+                             defmt::println!("{}", "Error");
                             board.usb_serial_send(format_args!("{}","Error"));
                         }
                     }
@@ -591,11 +590,11 @@ impl DataLogger {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
                             let output = format_args!("{:.4}", value );
-                            rprintln!("{}", value);
+                            defmt::println!("{}", value);
                             board.write_log_file(output);
                         }
                         Err(_) => {
-                            rprintln!("{}", "Error");
+                            defmt::println!("{}", "Error");
                             board.write_log_file(format_args!("Error"));
                         }
                     }
@@ -666,7 +665,7 @@ impl DataLogger {
     }
 
     pub fn execute_command(&mut self, board: &mut impl RRIVBoard, command_payload: CommandPayload) {
-        // rprintln!("executing command {:?}", command_payload);
+        // defmt::println!("executing command {:?}", command_payload);
         match command_payload {
             CommandPayload::DataloggerSet(payload) => {
                 match self.update_datalogger_settings(board, payload) {
@@ -848,7 +847,7 @@ impl DataLogger {
                         let count = driver.get_measured_parameter_count() / 2; // TODO: get_measured_parameter_count, vs get_output_parameter_count
                         let mut values = Box::new([0_f64; 10]); // TODO: max of 10, should we make this dynamic?
                         for j in 0..count {
-                            rprintln!("{:?}", j);
+                            defmt::println!("{:?}", j);
                             let value = match driver.get_measured_parameter_value(j * 2) {
                                 Ok(value) => value,
                                 Err(_) => {
@@ -905,7 +904,7 @@ impl DataLogger {
 
                 // list the values
                 if let Some(index) = self.get_driver_slot_by_id(payload_values.id) {
-                    rprintln!("driver index{}", index);
+                    defmt::println!("driver index{}", index);
                     let pairs: &Option<Box<[CalibrationPair]>> =
                         &self.calibration_point_values[index];
 
@@ -958,14 +957,14 @@ impl DataLogger {
                         // if let Some(pairs) = pairs {
                         //     for i in 0..pairs.len() {
                         //         let pair = &pairs[i];
-                        //         rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[i]);
+                        //         defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[i]);
                         //     }
                         // }
 
                         if let Some(pairs) = pairs {
                             for i in 0..pairs.len() {
                                 let pair = &pairs[i];
-                                rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+                                defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
                             }
 
                             driver.clear_calibration();
@@ -1032,19 +1031,16 @@ impl DataLogger {
                     }
                 };
 
-                board.usart_send(message);
-                board.usart_send("\r\n");
-                // rprintln!("{}", "\r\n");
-                // board.usart_send("\r\n");
-                // rprintln!("just line feed");
-                // board.usart_send("\r");
-
+                let prepared_message = format_args!("{}\r\n", message);
+                usart_service::format_and_send(board, args);
+                defmt::println!("{}\r\n", message);
+                
                 board.delay_ms(500);
 
                 let response = match usart_service::take_command(board) {
                     Ok(message) => message,
                     Err(_) => {
-                        rprintln!("no usart response");
+                        defmt::println!("no usart response");
                         responses::send_command_response_message(
                             board,
                             "No response received on serial",
@@ -1056,7 +1052,7 @@ impl DataLogger {
                 let length = response.len();
                 for b in &response[0..length] {
                     let c = *b as char;
-                    rprintln!("{}", c);
+                    defmt::println!("{}", c);
                 }
 
                 match core::str::from_utf8(&response) {

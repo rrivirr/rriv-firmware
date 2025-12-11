@@ -10,7 +10,6 @@ use core::borrow::BorrowMut;
 use core::ffi::CStr;
 use serde::{Deserialize, Serialize};
 
-use rtt_target::rprintln;
 
 
 use crate::datalogger::payloads::*;
@@ -59,16 +58,16 @@ pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPaylo
         if let Ok(command_bytes) = take_command(board) {
             let command_cstr = CStr::from_bytes_until_nul(&command_bytes).unwrap(); // TODO: do we really need CStr here?  I don't think so...
             let command_identification_result = identify_serial_command(command_cstr);
-            // rprintln!("{:?}", command_identification_result);
+            // defmt::println!("{:?}", command_identification_result);
             match command_identification_result {
                 Ok(command_type) => {
                     let result: Result<CommandPayload, _> =
                         get_command_payload(command_type, command_cstr);
-                    // rprintln!("{:?}", result);
+                    // defmt::println!("{:?}", result);
                     return Some(result);
                 }
                 Err(error) => {
-                    rprintln!("{:?} {:?}", error, command_cstr);
+                    defmt::println!("{:?} {:?}", defmt::Debug2Format(&error), defmt::Debug2Format(&command_cstr));
                     return Some(Err(error))
                 }
             }
@@ -106,7 +105,7 @@ where
     T: Deserialize<'a>,
 {
     let command_data_str = command_cstr.to_str().unwrap();
-    rprintln!("{}", command_data_str);
+    defmt::println!("{}", command_data_str);
 
     return serde_json::from_str::<T>(command_data_str);
 }
@@ -160,7 +159,7 @@ fn get_command_payload(
                 parse_command_to_payload!(SensorListPayload, CommandPayload::SensorList, command_cstr);
             },
         CommandType::SensorCalibratePoint => {
-                // rprintln!("parsing SensorCalibratePoint");
+                // defmt::println!("parsing SensorCalibratePoint");
                 parse_command_to_payload!(SensorCalibratePointPayload, CommandPayload::SensorCalibratePoint, command_cstr);
             },
         CommandType::SensorCalibrateList => {

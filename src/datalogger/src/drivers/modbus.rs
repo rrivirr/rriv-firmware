@@ -1,5 +1,4 @@
 use modbus_core::{Data, RequestPdu, ResponsePdu, rtu::{Header, RequestAdu, ResponseAdu}};
-use rtt_target::rprint;
 use serde_json::json;
 use alloc::boxed::Box;
 
@@ -107,12 +106,12 @@ impl SensorDriver for Rs485DataRequestDriver {
                     },
                     _ => {
                         // not doing anything else
-                        rprint!("wrong function")
+                        defmt::println!("wrong function")
                     }
                 }
             },
             Err(exception) => {
-                rprint!("exception")
+                defmt::println!("exception")
             }
         }
 

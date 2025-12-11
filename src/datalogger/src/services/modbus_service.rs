@@ -2,7 +2,6 @@ use core::borrow::BorrowMut;
 use alloc::boxed::Box;
 use modbus_buffer::ModbusBuffer;
 use rriv_board::{RRIVBoard, RXProcessor};
-use rtt_target::rprintln;
 use util::str_from_utf8;
 
 

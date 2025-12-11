@@ -1,6 +1,5 @@
 use core::{f64::MAX, num::Wrapping};
 
-use rtt_target::rprintln;
 use serde_json::json;
 
 
@@ -61,7 +60,7 @@ impl AHT20 {
         let mut attempted = 0;
         while (AHT20::get_status(board) & AHTX0_STATUS_BUSY) != 0 {
             if attempted < 3 { // only output a few messages so we don't overload the usb serial
-                rprintln!("AHT20 is busy");
+                defmt::println!("AHT20 is busy");
             }
             board.delay_ms(10);
             attempted = attempted + 1;
@@ -115,7 +114,7 @@ impl SensorDriver for AHT20 {
             Ok(_) => {},
             Err(err) => {
                 board.serial_debug(format_args!("Failed to setup AHTX0 {:?}", err));
-                rprintln!("Failed to setup AHTX0 {:?}", err);
+                defmt::println!("Failed to setup AHTX0 {:?}", err);
                 self.enabled = false;
                 return;
             }
@@ -132,7 +131,7 @@ impl SensorDriver for AHT20 {
             AHT20::self_calibrate(board);
 
             if !AHT20::is_calibrated(board) {
-                rprintln!("Failed to calibrate AHTX0");
+                defmt::println!("Failed to calibrate AHTX0");
                 return;
             }
         }
@@ -154,7 +153,7 @@ impl SensorDriver for AHT20 {
         match board.ic2_write(AHTX0_I2CADDR_DEFAULT, &cmd) {
             Ok(_) => {},
             Err(err) => {
-                rprintln!("Failed write to AHT20 {:?}", err);
+                defmt::println!("Failed write to AHT20 {:?}", err);
                 self.humidity = MAX;
                 self.temperature = MAX
             },
@@ -166,7 +165,7 @@ impl SensorDriver for AHT20 {
         match board.ic2_read(AHTX0_I2CADDR_DEFAULT, &mut data){
             Ok(_) => {},
             Err(err) => {
-                rprintln!("Failed write to AHT20 {:?}", err);
+                defmt::println!("Failed write to AHT20 {:?}", err);
                 self.humidity = MAX;
                 self.temperature = MAX
             },
@@ -222,7 +221,7 @@ impl SensorDriver for AHT20 {
     }
     
     fn clear_calibration(&mut self) {
-        rprintln!("not implemented");
+        defmt::println!("not implemented");
     }
 
 }

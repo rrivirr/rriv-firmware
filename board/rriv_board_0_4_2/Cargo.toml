@@ -17,7 +17,7 @@ cortex-m-rt = { version = "0.7.3", default-features = false }
 panic-halt = "0.2.0"
 unwrap-infallible = "0.1.5"
 stm32f1xx-hal = { version = "0.10", default-features = false, features = ["rt", "stm32f103", "high"] }
-rtt-target = "0.4.0"
+rtt-target = { version = "0.6.1", features =  ["defmt"] }
 usb-device = "0.2.9"
 usbd-serial = "0.1.1"
 embedded-sdmmc = "0.6.0"
@@ -26,3 +26,4 @@ one-wire-bus = "0.1.1"
 i2c_hung_fix = "0.1.0"
 bitfield-struct = "0.11.0"
 format_no_std = "1.2.0"
+defmt = "1.0.1"

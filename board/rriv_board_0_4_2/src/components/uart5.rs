@@ -2,7 +2,6 @@
 use core::convert::Infallible;
 use core::ops::DerefMut;
 
-use rtt_target::rprintln;
 use stm32f1xx_hal::{pac::{self, NVIC, RCC, UART5}, rcc::{BusClock, Clocks}, serial::{Config, Parity, StopBits, WordLength}, time::U32Ext};
 
 use crate::{UART5_RX_PROCESSOR, interrupt};
@@ -127,7 +126,7 @@ unsafe fn UART5() {
             // do a read from the sr register followed by a read from the dr register.
             let _ = usart.sr.read();
             let _ = usart.dr.read();
-            rprintln!("uart5 error {:?}", err);
+            defmt::println!("uart5 error {:?}", defmt::Debug2Format(&err));
             // Err(nb::Error::Other(err))
         } else {
             // Check if a byte is available
@@ -135,7 +134,7 @@ unsafe fn UART5() {
                 // Read the received byte
                 // Ok(
                 let byte = usart.dr.read().dr().bits() as u8;
-                rprintln!("uart5  rx byte: {}", byte as char); 
+                defmt::println!("uart5  rx byte: {}", byte as char); 
                 cortex_m::interrupt::free(|cs| {
                     let r = UART5_RX_PROCESSOR.borrow(cs);
 

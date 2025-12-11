@@ -2,7 +2,6 @@
 
 use core::{fmt::Display, str::Utf8Error};
 use core::fmt::Debug;
-use rtt_target::rprintln;
 
 pub fn remove_invalid_utf8(buffer: &mut [u8]) {
     // make sure all bytes are utf8 compliant
@@ -44,7 +43,7 @@ pub fn format_error<'a>(error: &'a dyn Debug, buffer: &'a mut [u8]) -> &'a str {
             return message;
         }
         Err(e) => {
-            rprintln!("{:?}", e);
+            defmt::println!("{:?}", defmt::Debug2Format(&e));
             return "format error";
         },
     }

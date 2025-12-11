@@ -5,7 +5,6 @@ use modbus_core::rtu::{Header, ResponseAdu};
 use rriv_board::RRIVBoard;
 
 use alloc::boxed::Box;
-use rtt_target::rprint;
 
 use crate::services::usart_service;
 

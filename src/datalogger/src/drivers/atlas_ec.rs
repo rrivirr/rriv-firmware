@@ -5,7 +5,6 @@ use crate::sensor_name_from_type_id;
 use super::types::*;
 use bitfield_struct::bitfield;
 use alloc::boxed::Box;
-use rtt_target::{rprint, rprintln};
 use serde::de::value;
 use serde_json::json;
 
@@ -105,7 +104,7 @@ impl SensorDriver for AtlasEC {
             }
 
             let value: u32 = bytes[3] as u32 + (bytes[2] as u32) << 8 + (bytes[1] as u32) << 16 + (bytes[0] as u32) << 24;
-            rprintln!("value {}", value);
+            defmt::println!("value {}", value);
             let value: f64 = value as f64 / 1000f64;
             self.measured_parameter_values[0] = value;
 

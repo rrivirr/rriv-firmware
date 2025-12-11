@@ -12,12 +12,10 @@ util = { path = "../../src/util"}
 hashbrown = "0.14"
 serde_json = { version = "1.0.104", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-rtt-target = "0.4.0"
-# bitflags = "2.4.1"
+rtt-target = { version = "0.6.1", features =  ["defmt"] }
 bitfield-struct = "0.11.0"
 one-wire-bus = "0.1.1"
-# embedded-hal = "1.0.0"
 modbus-core = { version = "*", default-features = false, features = ["rtu"] }
 modbus_buffer = "0.0.2"
 format_no_std = "1.2.0"
-
+defmt = "1.0.1"
