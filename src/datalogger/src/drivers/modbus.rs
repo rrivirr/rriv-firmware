@@ -31,14 +31,27 @@ impl ModbusDriverSpecialConfiguration {
     }
 }
 
-pub struct Rs485DataRequestDriver {
+pub struct ModbusDriver {
     general_config: SensorDriverGeneralConfiguration,
     special_config: ModbusDriverSpecialConfiguration,
-    measured_parameters_data: [i16; 12]
+    measured_parameter_values: [i16; 12]
 
 }
 
-impl SensorDriver for Rs485DataRequestDriver {
+impl ModbusDriver {
+     pub fn new(
+        general_config: SensorDriverGeneralConfiguration,
+        special_config: ModbusDriverSpecialConfiguration,
+    ) -> Self {
+        Self {
+            general_config,
+            special_config,
+            measured_parameter_values: [0_i16; 12],
+        }
+    }
+}
+
+impl SensorDriver for ModbusDriver {
 
     getters!();
 
@@ -70,7 +83,7 @@ impl SensorDriver for Rs485DataRequestDriver {
         if index > self.special_config.measured_parameter_count {
             return Err(());
         }
-        Ok(self.measured_parameters_data[index] as f64 / 10.0)
+        Ok(self.measured_parameter_values[index] as f64 / 10.0)
     }
 
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
@@ -98,7 +111,7 @@ impl SensorDriver for Rs485DataRequestDriver {
                     modbus_core::Response::ReadInputRegisters(data) => {
                         self.special_config.measured_parameter_count = data.len();
                         for i in 0..data.len() {
-                            self.measured_parameters_data[i] =match data.get(i){
+                            self.measured_parameter_values[i] =match data.get(i){
                                 Some(value) => value as i16,
                                 None => i16::MAX,
                             }

@@ -10,9 +10,9 @@ cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 
 # Panic behaviour, see https://crates.io/keywords/panic-impl for alternatives
-panic-halt = "0.2.0"
-# panic-abort = "0.3.2"
-# panic_rtt = "0.3.0"
+# panic-halt = "0.2.0"
+# we use a custom panic handler that we implemented ourselves
+
 
 
 unwrap-infallible = "0.1.5"

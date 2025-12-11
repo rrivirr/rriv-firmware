@@ -1,6 +1,4 @@
 
-use core::fmt::Debug;
-
 use embedded_hal::prelude::{
     _embedded_hal_blocking_i2c_Write,
     _embedded_hal_blocking_i2c_WriteRead,

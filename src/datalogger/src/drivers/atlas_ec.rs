@@ -3,9 +3,6 @@ use crate::sensor_name_from_type_id;
 // use crate::drivers::atlas::*;
 
 use super::types::*;
-use bitfield_struct::bitfield;
-use alloc::boxed::Box;
-use serde::de::value;
 use serde_json::json;
 
 // Constants for EC_OEM register data

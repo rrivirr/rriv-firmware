@@ -81,7 +81,7 @@ pub fn send_input_registers_response(board: &mut impl RRIVBoard, values: [i16; M
                     transmit(board, message);
                 },
                 Err(_) => {
-                    rprint!("Failed to send modbus exception response");
+                    defmt::println!("Failed to send modbus exception response");
                 },
             }
         }

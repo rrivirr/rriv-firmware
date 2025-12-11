@@ -157,7 +157,7 @@ impl SensorSetPayload {
                 serde_json::Value::String(id) => {
                     let mut prepared_id: [u8; 6] = [0; 6];
                     if id.len() > 6 {
-                        defmt::rprintln!("WARNING: Sensor id too long, truncating to 6 characters.\n");
+                        defmt::println!("WARNING: Sensor id too long, truncating to 6 characters.\n");
                     }
                     prepared_id[0..id.len().min(6)].copy_from_slice(&id.as_bytes()[0..id.len().min(6)]);
                     sensor_id = Some(prepared_id);

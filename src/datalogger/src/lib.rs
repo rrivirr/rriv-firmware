@@ -30,6 +30,8 @@ use registry::*;
 
 use serde_json::{json, Value};
 
+use core::num;
+
 pub struct DataLogger {
     settings: DataloggerSettings,
     sensor_drivers: [Option<Box<dyn SensorDriver>>; rriv_board::EEPROM_TOTAL_SENSOR_SLOTS], // TODO: this could be called 'sensor_configs'. modules, (composable modules)
@@ -420,7 +422,7 @@ impl DataLogger {
         // let bits = [13_u8; 12];
 
   
-        let payload = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values);
+        let payload: Box<[u8]> = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values);
 
         // stateful deltas codec
         // let payload = telemetry::codecs::first_differences_codec::encode(timestamp_hour_offset, values, bits);let p
@@ -430,7 +432,7 @@ impl DataLogger {
         } 
 
         let mut values_i16 = [i16::MAX; telemetry::telemeters::rs485::MAX_DATA_VALUES];
-        for i in 0..telemetry::telemeters::rs485::MAX_DATA_VALUES {
+        for i in 0..values.len() {
             values_i16[i] = (values[i] * 10.0) as i16;
         }
 
@@ -528,7 +530,8 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let output = format_args!("{:.4}", value);
+                            let value = (value * 1000f64) as u32;
+                            let output = format_args!("{}", value);
                              defmt::println!("{}", value);
                             board.usb_serial_send(format_args!("{}",&output));
                         }
@@ -589,7 +592,8 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let output = format_args!("{:.4}", value );
+                            let value = (value * 1000f64) as u32;
+                            let output = format_args!("{}", value );
                             defmt::println!("{}", value);
                             board.write_log_file(output);
                         }
@@ -1032,7 +1036,7 @@ impl DataLogger {
                 };
 
                 let prepared_message = format_args!("{}\r\n", message);
-                usart_service::format_and_send(board, args);
+                usart_service::format_and_send(board, prepared_message);
                 defmt::println!("{}\r\n", message);
                 
                 board.delay_ms(500);

@@ -103,7 +103,7 @@ impl RakWireless3172 {
                                 return;
                             } else {
                                 board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
-                                rprintln!("telem not ok: {}", message);
+                                defmt::println!("telem not ok: {}", message);
                                 self.telemetry_step = RakWireless3172Step::Begin;
                                 return;
                             }
@@ -116,7 +116,7 @@ impl RakWireless3172 {
                         }
                     },
                     Err(e) => {
-                        defmt::println!("telem message not ok: {:?}", e);
+                        defmt::println!("telem message not ok: {:?}", defmt::Debug2Format(&e));
                         self.telemetry_step = RakWireless3172Step::Begin; // bad message
                         return;
                     }

@@ -141,7 +141,7 @@ pub fn format_and_send(board: &mut impl RRIVBoard, args: fmt::Arguments){
                 board.usart_send(message);
             }
             Err(e) => {
-                rprintln!("{}", e);
+                defmt::println!("{}", defmt::Debug2Format(&e));
             },
         }
 }
