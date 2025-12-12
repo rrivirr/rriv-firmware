@@ -34,6 +34,7 @@ impl<'a> ModbusByteProcessor {
 
     pub fn take_message(&mut self, board: &impl RRIVBoard) -> Result< modbus_core::rtu::ResponseAdu<'_>, ()> {
 
+        // this needs to be in a critical section
         if self.pending_message_size > 0 {
             match modbus_core::rtu::client::decode_response(&self.message){
                 Ok(option) => {

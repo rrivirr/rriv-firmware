@@ -6,34 +6,56 @@ use rriv_board::RRIVBoard;
 
 use alloc::boxed::Box;
 
+use crate::drivers::resources::gpio::GpioRequest;
 use crate::services::usart_service;
+use crate::telemetry::telemeters::{MAX_DATA_VALUES, Telemeter, telemeter};
 
 
-pub const MAX_DATA_VALUES : usize = 16usize;
 const RRIV_DEFAULT_MODBUS_CLIENT_ID : u8 = 24;
 
-// pub struct Serial {
-// }
+pub struct ModBusRTU();
 
+impl Telemeter for ModBusRTU {
 
-// impl Serial {
-//     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
-//         board.usart_send(format!("timestamp:{}", board.timestamp()).as_str());
-//     }
-// }
-
-pub fn transmit(board: &mut impl RRIVBoard, payload: &[u8] ) {
-    board.get_sensor_driver_services().set_gpio_pin_mode(1, rriv_board::gpio::GpioMode::PushPullOutput);
-
-    let _ = board.get_sensor_driver_services().write_gpio_pin(1, true);
-    for i in 0..payload.len() {
-        let prepared_message = format_args!("{}\r\n", payload[i]);
-        usart_service::format_and_send(board, prepared_message); // just  using the normal usart right now
+    fn transmit(&mut self, board: &mut dyn RRIVBoard, values: &[i16; MAX_DATA_VALUES] ) {
+        send_input_registers_response(board, values);
     }
-    let _ = board.get_sensor_driver_services().write_gpio_pin(1, false);
+    
+    fn run_loop_iteration(&mut self, board: &mut dyn RRIVBoard) {
+        // nothing to do here yet
+    }
+    
+    fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
+        return true;
+    }
+    
+    fn process_events(&mut self, board: &mut dyn RRIVBoard) {
+        // not handled yet
+    }
+    
+    fn get_requested_gpios(&self) -> crate::drivers::resources::gpio::GpioRequest {
+        let mut request = GpioRequest::none();
+        request.use_rs485();
+        return request;
+    }
+
 }
 
-pub fn send_input_registers_response(board: &mut impl RRIVBoard, values: [i16; MAX_DATA_VALUES]){
+
+
+fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
+        board.get_sensor_driver_services().set_gpio_pin_mode(1, rriv_board::gpio::GpioMode::PushPullOutput);
+
+        let _ = board.get_sensor_driver_services().write_gpio_pin(1, true);
+        for i in 0..payload.len() {
+            let prepared_message = format_args!("{}\r\n", payload[i]);
+            usart_service::format_and_send(board, prepared_message); // just  using the normal usart right now
+        }
+        let _ = board.get_sensor_driver_services().write_gpio_pin(1, false);
+    }
+    
+
+  fn send_input_registers_response(board: &mut dyn RRIVBoard, values: &[i16; MAX_DATA_VALUES]){
 
     let mut registers = [u16::MAX; MAX_DATA_VALUES];
     for i in 0..MAX_DATA_VALUES {

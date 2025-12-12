@@ -208,6 +208,13 @@ impl Board {
             unsafe { cortex_m::interrupt::enable() }
         }
     }
+
+    fn do_critical_section<T, F>(&self, f: F) -> T
+    where
+        F: Fn() -> T,
+    {
+        cortex_m::interrupt::free(|_cs| f())
+    }
 }
 
 
@@ -239,9 +246,7 @@ impl RRIVBoard for Board {
         });
     }
 
-    fn critical_section<T, F>(&self, f: F) -> T
-    where
-        F: Fn() -> T,
+    fn critical_section(&self, f: fn())
     {
         cortex_m::interrupt::free(|_cs| f())
     }

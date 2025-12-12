@@ -16,7 +16,7 @@ use crate::datalogger::bytes;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
-use crate::{protocol::responses, services::*, telemetry::telemeters::lorawan::RakWireless3172};
+use crate::{protocol::responses, services::*, telemetry::telemeters::{*, Telemeter}};
 use alloc::boxed::Box;
 use core::fmt::Display;
 
@@ -48,7 +48,8 @@ pub struct DataLogger {
     // not memory efficient
     calibration_point_values: [Option<Box<[CalibrationPair]>>; EEPROM_TOTAL_SENSOR_SLOTS],
 
-    telemeter: telemetry::telemeters::lorawan::RakWireless3172,
+    lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
+    modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
     modbus_service: Option<modbus_service::ModbusByteProcessor>,
 
     // measurement cycle
@@ -69,7 +70,8 @@ impl DataLogger {
             mode: DataLoggerMode::Interactive,
             serial_tx_mode: DataLoggerSerialTxMode::Normal,
             calibration_point_values: [CALIBRATION_INIT_VALUE; EEPROM_TOTAL_SENSOR_SLOTS],
-            telemeter: RakWireless3172::new(),
+            lorawan_telemeter: None,
+            modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
             interactive_logging: false,
@@ -183,16 +185,9 @@ impl DataLogger {
         }
         defmt::println!("done loading sensors");
 
-        let requested_gpios = self.telemeter.get_requested_gpios();
-        if self.settings.toggles.enable_telemetry() {
-            match self.assigned_gpios.update_or_conflict(requested_gpios) {
-                Ok(_) => {}
-                Err(_) => {
-                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
-                    responses::send_command_response_error(board, "usart pin conflict", "");
-                }
-            }
-        }
+        self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry());
+        self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu());
+
 
         match self.mode {
             DataLoggerMode::Field => {
@@ -206,6 +201,62 @@ impl DataLogger {
         defmt::println!("done with setup");
 
         protocol::status::send_ready_status(board);
+    }
+
+    pub fn set_up_modbus_rtu(&mut self, enable: bool) -> Result<(), &'static str> {
+        if enable {
+            let telemeter = telemetry::telemeters::modbus::ModBusRTU();
+
+            let requested_gpios = telemeter.get_requested_gpios();
+            match self.assigned_gpios.update_or_conflict(requested_gpios) {
+                Ok(_) => {
+                    self.modbus_telemeter = Some(telemeter);
+                    return Ok(());
+                }
+                Err(_) => {
+                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
+                    // responses::send_command_response_error(board, "usart pin conflict", "");
+                    return Err("usart pin conflict");
+                }
+            }
+        } else {
+            if self.modbus_telemeter.is_some() {
+                let requested_gpios = self.modbus_telemeter.as_mut().unwrap().get_requested_gpios();
+                self.assigned_gpios.release(requested_gpios);
+            }
+            self.modbus_telemeter = None;
+            return Ok(());
+        }
+
+    }
+
+    pub fn set_up_lorawan_telemetry(&mut self, enable: bool) -> Result<(), &'static str>{
+
+        if enable {
+            let telemeter = telemetry::telemeters::lorawan::RakWireless3172::new();
+
+            let requested_gpios = telemeter.get_requested_gpios();
+            match self.assigned_gpios.update_or_conflict(requested_gpios) {
+                Ok(_) => {
+                    self.lorawan_telemeter = Some(telemeter);
+                    return Ok(());
+                }
+                Err(_) => {
+                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
+                    // responses::send_command_response_error(board, "usart pin conflict", "");
+                    return Err("usart pin conflict");
+                }
+            }
+        
+        } else {
+            if self.lorawan_telemeter.is_some() {
+                let requested_gpios = self.lorawan_telemeter.as_mut().unwrap().get_requested_gpios();
+                self.assigned_gpios.release(requested_gpios);
+            }
+            self.lorawan_telemeter = None;
+            return Ok(());
+        }
+
     }
 
     pub fn relay_modbus_message(&mut self, board: &mut impl RRIVBoard) {
@@ -255,8 +306,17 @@ impl DataLogger {
         //
         //  Process any telemetry setup or QOS
         //
-        if self.settings.toggles.enable_telemetry() {
-            self.telemeter.run_loop_iteration(board);
+        
+        if self.settings.toggles.enable_lorawan_telemetry() {
+            if let Some(lorawan_telemeter) = &mut self.lorawan_telemeter {
+                lorawan_telemeter.run_loop_iteration(board);
+            }        
+        }
+
+        if self.settings.toggles.enable_modbus_rtu() {
+            if let Some(modbus_telemeter) = &mut self.modbus_telemeter {
+                modbus_telemeter.run_loop_iteration(board);
+            }        
         }
 
         //
@@ -295,8 +355,6 @@ impl DataLogger {
 
                     self.relay_modbus_message(board);
 
-                    
-
 
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
@@ -306,10 +364,9 @@ impl DataLogger {
                         self.write_raw_measurement_to_storage(board);
                     }
 
-                    if self.settings.toggles.enable_telemetry() {
-                        self.process_telemetry(board); // telemeterize the measured values
-                    }
 
+                    self.process_telemetry(board);
+                    
 
                     self.last_interactive_log_time = board.timestamp();
                 }
@@ -386,11 +443,22 @@ impl DataLogger {
 
     fn process_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
 
-        self.telemeter.process_events(board);
-
-        if !self.telemeter.ready_to_transmit(board) && false { // support both telemeters
-            return;
+        if let Some(telemeter) = &mut self.lorawan_telemeter {
+            telemeter.process_events(board);
         }
+
+        if let Some(telemeter) = &mut self.modbus_telemeter {
+            telemeter.process_events(board);
+        }
+
+
+        let lorawan_ready =  (self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board));
+        let modbus_rtu_ready = (self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board));
+        let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
+        if !ready_to_transmit {
+            return;
+        }    
+
 
         // TODO: this book-keeping to get the sensor values is not correct / robust / fully functional
         let mut values: [f32; 12] = [f32::MAX; 12];
@@ -421,22 +489,19 @@ impl DataLogger {
         // let timestamp_hour_offset = 0; // TODO get the timestamp offset from the beginning of the utc hour
         // let bits = [13_u8; 12];
 
-  
-        let payload: Box<[u8]> = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values);
-
-        // stateful deltas codec
-        // let payload = telemetry::codecs::first_differences_codec::encode(timestamp_hour_offset, values, bits);let p
-
-        if self.telemeter.ready_to_transmit(board) {
-            self.telemeter.transmit(board, &payload);
-        } 
-
-        let mut values_i16 = [i16::MAX; telemetry::telemeters::rs485::MAX_DATA_VALUES];
+        let mut values_i16 = [i16::MAX; telemetry::telemeters::MAX_DATA_VALUES];
         for i in 0..values.len() {
-            values_i16[i] = (values[i] * 10.0) as i16;
+            values_i16[i] = values[i] as i16;
         }
 
-        telemetry::telemeters::rs485::send_input_registers_response(board, values_i16);
+        if lorawan_ready {
+            self.lorawan_telemeter.as_mut().unwrap().transmit(board, &values_i16);
+        }
+        
+        if modbus_rtu_ready {
+            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values_i16);
+        }
+
 
     }
 
@@ -637,18 +702,18 @@ impl DataLogger {
                         self.write_column_headers_to_serial(board);
                         self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
                         board.set_debug(false);
-                        self.telemeter.set_watch(true);
+                        self.set_telemeter_watch(true);
                     }
                     "watch-debug" => {
                         self.write_column_headers_to_serial(board);
                         self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
                         board.set_debug(true);
-                        self.telemeter.set_watch(true);
+                        self.set_telemeter_watch(true);
                     }
                     "quiet" => {
                         self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
                         board.set_debug(false);
-                        self.telemeter.set_watch(false);
+                        self.set_telemeter_watch(false);
                     }
                     "field" => {
                         self.mode = DataLoggerMode::Field;
@@ -658,7 +723,7 @@ impl DataLogger {
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
                         board.set_debug(true);
-                        self.telemeter.set_watch(false);
+                        self.set_telemeter_watch(false);
                     }
                 }
             }
@@ -666,6 +731,10 @@ impl DataLogger {
         }
         self.settings.mode = self.mode.to_u8();
         self.store_settings(board);
+    }
+
+    fn set_telemeter_watch(&mut self, watch: bool) {
+
     }
 
     pub fn execute_command(&mut self, board: &mut impl RRIVBoard, command_payload: CommandPayload) {
@@ -1081,14 +1150,21 @@ impl DataLogger {
 
                 return;
             }
-            CommandPayload::TelemeterGet => match self.telemeter.get_identity(board) {
-                Ok(message) => {
-                    board.usb_serial_send(format_args!("{}\n", message.as_str()));
+            CommandPayload::TelemeterGet => {
+                if self.settings.toggles.enable_lorawan_telemetry() {
+                    if let Some(telemeter) = &mut self.lorawan_telemeter {
+                        match telemeter.get_identity(board) {
+                        Ok(message) => {
+                            board.usb_serial_send(format_args!("{}\n", message.as_str()));
+                        }
+                        Err(_) => {
+                            responses::send_command_response_message(board, "Failed to get identifiers");
+                        }
+                    }
                 }
-                Err(_) => {
-                    responses::send_command_response_message(board, "Failed to get identifiers");
-                }
-            },
+            }
+        }
+        ,
             CommandPayload::DeviceSetSerialNumber(device_set_serial_number_payload) => {
                 match device_set_serial_number_payload.convert() {
                     Ok(values) => {
@@ -1122,18 +1198,22 @@ impl DataLogger {
     ) -> Result<(), &'static str> {
         let mode = set_command_payload.mode.clone(); // TODO: clean this up
         let values = set_command_payload.values();
-        if let Some(enable_telemetry) = &values.enable_telemetry {
-            if !self.settings.toggles.enable_telemetry() && *enable_telemetry {
-                match self
-                    .assigned_gpios
-                    .update_or_conflict(self.telemeter.get_requested_gpios())
-                {
-                    Ok(_) => {}
-                    Err(message) => return Err(message),
+        
+        if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
+            if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
+                match self.set_up_lorawan_telemetry(*enable_lorawan_telemetry) {
+                    Ok(_) => {},
+                    Err(error) => {return Err(error);}, 
                 }
-            } else if self.settings.toggles.enable_telemetry() && !*enable_telemetry {
-                self.assigned_gpios
-                    .release(self.telemeter.get_requested_gpios());
+            }
+        }
+
+        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
+            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
+               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
+                    Ok(_) => {},
+                    Err(error) => {return Err(error);}, 
+                }
             }
         }
 
@@ -1158,7 +1238,8 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
-           "enable_telemetry" : self.settings.toggles.enable_telemetry()
+           "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
+           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
         })
     }
 
@@ -1199,7 +1280,7 @@ impl DataLogger {
                 }
             }
         }
-        if self.settings.toggles.enable_telemetry() {
+        if self.settings.toggles.enable_lorawan_telemetry() {
             let id = b"lorawn";
             assignments[6].clone_from_slice(id);
             assignments[7].clone_from_slice(id);

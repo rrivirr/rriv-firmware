@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 
 
 pub fn encode( timestamp: i64, 
-               values: &[f32]
+               values: &[i16]
              ) -> Box<[u8]>{
     
     defmt::println!("encode {} {}", timestamp, values[0]);
@@ -16,7 +16,7 @@ pub fn encode( timestamp: i64,
     defmt::println!("{:X}", timestamp_bytes);
     bytes[0..8].copy_from_slice(&timestamp_bytes);
     for i in 0..values.len(){
-      let value = (values[i] * 100.0) as u32;
+      let value = values[i];
       let value_bytes = value.to_be_bytes();
       defmt::println!("{:?}", (i * 4 + 8)..(i * 4 + 12));
       bytes[(i * 4 + 8)..(i * 4 + 12)].copy_from_slice(&value_bytes);

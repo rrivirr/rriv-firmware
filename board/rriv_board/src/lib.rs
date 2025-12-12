@@ -51,8 +51,7 @@ pub trait RRIVBoard: Send {
 
     // Core Services
     fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral, processor: Box<&'static mut dyn RXProcessor>);
-    fn critical_section<T, F>(&self, f: F) -> T where F: Fn() -> T;
-
+    fn critical_section(&self, f: fn());
     // Storage Services
     fn store_datalogger_settings(&mut self, bytes: &[u8;EEPROM_DATALOGGER_SETTINGS_SIZE]);
     fn retrieve_datalogger_settings(&mut self, buffer: &mut [u8;EEPROM_DATALOGGER_SETTINGS_SIZE]);

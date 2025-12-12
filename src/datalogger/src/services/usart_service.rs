@@ -6,6 +6,8 @@ use util::str_from_utf8;
 
 const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, which is a total waste!
 const USART_BUFFER_SIZE: usize = 50;
+static mut PENDING_MESSAGE_COUNT: usize = 0;
+static mut COMMAND: [u8; USART_BUFFER_SIZE] = [0u8; USART_BUFFER_SIZE];
 
 static mut MESSAGE_DATA: MessageData = MessageData::default();  // TODO: This can be owned by USARTCharacterProcessor, doesn't need to be static
 
@@ -107,16 +109,18 @@ fn _take_command(message_data: &mut MessageData) -> [u8; USART_BUFFER_SIZE] {
     return command;
 }
 
-pub fn pending_message_count(board: &impl RRIVBoard) -> usize {
+pub fn pending_message_count(board: &dyn RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
         let message_data = MESSAGE_DATA.borrow_mut();
-        _pending_message_count(&message_data)
+        PENDING_MESSAGE_COUNT = _pending_message_count(&message_data);
     };
 
-    board.critical_section(get_pending_message_count)
+    board.critical_section(get_pending_message_count);
+    let pending_message_count = unsafe { PENDING_MESSAGE_COUNT };
+    pending_message_count
 }
 
-pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
+pub fn take_command(board: &dyn RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
     // defmt::println!("pending messages {}", pending_message_count(board));
     if pending_message_count(board) < 1 {
         return Err(());
@@ -124,14 +128,16 @@ pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], (
 
     let do_take_command = || unsafe {
         let message_data = MESSAGE_DATA.borrow_mut();
-        Ok(_take_command(message_data))
+        COMMAND = _take_command(message_data);
     };
 
-    board.critical_section(do_take_command)
+    board.critical_section(do_take_command);
+    let command = unsafe { COMMAND };
+    Ok(command)
 }
 
 
-pub fn format_and_send(board: &mut impl RRIVBoard, args: fmt::Arguments){
+pub fn format_and_send(board: &mut dyn RRIVBoard, args: fmt::Arguments){
      let mut buf = [0u8;50];
         match format_no_std::show(
             &mut buf,

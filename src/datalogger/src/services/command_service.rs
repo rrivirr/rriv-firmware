@@ -1,4 +1,4 @@
-use control_interface::command_recognizer::{CommandData, CommandRecognizer};
+use control_interface::command_recognizer::{BUFFER_SIZE, CommandData, CommandRecognizer};
 use control_interface::command_registry::CommandType;
 use rriv_board::{RRIVBoard, RXProcessor};
 
@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use crate::datalogger::payloads::*;
 
 static mut COMMAND_DATA: CommandData = CommandData::default();
+static mut PENDING_MESSAGE_COUNT: usize = 0;
+static mut COMMAND: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
 
 
 
@@ -38,19 +40,24 @@ pub fn setup(board: &mut impl RRIVBoard) {
 fn pending_message_count(board: &impl RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
         let command_data = COMMAND_DATA.borrow_mut();
-        CommandRecognizer::pending_message_count(&command_data)
+        PENDING_MESSAGE_COUNT = CommandRecognizer::pending_message_count(&command_data);
     };
 
-    board.critical_section(get_pending_message_count)
+    board.critical_section(get_pending_message_count);
+    let pending_message_count = unsafe { PENDING_MESSAGE_COUNT };
+    return pending_message_count;
 }
 
-fn take_command(board: &impl RRIVBoard) -> Result<[u8; 200], ()> {
+fn take_command(board: &impl RRIVBoard) -> Result<[u8; BUFFER_SIZE], ()> {
     let do_take_command = || unsafe {
         let command_data = COMMAND_DATA.borrow_mut();
-        Ok(CommandRecognizer::take_command(command_data))
+        COMMAND = CommandRecognizer::take_command(command_data);
     };
 
-    board.critical_section(do_take_command)
+    board.critical_section(do_take_command);
+
+    let command = unsafe { COMMAND };
+    Ok(command)
 }
 
 pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPayload, CommandError>> {

@@ -18,7 +18,8 @@ pub struct DataloggerSettingsValues {
     pub delay_between_bursts: Option<u16>,
     pub bursts_per_measurement_cycle: Option<u8>,
     pub mode: Option<u8>,
-    pub enable_telemetry: Option<bool>
+    pub enable_lorawan_telemetry: Option<bool>,
+    pub enable_modbus_rtu: Option<bool>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,7 +34,8 @@ pub struct DataloggerSetPayload {
     pub bursts_per_cycle: Option<u8>,
     pub start_up_delay: Option<u16>,
     pub mode: Option<Value>,
-    pub enable_telemetry: Option<bool>
+    pub enable_lorawan_telemetry: Option<bool>,
+    pub enable_modbus_rtu: Option<bool>
     // pub user_note: Option<Value>, // not implemented for now
     // pub user_value: Option<i16>
 }
@@ -98,9 +100,14 @@ impl DataloggerSetPayload {
             datalogger_settings_values.start_up_delay = Some(start_up_delay);
         }
 
-        if let Some(enable_telemetry) = self.enable_telemetry {
-            datalogger_settings_values.enable_telemetry = Some(enable_telemetry);
+        if let Some(enable_lorawan_telemetry) = self.enable_lorawan_telemetry {
+            datalogger_settings_values.enable_lorawan_telemetry = Some(enable_lorawan_telemetry);
         }
+
+        if let Some(enable_modbus_rtu) = self.enable_modbus_rtu {
+            datalogger_settings_values.enable_modbus_rtu = Some(enable_modbus_rtu);
+        }
+
 
         datalogger_settings_values
     }
