@@ -21,8 +21,7 @@ pub fn send_command_response_error(board: &mut impl RRIVBoard, message: &str, er
 }
 
 pub fn send_json(board: &mut impl RRIVBoard, json: Value) {
-    board.usb_serial_send(format_args!("{}", json.to_string()));
-    board.usb_serial_send(format_args!("\n"));
+    board.usb_serial_send(format_args!("{}\n", json.to_string()));
 }
 
 pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[CalibrationPair]>>) {

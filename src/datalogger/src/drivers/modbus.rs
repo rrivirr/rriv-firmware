@@ -29,6 +29,16 @@ impl ModbusDriverSpecialConfiguration {
             measured_parameter_count: 0,
         }
     }
+
+    pub fn parse_from_values(value: serde_json::Value) -> Result<ModbusDriverSpecialConfiguration, &'static str> {
+        Ok(ModbusDriverSpecialConfiguration::new())
+    }
+
+    pub fn new_from_bytes(
+        _bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
+    ) -> ModbusDriverSpecialConfiguration {
+       ModbusDriverSpecialConfiguration::new()
+    }
 }
 
 pub struct ModbusDriver {
@@ -123,8 +133,8 @@ impl SensorDriver for ModbusDriver {
                     }
                 }
             },
-            Err(exception) => {
-                defmt::println!("exception")
+            Err(_exception) => {
+                defmt::println!("modbus exception")
             }
         }
 

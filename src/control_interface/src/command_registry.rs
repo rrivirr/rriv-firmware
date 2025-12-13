@@ -1,10 +1,4 @@
-extern crate alloc;
-use core::ffi::c_char;
-use hashbrown::HashMap;
 
-
-/// NOTE: Since this has a C compatible representation, it could be used in the FFI
-/// we use from_str when processing commands from the serial side anyway though..
 #[repr(u8)]
 #[derive(Eq, Hash, PartialEq)]
 pub enum CommandType {
@@ -56,6 +50,7 @@ pub enum CommandType {
 impl CommandType {
     // TODO: this is the right way to do it, without format!
     pub fn from(cmd: (&str, &str, &str)) -> Self {
+        defmt::println!("{}", cmd);
         match cmd {
             ("datalogger", "set", "") => CommandType::DataloggerSet,
             ("datalogger", "get", "") => CommandType::DataloggerGet,

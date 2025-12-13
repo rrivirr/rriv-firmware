@@ -272,7 +272,7 @@ impl RRIVBoard for Board {
     }
 
     fn usb_serial_send(&mut self, arg: fmt::Arguments) { // TODO: ok so the formatter doesn't below in the board level, it can go into a util in the datalogger app level
-        let mut buf = [0u8; 64];
+        let mut buf = [0u8; 500];
         match format_no_std::show(
             &mut buf,
             arg
@@ -282,7 +282,7 @@ impl RRIVBoard for Board {
                 defmt::println!("{}", message); // TODO: this uses format!
             }
             Err(e) => {
-                defmt::println!("{}", defmt::Debug2Format(&e));
+                defmt::println!("format error {}", defmt::Debug2Format(&e));
             },
         }
     }
@@ -358,7 +358,7 @@ impl RRIVBoard for Board {
         if let Some(datetime) = datetime {
             match ds3231.set_datetime(&datetime) {
                 Ok(_) => {}
-                Err(err) => defmt::println!("Error {:?}", defmt::Debug2Format(&err)),
+                Err(err) => defmt::println!("Error set epoch {:?}", defmt::Debug2Format(&err)),
             }
         }
         let _result = ds3231.datetime();
@@ -1537,7 +1537,7 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
                             delay.delay_ms(1);
                         }
                         _ => {
-                            defmt::println!("{:?}", defmt::Debug2Format(&err));
+                            defmt::println!("usb error {:?}", defmt::Debug2Format(&err));
                         } // UsbError::ParseError => todo!(),
                           // UsbError::BufferOverflow => todo!(),
                           // UsbError::EndpointOverflow => todo!(),
