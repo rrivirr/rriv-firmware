@@ -19,9 +19,6 @@ extern crate rriv_board;
 extern crate rriv_board_0_4_2;
 use crate::rriv_board::RRIVBoard;
 
-extern crate datalogger;
-use datalogger::DataLogger;
-
 use rtt_target::rprintln;
 
 extern crate alloc;
@@ -49,32 +46,6 @@ fn panic(_info: &PanicInfo) -> ! {
     if let Some(location) = _info.location() {
         rprintln!("at {}", location);
     }
-    
-    rprintln!("with message: {}", _info.message());
-    let device_peripherals = unsafe { pac::Peripherals::steal() };
-    
-    let rcc = device_peripherals.RCC.constrain();
-    let mut flash = device_peripherals.FLASH.constrain();
-    let clocks = rcc.cfgr
-            .use_hse(8.MHz())
-            .sysclk(48.MHz())
-            .pclk1(24.MHz())
-            .adcclk(14.MHz())
-            .freeze(&mut flash.acr);
-
-    let mut delay: DelayMs<TIM3> = device_peripherals.TIM3.delay(&clocks);
-    // we avoid using format! here because we don't want to do dynamic memory in panic handler
-    rriv_board_0_4_2::usb_serial_send("{\"status\":\"panic\",\"message\":\"", &mut delay);
-    // if let Some(location) = _info.location() {
-    //     rriv_board_0_4_2::usb_serial_send(" at ", &mut delay);
-    //     rriv_board_0_4_2::usb_serial_send(location., &mut delay);
-    // }
-    rriv_board_0_4_2::usb_serial_send(_info.message().as_str().unwrap_or_default(), &mut delay);
-    rriv_board_0_4_2::usb_serial_send("\"}\n", &mut delay);
-    rprintln!("send json panic");
-
-    // we use format! here because we didn't find another good way yet.
-    rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
 
     loop {}
 }
