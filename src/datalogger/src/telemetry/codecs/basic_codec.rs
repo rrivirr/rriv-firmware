@@ -1,4 +1,4 @@
-// use rtt_target::rprintln;
+// use rtt_target::defmt::println;
 
 // use alloc::boxed::Box;
 
@@ -22,6 +22,6 @@
 //                bits: &[u8]
 //              ) -> Box<[u8]>{
 
-//     rprintln!("{}", "codec not implemented");
+//     defmt::println!("{}", "codec not implemented");
 //     return Box::new([0]);
 // }

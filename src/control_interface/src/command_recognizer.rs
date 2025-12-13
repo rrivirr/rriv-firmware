@@ -1,11 +1,11 @@
 // https://ferrous-systems.com/blog/test-embedded-app/
 
-// use rtt_target::rprintln;
+// use rtt_target::defmt::println;
 
 
 
-pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
-pub const BUFFER_SIZE: usize = 500;
+pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, TODO: what a waste!
+pub const BUFFER_SIZE: usize = 200;
 
 pub struct CommandData {
     receiving: bool,

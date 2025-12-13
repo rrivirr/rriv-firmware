@@ -2,7 +2,6 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 use bitfield_struct::bitfield;
-use rtt_target::{rprintln};
 use serde_json::json;
 
 pub struct GenericAnalog {
@@ -46,7 +45,7 @@ impl SensorDriver for GenericAnalog {
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         self.m = self.special_config.m as f64;
-        // rprintln!("loading {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
+        // defmt::println!("loading {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
         self.b = self.special_config.b as f64;
     }
  
@@ -89,7 +88,7 @@ impl SensorDriver for GenericAnalog {
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
         for i in 0..pairs.len() {
             let pair = &pairs[i];
-            rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+            defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
         }
 
         if pairs.len() != 2 {
@@ -101,10 +100,10 @@ impl SensorDriver for GenericAnalog {
 
         self.m = (cal2.point - cal1.point) / (cal2.values[0] - cal1.values[0]);
         self.b = cal1.point - self.m * cal1.values[0];
-        rprintln!("calibration: {} {}", self.m, self.b);
+        defmt::println!("calibration: {} {}", self.m, self.b);
         self.special_config.m = self.m as f32;
         self.special_config.b = self.b as f32;
-        rprintln!(
+        defmt::println!(
             "calibration: {} {}",
             self.special_config.m,
             self.special_config.b
@@ -206,13 +205,13 @@ impl GenericAnalogSpecialConfiguration {
     pub fn new_from_bytes(
         bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
     ) -> GenericAnalogSpecialConfiguration {
-        rprintln!("loading: {:X?}", bytes);
+        defmt::println!("loading: {:X}", bytes);
         for i in 0..8 {
-            rprintln!("loading {:#b}", bytes[i]);
+            defmt::println!("loading {:#b}", bytes[i]);
         }
         let settings: *const GenericAnalogSpecialConfiguration = bytes.as_ptr().cast::<GenericAnalogSpecialConfiguration>();
         let settings = unsafe { *settings };
-        // rprintln!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
+        // defmt::println!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
 
         settings
     }

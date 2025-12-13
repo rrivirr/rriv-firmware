@@ -12,7 +12,10 @@ pub struct DataloggerSettingsBitField {
     pub external_adc_enabled: bool,
 
     #[bits(1)]
-    pub enable_telemetry: bool,
+    pub enable_lorawan_telemetry: bool,
+
+    #[bits(1)]
+    pub enable_modbus_rtu: bool,
 
     #[bits(1)]
     pub debug_includes_values: bool,
@@ -23,7 +26,7 @@ pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub log_raw_data: bool,
 
-    #[bits(3)]
+    #[bits(2)]
     unused: usize,
 }
 
@@ -130,7 +133,8 @@ impl DataloggerSettings {
         settings.start_up_delay = values.start_up_delay.unwrap_or(self.start_up_delay);
         settings.delay_between_bursts = values.delay_between_bursts.unwrap_or(self.delay_between_bursts);
         settings.mode = values.mode.unwrap_or(self.mode);
-        settings.toggles.set_enable_telemetry(values.enable_telemetry.unwrap_or(self.toggles.enable_telemetry()));
+        settings.toggles.set_enable_lorawan_telemetry(values.enable_lorawan_telemetry.unwrap_or(self.toggles.enable_lorawan_telemetry()));
+        settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
         settings
     }
 

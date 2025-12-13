@@ -1,6 +1,7 @@
 #![no_std]
 
-use core::str::Utf8Error;
+use core::{fmt::Display, str::Utf8Error};
+use core::fmt::Debug;
 
 pub fn remove_invalid_utf8(buffer: &mut [u8]) {
     // make sure all bytes are utf8 compliant
@@ -30,4 +31,20 @@ pub fn check_alphanumeric(array: &[u8]) -> bool {
 
 pub unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
+}
+
+
+pub fn format_error<'a>(error: &'a dyn Debug, buffer: &'a mut [u8]) -> &'a str {
+    match format_no_std::show(
+        buffer,
+        format_args!("{:?}", error)
+    ) {
+        Ok(message) => {
+            return message;
+        }
+        Err(e) => {
+            defmt::println!("{:?}", defmt::Debug2Format(&e));
+            return "format error";
+        },
+    }
 }

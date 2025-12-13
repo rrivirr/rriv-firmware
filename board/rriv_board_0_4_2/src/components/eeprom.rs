@@ -5,7 +5,6 @@ use embedded_hal::prelude::{
 };
 use crate::Board;
 use rriv_board::{RRIVBoard};
-use rtt_target::rprintln;
 
 // implementation specific consts
 const EEPROM_I2C_ADDRESS: u8 = 0x50;
@@ -36,12 +35,12 @@ pub fn write_bytes_to_eeprom(board: &mut crate::Board, block: u8, start_address:
                 board.delay_ms(5_u16);
             }
             Err(error) => {
-                rprintln!("write error: {:?}", error);
+                defmt::println!("write error: {:?}", defmt::Debug2Format(&error));
             }
         }
         offset = offset + 1; // Last byte will crash
     }
-    rprintln!("done with EEPROM writes");
+    defmt::println!("done with EEPROM writes");
 }
 
 pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address: u8, buffer: &mut [u8]) {
@@ -58,7 +57,7 @@ pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address
                     buffer[i] = b[0];
                 }
                 Err(_) => {
-                    board.usb_serial_send("EEPROM read failure, restarting");
+                    board.usb_serial_send(format_args!("EEPROM read failure, restarting"));
                     // board.restart();
                     return;
                 } // what do we do if we fail?  panic?  retry?  restart the board?
