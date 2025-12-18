@@ -12,5 +12,6 @@ pub mod ds18b20;
 pub mod k30_co2;
 // pub mod atlas_ec;
 pub mod aht20;
+pub mod adc_temperature;
 pub mod resources;
 
