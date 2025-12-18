@@ -127,6 +127,8 @@ pub trait SensorDriverServices {
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 
     control_services!();
+
+    fn read_temp_adc(&mut self) -> i32;
     
 }
 

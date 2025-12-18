@@ -536,6 +536,10 @@ impl SensorDriverServices for Board {
         return value;
     }
 
+    fn read_temp_adc(&mut self) -> i32 {
+        return self.internal_adc.read_tempertature();
+    }
+
     control_services_impl!();
 
     fn ic2_read(&mut self, addr: u8, buffer: &mut [u8]) -> Result<(), ()> {
