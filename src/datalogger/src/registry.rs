@@ -11,7 +11,8 @@ const SENSOR_NAMES: [&str; 10] = [
     "atlas_ec",
     "aht20",
     "mcp_9808",
-    "ring_temperature",
+    // "ring_temperature",
+    "ring_w_mux",
     "timed_switch_2",
     "ds18b20",
     "k30_co2",
@@ -94,9 +95,13 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::mcp9808::MCP9808TemperatureDriver,
         crate::drivers::mcp9808::MCP9808TemperatureDriverSpecialConfiguration
     )); 
+    // driver_create_functions[5] = Some(driver_create_functions!(
+    //     crate::drivers::ring_temperature::RingTemperatureDriver,
+    //     crate::drivers::ring_temperature::RingTemperatureDriverSpecialConfiguration
+    // ));
     driver_create_functions[5] = Some(driver_create_functions!(
-        crate::drivers::ring_temperature::RingTemperatureDriver,
-        crate::drivers::ring_temperature::RingTemperatureDriverSpecialConfiguration
+        crate::drivers::ring_w_mux::RingTemperatureDriver,
+        crate::drivers::ring_w_mux::RingTemperatureDriverSpecialConfiguration
     ));
     driver_create_functions[6] = Some(driver_create_functions!(
         crate::drivers::timed_switch_2::TimedSwitch2, 
