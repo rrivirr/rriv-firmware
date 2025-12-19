@@ -16,9 +16,9 @@ const MULTIPLEXER_ADDRESS: u8 = 0x70;
 #[derive(Copy, Clone)]
 pub struct RingTemperatureDriverSpecialConfiguration {
     channels: usize,
+    sensors: usize,
     calibration_offset: [i16; 8], // 16
     address_offset: u8, // 1
-    _reserved: [u8; 11], // 32 - 1 -16 -4 = 11
 }
 
 impl RingTemperatureDriverSpecialConfiguration {
@@ -38,16 +38,37 @@ impl RingTemperatureDriverSpecialConfiguration {
                 }
             }
             _ => {
-                return Err("channels is required")
+                channels = 0;
             }
         }
 
+        if channels > 8 {
+            return Err("channels must be between 0 and 8");
+        }
+
+        let mut sensors = 6;
+        match &value["sensors"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            sensors = number;
+                        }
+                        Err(_) => return Err("invalid number of sensors")
+                    }
+                }
+            }
+            _ => {
+                sensors = 6; // default to 6
+            }
+        }
 
         Ok ( Self {
             channels: channels,
-            calibration_offset: [0; 8],
+            sensors: sensors,
+            calibration_offset: [0; TEMPERATURE_SENSORS_ON_RING],
             address_offset: 0,
-            _reserved: [b'\0'; 11],
         } ) // Just using default address offset of 0 for now, need to optionally read from JSON
     }
 
@@ -61,12 +82,13 @@ impl RingTemperatureDriverSpecialConfiguration {
     }
 }
 
-const TEMPERATURE_SENSORS_ON_RING: usize = 6;
+const TEMPERATURE_SENSORS_ON_RING: usize = 8;
+const MAX_CHANNELS: usize = 8;
 
 pub struct RingTemperatureDriver {
     general_config: SensorDriverGeneralConfiguration,
     special_config: RingTemperatureDriverSpecialConfiguration,
-    measured_parameter_values: [f64; TEMPERATURE_SENSORS_ON_RING * 2 * 8], // 8 channels
+    measured_parameter_values: [f64; TEMPERATURE_SENSORS_ON_RING * 2 * MAX_CHANNELS], // 8 channels
     sensor_drivers: [MCP9808TemperatureDriver; TEMPERATURE_SENSORS_ON_RING],
 }
 
@@ -75,10 +97,19 @@ impl RingTemperatureDriver {
         general_config: SensorDriverGeneralConfiguration,
         special_config: RingTemperatureDriverSpecialConfiguration,
     ) -> Self {
-        let mut addresses: [u8; TEMPERATURE_SENSORS_ON_RING] = [
-            0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100,
-        ];
-        for i in 0..6 {
+
+        let mut addresses = [0u8; TEMPERATURE_SENSORS_ON_RING];
+        if special_config.sensors == 6 {
+            addresses = [
+                0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100, 0, 0
+            ];
+        }
+        else if special_config.sensors == 8 {
+            addresses = [
+                0b0011001, 0b0011000, 0b0011100, 0b0011101, 0b0011010, 0b0011111, 0b0011011, 0b0011110
+            ];
+        }
+        for i in 0..TEMPERATURE_SENSORS_ON_RING {
             addresses[i] = addresses[i] + special_config.address_offset;
         }
 
@@ -128,6 +159,20 @@ impl RingTemperatureDriver {
                         special_config.calibration_offset[5],
                     ),
                     addresses[5],
+                ),
+                MCP9808TemperatureDriver::new_with_address(
+                    SensorDriverGeneralConfiguration::empty(),
+                    MCP9808TemperatureDriverSpecialConfiguration::new(
+                        special_config.calibration_offset[6],
+                    ),
+                    addresses[6],
+                ),
+                MCP9808TemperatureDriver::new_with_address(
+                    SensorDriverGeneralConfiguration::empty(),
+                    MCP9808TemperatureDriverSpecialConfiguration::new(
+                        special_config.calibration_offset[7],
+                    ),
+                    addresses[7],
                 ),
             ],
         }
@@ -186,7 +231,7 @@ impl RingTemperatureDriver {
 
 
 
-const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F'];
+const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H'];
 
 impl SensorDriver for RingTemperatureDriver {
 
@@ -213,7 +258,7 @@ impl SensorDriver for RingTemperatureDriver {
     getters!();
 
     fn get_measured_parameter_count(&mut self) -> usize {
-        TEMPERATURE_SENSORS_ON_RING * 2 * self.special_config.channels
+        self.special_config.sensors * 2 * self.special_config.channels
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
@@ -225,7 +270,7 @@ impl SensorDriver for RingTemperatureDriver {
     }
 
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
-        let sensor_index = (index / 2) % TEMPERATURE_SENSORS_ON_RING;
+        let sensor_index = (index / 2) % self.special_config.sensors;
         let parameter_index = index % 2;
         let buf =
             self.sensor_drivers[sensor_index].get_measured_parameter_identifier(parameter_index);
@@ -245,18 +290,17 @@ impl SensorDriver for RingTemperatureDriver {
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         
         for c in 0..self.special_config.channels {
-
             // Enable channel c on the multiplexer
             self.enable_channel(c, board);
 
-            for i in 0..TEMPERATURE_SENSORS_ON_RING {
+            for i in 0..self.special_config.sensors {
                 self.sensor_drivers[i].take_measurement(board);
-                self.measured_parameter_values[c * TEMPERATURE_SENSORS_ON_RING * 2 + i * 2] =
+                self.measured_parameter_values[c * self.special_config.sensors * 2 + i * 2] =
                     match self.sensor_drivers[i].get_measured_parameter_value(0) {
                         Ok(value) => value,
                         Err(_) => f64::MAX,
                     };
-                self.measured_parameter_values[c * TEMPERATURE_SENSORS_ON_RING * 2 + i * 2 + 1] =
+                self.measured_parameter_values[c * self.special_config.sensors * 2 + i * 2 + 1] =
                     match self.sensor_drivers[i].get_measured_parameter_value(1) {
                         Ok(value) => value,
                         Err(_) => f64::MAX,
@@ -265,6 +309,23 @@ impl SensorDriver for RingTemperatureDriver {
 
             // Disable channel c on the multiplexer
             self.disable_all_channels(board);
+        }
+        
+        // If mux is not used
+        if self.special_config.channels == 0 {
+            for i in 0..self.special_config.sensors {
+                self.sensor_drivers[i].take_measurement(board);
+                self.measured_parameter_values[i * 2] =
+                    match self.sensor_drivers[i].get_measured_parameter_value(0) {
+                        Ok(value) => value,
+                        Err(_) => f64::MAX,
+                    };
+                self.measured_parameter_values[i * 2 + 1] =
+                    match self.sensor_drivers[i].get_measured_parameter_value(1) {
+                        Ok(value) => value,
+                        Err(_) => f64::MAX,
+                    };
+            }
         }
     }
 
