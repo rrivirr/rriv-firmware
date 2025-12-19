@@ -5,7 +5,8 @@
 pub mod types;
 pub mod mcp9808;
 pub mod generic_analog;
-pub mod ring_temperature;
+// pub mod ring_temperature;
+pub mod ring_w_mux;
 pub mod timed_switch;
 pub mod timed_switch_2;
 pub mod ds18b20;
