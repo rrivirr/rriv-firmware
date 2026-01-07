@@ -34,7 +34,7 @@ pub fn setup_serialb(
         UART5::reset(rcc);
 
     let config = Config::default()
-                .baudrate(115200.bps())
+                .baudrate(38400.bps())
                 .wordlength_8bits()
                 .parity_none()
                 .stopbits(StopBits::STOP1);
@@ -96,7 +96,7 @@ pub fn setup_serialb(
 
 #[interrupt]
 unsafe fn UART5() {
-    cortex_m::interrupt::free(|_cs| {
+    cortex_m::interrupt::free(|cs| {
 
         // rx.is_rx_not_empty
         if ! unsafe { (*UART5::ptr()).sr.read().rxne().bit_is_set() } {
@@ -134,14 +134,12 @@ unsafe fn UART5() {
                 // Read the received byte
                 // Ok(
                 let byte = usart.dr.read().dr().bits() as u8;
-                defmt::println!("uart5  rx byte: {}", byte as char); 
-                cortex_m::interrupt::free(|cs| {
-                    let r = UART5_RX_PROCESSOR.borrow(cs);
+                // defmt::println!("uart5  rx byte: {}", byte as char); 
+                let r = UART5_RX_PROCESSOR.borrow(cs);
 
-                    if let Some(processor) = r.borrow_mut().deref_mut() {
-                        processor.process_byte(byte.clone());
-                    }
-                });
+                if let Some(processor) = r.borrow_mut().deref_mut() {
+                    processor.process_byte(byte.clone());
+                }
             } else {
                 // Err(nb::Error::WouldBlock)
             }

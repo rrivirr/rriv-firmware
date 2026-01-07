@@ -43,6 +43,7 @@ pub fn write_bytes_to_eeprom(board: &mut crate::Board, block: u8, start_address:
     defmt::println!("done with EEPROM writes");
 }
 
+// you can pass a mut ref to i2c in here, don't need to pass the whole board
 pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address: u8, buffer: &mut [u8]) {
         let mut i: usize = 0;
         let device_address = EEPROM_I2C_ADDRESS + block;
@@ -58,9 +59,8 @@ pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address
                 }
                 Err(_) => {
                     board.usb_serial_send(format_args!("EEPROM read failure, restarting"));
-                    // board.restart();
-                    return;
-                } // what do we do if we fail?  panic?  retry?  restart the board?
+                    panic!("EEPROM read failure");
+                }
             }
             i = i + 1;
         }

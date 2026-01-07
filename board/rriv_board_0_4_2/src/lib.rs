@@ -252,16 +252,15 @@ impl RRIVBoard for Board {
     }
 
     // // use this to talk out on serial to other UART modules, RS 485, etc
-    fn usart_send(&mut self, string: &str) {
+    fn usart_send(&mut self, bytes: &[u8]) {
 
         cortex_m::interrupt::free(|cs| {
             // USART
-            let bytes = string.as_bytes();
-            for char in bytes.iter() {
+            for byte in bytes.iter() {
                 // defmt::println!("char {}", char);
                 let t: &RefCell<Option<Tx<USART2>>> = USART_TX.borrow(cs);
                 if let Some(tx) = t.borrow_mut().deref_mut() {
-                    _ = nb::block!(tx.write(char.clone()));
+                    _ = nb::block!(tx.write(byte.clone()));
                 }
             }
 
@@ -497,8 +496,8 @@ macro_rules! control_services_impl {
             rriv_board::RRIVBoard::usb_serial_send(self, args);
         }
 
-        fn usart_send(&mut self, string: &str) {
-            rriv_board::RRIVBoard::usart_send(self, string);
+        fn usart_send(&mut self, bytes: &[u8]) {
+            rriv_board::RRIVBoard::usart_send(self, bytes);
         }
 
         fn rs485_send(&mut self, message: &[u8]) {
@@ -1120,7 +1119,7 @@ impl BoardBuilder {
             mapr,
             // Config::default().baudrate(38400.bps()).wordlength_8bits().parity_none().stopbits(StopBits::STOP1), // this worked for the nox sensor
             Config::default()
-                .baudrate(115200.bps())
+                .baudrate(38400.bps()) // going slower for uart5 and rs485 for now
                 .wordlength_8bits()
                 .parity_none()
                 .stopbits(StopBits::STOP1), // this appears to be right for the RAK 3172

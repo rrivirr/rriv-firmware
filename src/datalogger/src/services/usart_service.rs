@@ -144,10 +144,11 @@ pub fn format_and_send(board: &mut dyn RRIVBoard, args: fmt::Arguments){
             args
         ) {
             Ok(message) => {
-                board.usart_send(message);
+                board.usart_send(message.as_bytes());
             }
             Err(e) => {
                 defmt::println!("{}", defmt::Debug2Format(&e));
             },
         }
 }
+

@@ -319,18 +319,18 @@ impl DataLogger {
             }        
         }
 
-        //
-        // receive serialb (modbus) message
-        //
+        // //
+        // // receive serialb (modbus) message
+        // //
 
-        if let Some(modbus_service) = &mut self.modbus_service {
-            match modbus_service.take_message(board) {
-                Ok(adu) => {
-                    // relay this to the modbus driver, if configured
-                },
-                Err(_) => {},
-            }
-        }
+        // if let Some(modbus_service) = &mut self.modbus_service {
+        //     match modbus_service.take_message(board) {
+        //         Ok(adu) => {
+        //             // relay this to the modbus driver, if configured
+        //         },
+        //         Err(_) => {},
+        //     }
+        // }
 
         self.update_actuators(board);
 

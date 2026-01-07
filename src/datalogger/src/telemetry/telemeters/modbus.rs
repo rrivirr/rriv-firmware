@@ -47,10 +47,7 @@ fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
         board.get_sensor_driver_services().set_gpio_pin_mode(1, rriv_board::gpio::GpioMode::PushPullOutput);
 
         let _ = board.get_sensor_driver_services().write_gpio_pin(1, true);
-        for i in 0..payload.len() {
-            let prepared_message = format_args!("{}\r\n", payload[i]);
-            usart_service::format_and_send(board, prepared_message); // just  using the normal usart right now
-        }
+        board.usart_send(payload);
         let _ = board.get_sensor_driver_services().write_gpio_pin(1, false);
     }
     
@@ -85,6 +82,9 @@ fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
     match modbus_core::rtu::server::encode_response(adu, &mut adu_buffer) {
         Ok(length) => {
             let message: &[u8] = &adu_buffer[0..length];
+            for byte in message {
+                defmt::println!("tx byte: {:X}", byte);
+            }
             transmit(board, message);
         },
         Err(_) => {

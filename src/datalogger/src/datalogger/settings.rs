@@ -94,7 +94,7 @@ impl DataloggerSettings {
         }
 
         if self.sleep_interval > 60_u16 * 4 {
-            settings.interactive_logging_interval = 15_u16;
+            settings.sleep_interval = 15_u16;
         }
 
 
