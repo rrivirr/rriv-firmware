@@ -126,7 +126,7 @@ pub struct SensorSetPayload {
     pub object: Value,
     pub action: Value,
     pub id: Option<Value>, // option
-    pub r#type: Value,     // option
+    pub r#type: Value,     
 }
 
 pub struct SensorSetPayloadValues {
@@ -164,9 +164,7 @@ impl SensorSetPayload {
                     sensor_id = Some(prepared_id);
                 }
                 _ => {
-                    // make a unique id
-                            // let mut sensor_id: [u8; 6] = [b'0'; 6]; // base default value
-                    // make_unique_sensor_id(drivers, sensor_id)
+                    // a unique ID will be created later
                 }
             };
         }

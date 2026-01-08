@@ -38,7 +38,7 @@ impl SensorDriverGeneralConfiguration {
             sensor_type_id: 0,
             warmup: 0,
             readings_per_burst: 0,
-        }
+       }
     }
 }
 
