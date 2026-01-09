@@ -3,6 +3,8 @@
 mod datalogger;
 mod services;
 
+use core::i16::MAX;
+
 use datalogger::commands::*;
 use datalogger::payloads::*;
 use datalogger::settings::*;
@@ -176,7 +178,7 @@ impl DataLogger {
                 self.sensor_drivers[i] = Some(driver);
             }
         }
-        rprintln!("done loading sensors");
+        rprintln!("done loading");
 
         let requested_gpios = self.telemeter.get_requested_gpios();
         if self.settings.toggles.enable_telemetry() {
@@ -345,19 +347,22 @@ impl DataLogger {
         }
 
         // TODO: this book-keeping to get the sensor values is not correct / robust / fully functional
-        let mut values: [f32; 12] = [0_f32; 12];
+        let mut values: [i16; 26] = [MAX; 26]; // need 26 here to support all the values from the 3d groundwater flow sensor
         // let mut bits: [u8; 12] = [0_u8; 12];
-        let mut j = 0; // index of value into the values array
+        let mut k = 0; // index of value into the values array
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
-                // TODO: iterate values
-                match driver.get_measured_parameter_value(0) {
-                    Ok(value) => {
-                        values[j] = value as f32;
-                        j = j + 1;
+                for j in 0..driver.get_measured_parameter_count(){
+                        match driver.get_measured_parameter_value(j) {
+                        Ok(value) => {
+                            values[k] = (value * 100_f64) as i16;
+                            k = k + 1;
+                        }
+                        Err(_) => rprintln!("error reading value"),
                     }
-                    Err(_) => rprintln!("error reading value"),
+
                 }
+                
 
                 // TODO: returning bits instead of full f64 is a way to use less space in the payload
                 //  Bits is a number of bits that should be used when encoding.
@@ -371,12 +376,13 @@ impl DataLogger {
         // let timestamp_hour_offset = 0; // TODO get the timestamp offset from the beginning of the utc hour
         // let bits = [13_u8; 12];
 
-        let payload = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values);
+        let mut payload: [u8; telemetry::codecs::naive_codec::MAX_BYTES] = [0; telemetry::codecs::naive_codec::MAX_BYTES];
+        let size = telemetry::codecs::naive_codec::encode(board.epoch_timestamp(), &values, &mut payload);
 
         // stateful deltas codec
         // let payload = telemetry::codecs::first_differences_codec::encode(timestamp_hour_offset, values, bits);let p
 
-        self.telemeter.transmit(board, &payload);
+        self.telemeter.transmit(board, &payload[0..size]);
     }
 
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
@@ -637,12 +643,26 @@ impl DataLogger {
                     }
                 };
 
+                // check if we have an existing sensor with this id
+                let mut slot = None;
+                if let Some(sensor_id) = &mut payload_values.sensor_id {
+                    match util::str_from_utf8(sensor_id) {
+                        Ok(sensor_id) => slot = self.get_driver_slot_by_id(sensor_id),
+                        Err(_) => {}
+                    }
+                }
+
                 // make sure the id is unique
                 if payload_values.sensor_id == None {
                     let sensor_id: [u8; 6] = [b'0'; 6]; // base default value
                     payload_values.sensor_id =
                         Some(make_unique_sensor_id(&mut self.sensor_drivers, sensor_id));
                 }
+
+                // TO DO
+                // get or build the driver
+                // update with the latest configs
+                // save the configs
 
                 // build the driver
                 let mut driver =
@@ -654,13 +674,7 @@ impl DataLogger {
                         }
                     };
 
-                let mut slot = None;
-                if let Some(sensor_id) = &mut payload_values.sensor_id {
-                    match util::str_from_utf8(sensor_id) {
-                        Ok(sensor_id) => slot = self.get_driver_slot_by_id(sensor_id),
-                        Err(_) => {}
-                    }
-                }
+                
 
                 if slot.is_some() {
                     if let Some(existing_driver) = &self.sensor_drivers[slot.unwrap()] {
