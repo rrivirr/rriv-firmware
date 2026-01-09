@@ -29,6 +29,7 @@ impl InternalAdcConfiguration {
   pub fn build(self, clocks: &Clocks) -> InternalAdc {
 
     let adc_device = self.adc_device;
+    
     let adc = adc::Adc::adc1(adc_device, *clocks);
     return InternalAdc::new(self.pins, adc);
   }
