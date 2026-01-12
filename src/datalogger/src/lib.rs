@@ -722,7 +722,7 @@ impl DataLogger {
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
-                        board.set_debug(true);
+                        board.set_debug(false);
                         self.set_telemeter_watch(false);
                     }
                 }

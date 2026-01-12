@@ -953,19 +953,12 @@ fn usb_interrupt(cs: &CriticalSection) {
 
     match serial.read(&mut buf) {
         Ok(count) if count > 0 => {
-            // Echo back in upper case
+            // defmt::println!("count: {}", count);
             for c in buf[0..count].iter() {
+                // defmt::println!("tx byte: {:X}", c);
                 let r = RX_PROCESSOR.borrow(cs);
                 if let Some(processor) = r.borrow_mut().deref_mut() {
                     processor.process_byte(c.clone());
-                }
-                // use PA9 to flash RGB led
-                if let Some(led) = WAKE_LED.borrow(cs).borrow_mut().deref_mut() {
-                    if led.is_low() {
-                        led.set_high();
-                    } else {
-                        led.set_low();
-                    }
                 }
             }
             serial.write(&buf[0..count]).ok();
@@ -1073,7 +1066,7 @@ impl BoardBuilder {
             oscillator_control: self.oscillator_control.unwrap(),
             internal_rtc: self.internal_rtc.unwrap(),
             storage: self.storage.unwrap(),
-            debug: true,
+            debug: false,
             file_epoch: 0,
             one_wire_bus: one_wire,
             one_wire_search_state: None,
