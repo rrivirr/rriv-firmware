@@ -1,17 +1,18 @@
-use core::borrow::BorrowMut;
+use core::{borrow::BorrowMut, fmt};
 use alloc::boxed::Box;
 use rriv_board::{RRIVBoard, RXProcessor};
-use rtt_target::rprintln;
 use util::str_from_utf8;
 
 
-const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
+const USART_BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, which is a total waste!
 const USART_BUFFER_SIZE: usize = 50;
+static mut PENDING_MESSAGE_COUNT: usize = 0;
+static mut COMMAND: [u8; USART_BUFFER_SIZE] = [0u8; USART_BUFFER_SIZE];
 
-static mut MESSAGE_DATA: MessageData = MessageData::default();
+static mut MESSAGE_DATA: MessageData = MessageData::default();  // TODO: This can be owned by USARTCharacterProcessor, doesn't need to be static
 
 pub struct MessageData {
-    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],
+    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],  // The buffer can just be contiguous memory, we can raise command avialable by detected \r
     cur: usize,
     end: usize,
     command_pos: usize,
@@ -37,7 +38,7 @@ impl<'a> USARTCharacterProcessor {
 }
 
 impl<'a, 'b> RXProcessor for USARTCharacterProcessor {
-    fn process_character(&self, character: u8) {
+    fn process_byte(&mut self, character: u8) {
         unsafe {
             let message_data = MESSAGE_DATA.borrow_mut();
             process_character(message_data, character);
@@ -50,7 +51,7 @@ pub fn setup(board: &mut impl RRIVBoard) {
     let char_processor = Box::<USARTCharacterProcessor>::leak(Box::new(USARTCharacterProcessor::new()));
 
     // pass a pointer to the leaked processor to Board::set_rx_processor
-    board.set_usart_rx_processor(Box::new(char_processor));
+    board.set_serial_rx_processor(rriv_board::SerialRxPeripheral::SerialPeripheral1, Box::new(char_processor));
 }
 
 
@@ -59,7 +60,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
     let pos: usize = message_data.command_pos;
 
     if message_data.cur == message_data.end {
-        rprintln!("usart circular buffer is full");
+        defmt::println!("usart circular buffer is full");
         return;
     }
 
@@ -70,7 +71,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
         // command is done
         let mut message = message_data.buffer[cur].clone();
         match str_from_utf8(&mut message)  {
-            Ok(message) =>  rprintln!("{}", message),
+            Ok(message) =>  defmt::println!("{}", message),
             Err(_) => {},
         }
        
@@ -108,25 +109,46 @@ fn _take_command(message_data: &mut MessageData) -> [u8; USART_BUFFER_SIZE] {
     return command;
 }
 
-pub fn pending_message_count(board: &impl RRIVBoard) -> usize {
+pub fn pending_message_count(board: &dyn RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
         let message_data = MESSAGE_DATA.borrow_mut();
-        _pending_message_count(&message_data)
+        PENDING_MESSAGE_COUNT = _pending_message_count(&message_data);
     };
 
-    board.critical_section(get_pending_message_count)
+    board.critical_section(get_pending_message_count);
+    let pending_message_count = unsafe { PENDING_MESSAGE_COUNT };
+    pending_message_count
 }
 
-pub fn take_command(board: &impl RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
-    // rprintln!("pending messages {}", pending_message_count(board));
+pub fn take_command(board: &dyn RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()> {
+    // defmt::println!("pending messages {}", pending_message_count(board));
     if pending_message_count(board) < 1 {
         return Err(());
     }
 
     let do_take_command = || unsafe {
         let message_data = MESSAGE_DATA.borrow_mut();
-        Ok(_take_command(message_data))
+        COMMAND = _take_command(message_data);
     };
 
-    board.critical_section(do_take_command)
+    board.critical_section(do_take_command);
+    let command = unsafe { COMMAND };
+    Ok(command)
 }
+
+
+pub fn format_and_send(board: &mut dyn RRIVBoard, args: fmt::Arguments){
+     let mut buf = [0u8;50];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(message) => {
+                board.usart_send(message.as_bytes());
+            }
+            Err(e) => {
+                defmt::println!("{}", defmt::Debug2Format(&e));
+            },
+        }
+}
+

@@ -1,5 +1,4 @@
 use rriv_board::gpio::GpioMode;
-use rtt_target::rprintln;
 use serde_json::json;
 
 use crate::sensor_name_from_type_id;
@@ -133,7 +132,7 @@ impl SensorDriver for TimedSwitch2 {
         board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
-        rprintln!("Initial state is set to {}", self.state);
+        defmt::println!("Initial state is set to {}", self.state);
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -173,25 +172,25 @@ impl SensorDriver for TimedSwitch2 {
         if self.state == 0 {
             // heater is off
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
-                rprintln!("state is 0, toggle triggered");
+                defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
             }
         } else if self.state == 1 {
             // heater is on
             if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
-                rprintln!("state is 1, toggle triggered");
+                defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
             }
         }
 
         if toggle_state { 
-            rprintln!("toggle state timed switch");
+            defmt::println!("toggle state timed switch");
             self.state = match self.state {
                 0 => 1,
                 1 => 0,
                 _ => 0,
             };
-            rprintln!("toggled to {}", self.state );
+            defmt::println!("toggled to {}", self.state );
             board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
             self.last_state_updated_at = timestamp;
         }

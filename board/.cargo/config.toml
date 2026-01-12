@@ -4,4 +4,7 @@ target = "thumbv7m-none-eabi"
 [target.thumbv7m-none-eabi]
 # runner = 'arm-none-eabi-gdb'
 runner = "probe-rs run --probe 1366:0101 --chip STM32f103RE --connect-under-reset"
-rustflags = ["-C", "link-arg=-Tlink.x"]
+rustflags = [
+	"-C", "link-arg=-Tlink.x",
+	"-C", "link-arg=-Tdefmt.x",
+]

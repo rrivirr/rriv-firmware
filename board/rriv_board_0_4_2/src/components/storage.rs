@@ -1,10 +1,9 @@
-use alloc::format;
 
 use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 use pac::SPI2;
-use stm32f1xx_hal::spi::Spi2NoRemap;
+use stm32f1xx_hal::{gpio::Alternate, spi::Spi2NoRemap};
 // use embedded_sdmmc::{File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 
 use crate::*;
@@ -28,7 +27,7 @@ pub fn build(
         clocks,
     );
 
-    rprintln!("set up sdcard");
+    defmt::println!("set up sdcard");
     // let sdmmc_spi = embedded_hal_bus::spi::RefCellDevice::new(&spi_bus, DummyCsPin, delay).unwrap();
     // only one SPI device on this bus, can we avoid using embedded_hal_bus?
 
@@ -118,38 +117,38 @@ impl Storage {
         let time_source = RrivTimeSource::new(); // unsafe access to the board
                                                  // or global time var via interrupt
                                                  // or copy into a global variable at the top of the run loop
-        rprintln!("set up sdcard");
+        defmt::println!("set up sdcard");
 
         let mut volume_manager = embedded_sdmmc::VolumeManager::new(sd_card, time_source);
         // Try and access Volume 0 (i.e. the first partition).
         // The volume object holds information about the filesystem on that volume.
-        rprintln!("trying to set up sd card volume");
+        defmt::println!("trying to set up sd card volume");
         let result = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0)); // TODO: this just hangs.  need window watchdog to catch here.
         let volume = match result {
             Ok(volume0) => {
-                rprintln!("Volume Success: {:?}", volume0);
+                defmt::println!("Volume Success: {:?}", defmt::Debug2Format(&volume0));
                 volume0
             }
             Err(error) => {
-                rprintln!("Volume error: {:?}", error);
+                defmt::println!("Volume error: {:?}", defmt::Debug2Format(&error));
                 panic!("sd card error");
             }
         };
 
         // let volume = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0)).unwrap();
-        rprintln!("Volume Success: {:?}", volume);
+        defmt::println!("Volume Success: {:?}", defmt::Debug2Format(&volume));
         // Open the root directory (mutably borrows from the volume).
 
         // let mut filename_bytes: [u8; 20] = [b'\0'; 20];
         // let filename = format!("{}.csv", timestamp).as_bytes();
         // filename_bytes[0..filename.len()].clone_from_slice(filename);
-        // rprintln!("file: {:?}", filename);
+        // defmt::println!("file: {:?}", filename);
 
-        // rprintln!("set up root dir");
+        // defmt::println!("set up root dir");
 
         let root_dir = volume_manager.open_root_dir(volume).unwrap();
         // This mutably borrows the directory.
-        rprintln!("Root Dir: {:?}", root_dir);
+        defmt::println!("Root Dir: {:?}", defmt::Debug2Format(&root_dir));
 
         Storage {
             volume_manager,
@@ -166,12 +165,12 @@ impl Storage {
         let filename = match core::str::from_utf8(&self.filename) {
             Ok(filename) => filename,
             Err(err) => {
-                rprintln!("{:?}", err);
+                defmt::println!("{:?}", defmt::Debug2Format(&err));
                 panic!();
             }
         };
 
-        rprintln!("Filename: {:?}", filename);
+        defmt::println!("Filename: {:?}", filename);
 
         let my_file = match self.volume_manager.open_file_in_dir(
             self.root_dir,
@@ -180,12 +179,12 @@ impl Storage {
         ) {
             Ok(my_file) => my_file,
             Err(error) => {
-                rprintln!("{:?}", error);
+                defmt::println!("{:?}", defmt::Debug2Format(&error));
                 panic!();
             }
         };
 
-        rprintln!("File: {:?}", my_file);
+        defmt::println!("File: {:?}", defmt::Debug2Format(&my_file));
 
         self.file = Some(my_file);
     }
@@ -197,11 +196,26 @@ impl Storage {
             timestamp
         };
         // let timestamp = timestamp > 1704067200 ? timestamp - 1704067200 : timestamp; // the RRIV epoch starts on Jan 1 2024, necessary to support short file names
-        let filename = format!("{:0>7}.csv", timestamp);
-        let filename = filename.as_bytes();
-        rprintln!("file: {:?}", core::str::from_utf8(filename));
+        let args = format_args!("{:0>7}.csv", timestamp);
         let mut filename_bytes: [u8; 11] = [b'\0'; 11];
-        filename_bytes[0..filename.len()].clone_from_slice(filename);
+        let mut buffer = [b'\0'; 11];
+        match format_no_std::show(&mut buffer, args){
+            Ok(str) => {
+                let bytes = str.as_bytes();
+                let len = if bytes.len() < 11 {
+                    bytes.len()
+                } else {
+                    11
+                };
+                filename_bytes[0..bytes.len()].clone_from_slice(bytes);
+            } 
+            Err(err) => {
+               let bytes = [u8::MAX; 11];
+                filename_bytes[0..bytes.len()].clone_from_slice(&bytes); 
+            }
+        }
+        // let filename = filename.as_bytes();
+        // rprintln!("file: {:?}", core::str::from_utf8(filename));
         self.filename = filename_bytes;
 
     }
@@ -214,17 +228,17 @@ impl Storage {
         if let Some(file) = self.file {
             let cache_data: &[u8] = &self.cache[0..self.next_position];
             match self.volume_manager.write(file, cache_data) {
-                Ok(ret) => rprintln!("wrote: {:?}", ret),
-                Err(err) => rprintln!("Err: {:?}", err),
+                Ok(ret) => defmt::println!("wrote: {:?}", ret),
+                Err(err) => defmt::println!("Err: {:?}", defmt::Debug2Format(&err)),
             }
 
             match self.volume_manager.close_file(file) {
                 Ok(_) => {}
-                Err(err) => rprintln!("Err: {:?}", err),
+                Err(err) => defmt::println!("Err: {:?}", defmt::Debug2Format(&err)),
             }
             self.reopen_file();
             self.next_position = 0;
-            rprintln!("flushed");
+            defmt::println!("flushed");
         }
     }
 
@@ -247,7 +261,7 @@ impl Storage {
 
         while data.len() - write_start > 0 {
             let mut write_length = data.len() - write_start;
-            // rprintln!("writing {}", write_length);
+            // defmt::println!("writing {}", write_length);
             if write_length > CACHE_SIZE - self.next_position {
                 write_length = CACHE_SIZE - self.next_position;
             }
