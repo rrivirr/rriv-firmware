@@ -691,7 +691,8 @@ impl DataLogger {
         }
     }
 
-    pub fn set_mode(&mut self, board: &mut impl RRIVBoard, mode: Value) {
+    pub fn set_mode(&mut self, board: &mut impl RRIVBoard, mode: Value) -> bool {
+        let mut persist = false;
         match mode {
             Value::String(mode) => {
                 let mode = mode.as_str();
@@ -719,18 +720,20 @@ impl DataLogger {
                         self.mode = DataLoggerMode::Field;
                         // switching into field mode should create a new file
                         self.write_column_headers_to_storage(board);
+                        persist = true;
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
                         board.set_debug(false);
                         self.set_telemeter_watch(false);
+                        persist = true;
                     }
                 }
             }
             _ => {}
         }
         self.settings.mode = self.mode.to_u8();
-        self.store_settings(board);
+        return persist;
     }
 
     fn set_telemeter_watch(&mut self, watch: bool) {
@@ -753,7 +756,9 @@ impl DataLogger {
                 // Deprecated, replaced by DataloggerSet
                 // TODO: this command is deprecated
                 if let Some(mode) = payload.mode {
-                    self.set_mode(board, mode);
+                    if self.set_mode(board, mode) {
+                        self.store_settings(board);
+                    }
                 }
 
                 responses::send_json(board, self.datalogger_settings_payload());
@@ -777,39 +782,66 @@ impl DataLogger {
                     }
                 }
 
-                // make sure the id is unique
-                if payload_values.sensor_id == None {
-                    let sensor_id: [u8; 6] = [b'0'; 6]; // base default value
-                    payload_values.sensor_id =
-                        Some(make_unique_sensor_id(&mut self.sensor_drivers, sensor_id));
+                let mut driver: Option<&mut Box<dyn SensorDriver>> = None;
+                if slot.is_none() {
+                    slot = find_empty_slot(&mut self.sensor_drivers);
+                } else if slot.is_some() {
+                    if let Some(existing_driver) = &mut self.sensor_drivers[slot.unwrap()] { // move out
+                        driver = Some(existing_driver);
+                    }
                 }
+                let slot = slot.unwrap(); // no longer an option
 
-                // TO DO
-                // get or build the driver
-                // update with the latest configs
-                // save the configs
 
-                // build the driver
-                let mut driver =
+         
+                // new driver
+                let mut new_driver: Option<Box<dyn SensorDriver>> = None; // a place to hold the new driver
+                if driver.is_none() {
+                    // make sure the id is unique
+                    // this is just for creating
+                    if payload_values.sensor_id == None {
+                        let sensor_id: [u8; 6] = [b'0'; 6]; // base default value
+                        payload_values.sensor_id =
+                            Some(make_unique_sensor_id(&mut self.sensor_drivers, sensor_id));
+                    }
+
+                    new_driver =
                     match datalogger::commands::build_driver(&payload_values, raw_values) {
-                        Ok(driver) => driver,
+                        Ok(driver) => Some(driver),
                         Err(message) => {
                             responses::send_command_response_error(board, message, "");
                             return;
                         }
                     };
+                    driver = new_driver.as_mut();
 
-                
+                // existing driver   
+                } else {
+                    if let Some(ref mut driver) = driver {
 
-                if slot.is_some() {
-                    if let Some(existing_driver) = &self.sensor_drivers[slot.unwrap()] {
+                        if payload_values.sensor_type_id.is_some() {
+                            responses::send_command_response_error(board, "sensor type cannot be specified when updating","");
+                            return;
+                        }
+                        
                         // release bound resources so they can be checked and rebound or changed in next step
                         self.assigned_gpios
-                            .release(existing_driver.get_requested_gpios());
+                            .release(driver.get_requested_gpios());
+
+                        // update the driver
+                        match driver.update(raw_values) {
+                            Ok(_) => {},
+                            Err(error) => {
+                                responses::send_command_response_error(board, "error", error);
+                            }
+                        }
+
                     }
                 }
 
-                // check for dedicated resources if this is a new sensor
+                let driver = driver.unwrap(); // we have a driver now.
+
+                // check for dedicated resources
                 match self
                     .assigned_gpios
                     .update_or_conflict(driver.get_requested_gpios())
@@ -821,18 +853,20 @@ impl DataLogger {
                     }
                 };
 
-                driver.setup(board.get_sensor_driver_services());
+             
 
-                if slot.is_none() {
-                    slot = find_empty_slot(&mut self.sensor_drivers);
-                }
-                let slot = slot.unwrap();
+                driver.setup(board.get_sensor_driver_services());
 
                 let mut configuration_bytes: [u8; EEPROM_SENSOR_SETTINGS_SIZE] =
                     [0; EEPROM_SENSOR_SETTINGS_SIZE];
                 driver.get_configuration_bytes(&mut configuration_bytes);
                 board.store_sensor_settings(slot as u8, &configuration_bytes);
-                self.sensor_drivers[slot] = Some(driver);
+
+                if let Some(new_driver) = new_driver {
+                    // we have a new driver, it needs to be assigned
+                    // existing driver will have already been updated in place
+                    self.sensor_drivers[slot] = Some(new_driver); // put the new or updated driver into place
+                }
 
                 if let Some(driver) = &mut self.sensor_drivers[slot] {
                     responses::send_json(board, driver.get_configuration_json());
@@ -1225,12 +1259,42 @@ impl DataLogger {
             }
         }
 
-        let new_settings = self.settings.with_values(values);
+        let new_settings: DataloggerSettings = self.settings.with_values(values);
+        let mut old_settings: DataloggerSettings = self.settings.clone();
         self.settings = new_settings;
         if let Some(mode) = mode {
             self.set_mode(board, mode);
         }
-        self.store_settings(board);
+        // defmt::println!("old {} {} {} {} {} {} {} {} {}", 
+        //     old_settings.bursts_per_measurement_cycle, 
+        //     old_settings.delay_between_bursts, 
+        //     old_settings.deployment_identifier, 
+        //     old_settings.deployment_timestamp, 
+        //     old_settings.interactive_logging_interval, 
+        //     old_settings.logger_name, 
+        //     old_settings.mode, 
+        //     old_settings.site_name, 
+        //     old_settings.sleep_interval
+        // );
+        // defmt::println!("new {} {} {} {} {} {} {} {} {}", 
+        //     self.settings.bursts_per_measurement_cycle, 
+        //     self.settings.delay_between_bursts, 
+        //     self.settings.deployment_identifier, 
+        //     self.settings.deployment_timestamp, 
+        //     self.settings.interactive_logging_interval, 
+        //     self.settings.logger_name, 
+        //     self.settings.mode, 
+        //     self.settings.site_name, 
+        //     self.settings.sleep_interval
+        // );   
+        // defmt::println!("old {:?}", old_settings.get_bytes());
+        // defmt::println!("new {:?}", self.settings.get_bytes());
+
+
+
+        if self.settings.get_bytes() != old_settings.get_bytes() {
+            self.store_settings(board);
+        }
         Ok(())
     }
 

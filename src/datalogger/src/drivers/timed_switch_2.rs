@@ -16,6 +16,67 @@ pub struct TimedSwitch2SpecialConfiguration {
 
 impl TimedSwitch2SpecialConfiguration {
 
+    pub fn update_from_values(&mut self, values: serde_json::Value) -> Result<(),&'static str>{
+        match &values["on_time_s"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            self.on_time_s = number;
+                        }
+                        Err(_) => return Err("invalid on time")
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        match &values["off_time_s"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            self.off_time_s = number;
+                        }
+                        Err(_) => return Err("invalid off time")
+                    }
+                }
+            },
+            _ => {}
+        }
+
+         match &values["gpio_pin"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    if number >= 1 && number <= 8 { //TODO: this is annoying to have to code into each driver
+                       self.gpio_pin = number as u8;
+                    } else {
+                        return Err("invalid pin");
+                    }           
+                } 
+            }
+            _ => {}
+        }
+
+        match &values["initial_state"] {
+            serde_json::Value::String(s) => {
+                let val = s.as_str();
+                let initial_state: bool = match s.to_ascii_lowercase().as_str() {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err("invalid initial state"),
+                };
+                self.initial_state = initial_state;
+                return Ok(());
+            },
+            _ => {}
+        };
+
+        Ok(())
+    }
+
     pub fn parse_from_values(value: serde_json::Value) -> Result<TimedSwitch2SpecialConfiguration, &'static str> {
         // should we return a Result object here? because we are parsing?  parse_from_values?
         let mut on_time_s: usize = 10;
@@ -132,7 +193,7 @@ impl SensorDriver for TimedSwitch2 {
         board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
-        defmt::println!("Initial state is set to {}", self.state);
+        // defmt::println!("Initial state is set to {}", self.state);
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -227,5 +288,15 @@ impl SensorDriver for TimedSwitch2 {
         })
     }
     
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>{
+        
+        match self.special_config.update_from_values(values){
+            Ok(_) => {                
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        }
+        
+    }
    
 }

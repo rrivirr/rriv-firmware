@@ -132,31 +132,16 @@ pub struct SensorSetPayload {
     pub object: Value,
     pub action: Value,
     pub id: Option<Value>, // option
-    pub r#type: Value,     
+    pub r#type: Option<Value>,     
 }
 
 pub struct SensorSetPayloadValues {
-    pub sensor_type_id: u16,
+    pub sensor_type_id: Option<u16>,
     pub sensor_id: Option<[u8; 6]>,
 }
 
 impl SensorSetPayload {
     pub fn  convert(&self) -> Result<SensorSetPayloadValues, &'static str> {
-        let sensor_type_id = match &self.r#type {
-            serde_json::Value::String(sensor_type) => {
-                match crate::registry::sensor_type_id_from_name(&sensor_type) {
-                    Ok(sensor_type_id) => sensor_type_id,
-                    Err(_) => {
-                        // responses::send_command_response_message(board, "sensor type not found");
-                        return Err("sensor type not found");
-                    }
-                }
-            }
-            _ => {
-                // responses::send_command_response_message(board, "sensor type not specified");
-                return Err("sensor type not specified");
-            }
-        };
 
         let mut sensor_id = None;
         if let Some(payload_id) = &self.id {
@@ -174,6 +159,32 @@ impl SensorSetPayload {
                 }
             };
         }
+
+        let mut sensor_type_id= None;
+        if let Some(sensor_type) = &self.r#type {
+            match &sensor_type {
+                serde_json::Value::String(sensor_type) => {
+                    match crate::registry::sensor_type_id_from_name(&sensor_type) {
+                        Ok(sensor_type) => sensor_type_id = Some(sensor_type),
+                        Err(_) => {
+                            // responses::send_command_response_message(board, "sensor type not found");
+                            return Err("sensor type not found");
+                        }
+                    }
+                }
+                _ => {
+                    // responses::send_command_response_message(board, "sensor type not specified");
+                    return Err("sensor type not specified");
+                }
+            }
+        } else {
+            if sensor_id.is_none() {
+                return Err("sensor type required for adding driver");
+            }
+        }
+       
+
+
         
         let values = SensorSetPayloadValues {
             sensor_id: sensor_id,

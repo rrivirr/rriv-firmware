@@ -94,14 +94,21 @@ pub fn build_driver(
 
     defmt::println!("looking up funcs");
     let registry = crate::registry::get_registry();
-    let create_function = registry[usize::from(payload_values.sensor_type_id)];
+    if payload_values.sensor_type_id.is_none() {
+        return Err(
+            "sensor type not specified"
+        )
+    }
+
+    let sensor_type_id = payload_values.sensor_type_id.unwrap();
+    let create_function = registry[usize::from(sensor_type_id)];
 
     if let Some(functions) = create_function {
         let sensor_id = match payload_values.sensor_id {
             Some(id) => id,
             None => [0;6],
         };
-        let general_settings = SensorDriverGeneralConfiguration::new(sensor_id, payload_values.sensor_type_id);
+        let general_settings = SensorDriverGeneralConfiguration::new(sensor_id, sensor_type_id);
 
         match functions.0(general_settings, raw_payload_values) {
             Err(message) => {

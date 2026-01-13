@@ -40,7 +40,7 @@ impl<'a> ModbusByteProcessor {
 
         //this needs to be in a critical section
         let mut buffer = [u8::MAX; BUFFER_SIZE];
-        defmt::println!("tryy decode {}", defmt::Debug2Format(&self.modbus_buffer));
+        // defmt::println!("tryy decode {}", defmt::Debug2Format(&self.modbus_buffer));
         if let Some(message_size) = self.modbus_buffer.try_decode_frame(&mut buffer){
             self.message.copy_from_slice(&buffer[0..message_size]);
             self.pending_message_size = message_size;

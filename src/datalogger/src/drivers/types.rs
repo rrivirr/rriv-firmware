@@ -95,6 +95,8 @@ pub trait SensorDriver {
         // most drivers don't need to receive modbus
     }
 
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>{ Ok(()) }
+
 }
 
 

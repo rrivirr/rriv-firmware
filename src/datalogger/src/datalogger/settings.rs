@@ -7,6 +7,7 @@ use crate::datalogger::payloads::DataloggerSettingsValues;
 
 const DATALOGGER_SETTINGS_UNUSED_BYTES: usize = 13;
 #[bitfield(u8)]
+#[derive(PartialEq)]
 pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub external_adc_enabled: bool,
@@ -30,7 +31,7 @@ pub struct DataloggerSettingsBitField {
     unused: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct DataloggerSettings {
     pub deployment_identifier: [u8; 16],
     pub logger_name: [u8; 8],
@@ -73,7 +74,7 @@ impl DataloggerSettings {
         let mut bytes: [u8; EEPROM_DATALOGGER_SETTINGS_SIZE] =
             [0; EEPROM_DATALOGGER_SETTINGS_SIZE];
         let bytes_ref = unsafe { any_as_u8_slice(self) };
-        bytes.clone_from_slice(bytes_ref);
+        bytes[0..bytes_ref.len()].clone_from_slice(bytes_ref);
         bytes
     }
 
