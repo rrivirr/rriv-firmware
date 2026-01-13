@@ -1,3 +1,10 @@
+# [1.5.0-beta.3](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.2...v1.5.0-beta.3) (2026-01-13)
+
+
+### Bug Fixes
+
+* indexes and messages ([50de01b](https://github.com/rrivirr/rriv-firmware/commit/50de01b6fe78b46a4e20c2981dafb13cdaa26254))
+
 # [1.5.0-beta.2](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.1...v1.5.0-beta.2) (2026-01-13)
 
 
