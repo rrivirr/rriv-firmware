@@ -368,17 +368,6 @@ impl SensorDriver for RingMuxTemperatureDriver {
         Ok(())
     }
 
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // right now this just gets the bytes
-        // but the special settings probably should be consisted as member variables and copied back to the storage struct
-
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-    }
-
     fn update_actuators(&mut self, _board: &mut dyn rriv_board::SensorDriverServices) {
     }
 }
