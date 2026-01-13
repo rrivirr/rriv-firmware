@@ -14,6 +14,7 @@ use stm32f1xx_hal::{gpio::*, afio::MAPR};
 pub struct FreedDebugPins {
     pub pb3: Pin<'B', 3>,
     pub pb4: Pin<'B', 4>,
+    #[allow(unused)]
     pub pa15: Pin<'A', 15>,
 }
 

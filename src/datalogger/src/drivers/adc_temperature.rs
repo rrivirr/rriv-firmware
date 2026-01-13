@@ -87,15 +87,6 @@ impl SensorDriver for ADCTemperatureDriver {
        // validation
         Ok(())
     }
-    
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // TODO: this can become a utility or macro function
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-    }
    
     #[allow(unused)]
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
