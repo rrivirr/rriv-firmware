@@ -24,3 +24,12 @@ pub use eeprom::*;
 
 pub mod uid;
 pub use uid::*;
+
+mod precise_delay;
+pub use precise_delay::*;
+
+mod one_wire;
+pub use one_wire::*;
+
+pub mod uart5;
+pub use uart5::*;

@@ -6,6 +6,7 @@ use super::mcp9808::*;
 
 use super::types::*;
 use alloc::boxed::Box;
+use rtt_target::rprint;
 use serde_json::json;
 
 // TODO: calibration offsets for all 6 sensors need to be stored and loaded into this driver, and written to EEPROM.
@@ -39,7 +40,7 @@ pub struct RingTemperatureDriver {
     general_config: SensorDriverGeneralConfiguration,
     special_config: RingTemperatureDriverSpecialConfiguration,
     measured_parameter_values: [f64; TEMPERATURE_SENSORS_ON_RING * 2],
-    sensor_drivers: [MCP9808TemperatureDriver; TEMPERATURE_SENSORS_ON_RING],
+    // sensor_drivers: [MCP9808TemperatureDriver; TEMPERATURE_SENSORS_ON_RING],
 }
 
 impl RingTemperatureDriver {
@@ -48,7 +49,7 @@ impl RingTemperatureDriver {
         special_config: RingTemperatureDriverSpecialConfiguration,
     ) -> Self {
         let mut addresses: [u8; TEMPERATURE_SENSORS_ON_RING] = [
-            0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100,
+            0b0011000, 0b0011001, 0b0011010, 0b0011110, 0b0011100, 0b0011101,
         ];
         for i in 0..6 {
             addresses[i] = addresses[i] + special_config.address_offset;
@@ -58,57 +59,57 @@ impl RingTemperatureDriver {
             general_config,
             special_config,
             measured_parameter_values: [0.0; TEMPERATURE_SENSORS_ON_RING * 2],
-            sensor_drivers: [
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[0],
-                    ),
-                    addresses[0],
-                ),
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[1],
-                    ),
-                    addresses[1],
-                ),
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[2],
-                    ),
-                    addresses[2],
-                ),
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[3],
-                    ),
-                    addresses[3],
-                ),
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[4],
-                    ),
-                    addresses[4],
-                ),
-                MCP9808TemperatureDriver::new_with_address(
-                    SensorDriverGeneralConfiguration::empty(),
-                    MCP9808TemperatureDriverSpecialConfiguration::new(
-                        special_config.calibration_offset[5],
-                    ),
-                    addresses[5],
-                ),
-            ],
+            // sensor_drivers: [
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[0],
+            //         ),
+            //         addresses[0],
+            //     ),
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[1],
+            //         ),
+            //         addresses[1],
+            //     ),
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[2],
+            //         ),
+            //         addresses[2],
+            //     ),
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[3],
+            //         ),
+            //         addresses[3],
+            //     ),
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[4],
+            //         ),
+            //         addresses[4],
+            //     ),
+            //     MCP9808TemperatureDriver::new_with_address(
+            //         SensorDriverGeneralConfiguration::empty(),
+            //         MCP9808TemperatureDriverSpecialConfiguration::new(
+            //             special_config.calibration_offset[5],
+            //         ),
+            //         addresses[5],
+            //     ),
+            // ],
         }
     }
 }
 
 
 
-const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F'];
+const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'0', b'1', b'2', b'3', b'4', b'5'];
 
 impl SensorDriver for RingTemperatureDriver {
 
@@ -128,7 +129,7 @@ impl SensorDriver for RingTemperatureDriver {
 
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
-            self.sensor_drivers[i].setup(board);
+            // self.sensor_drivers[i].setup(board);
         }
     }
 
@@ -149,11 +150,11 @@ impl SensorDriver for RingTemperatureDriver {
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
         let sensor_index = index / 2;
         let parameter_index = index % 2;
-        let buf =
-            self.sensor_drivers[sensor_index].get_measured_parameter_identifier(parameter_index);
+        // let buf =
+        //     self.sensor_drivers[sensor_index].get_measured_parameter_identifier(parameter_index);
 
         let mut buf2: [u8; 16] = [0; 16];
-        buf2[0..10].copy_from_slice(&buf[0..10]);
+        // buf2[0..10].copy_from_slice(&buf[0..10]);
         let mut end = buf2
                         .iter()
                         .position(|&x| x == b'\0')
@@ -166,24 +167,28 @@ impl SensorDriver for RingTemperatureDriver {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
-            self.sensor_drivers[i].take_measurement(board);
-            self.measured_parameter_values[i * 2] =
-                match self.sensor_drivers[i].get_measured_parameter_value(0) {
-                    Ok(value) => value,
-                    Err(_) => f64::MAX,
-                };
-            self.measured_parameter_values[i * 2 + 1] =
-                match self.sensor_drivers[i].get_measured_parameter_value(1) {
-                    Ok(value) => value,
-                    Err(_) => f64::MAX,
-                };
+
+            self.measured_parameter_values[i * 2] = 22.2;
+            self.measured_parameter_values[i * 2 + 1] = 22.2;
+             
+            // self.sensor_drivers[i].take_measurement(board);
+            // self.measured_parameter_values[i * 2] =
+            //     match self.sensor_drivers[i].get_measured_parameter_value(0) {
+            //         Ok(value) => value,
+            //         Err(_) => f64::MAX,
+            //     };
+            // self.measured_parameter_values[i * 2 + 1] =
+            //     match self.sensor_drivers[i].get_measured_parameter_value(1) {
+            //         Ok(value) => value,
+            //         Err(_) => f64::MAX,
+            //     };
         }
     }
 
     fn clear_calibration(&mut self) {
-        for i in 0..self.sensor_drivers.len() {
-            self.sensor_drivers[i].clear_calibration();
-        }
+        // for i in 0..self.sensor_drivers.len() {
+        //     self.sensor_drivers[i].clear_calibration();
+        // }
     }
     
    
@@ -196,7 +201,7 @@ impl SensorDriver for RingTemperatureDriver {
 
         if pairs[0].values.len() < 6 {
             // TODO: check for zeros, not for len().  len is constant
-            defmt::println!("not enough values to calibrate");
+            rprint!("not enough values to calibrate");
             return Err(());
         }
 
@@ -209,27 +214,13 @@ impl SensorDriver for RingTemperatureDriver {
                 point: point,
                 values: Box::new([values[i]]),
             };
-            let result = self.sensor_drivers[i].fit(&[pairs]);
-            self.special_config.calibration_offset[i] = self.sensor_drivers[i].get_calibration_offset().clone();
-            match result {
-                Ok(_) => true,
-                Err(_) => return Err(()),
-            };
+            // let result = self.sensor_drivers[i].fit(&[pairs]);
+            // self.special_config.calibration_offset[i] = self.sensor_drivers[i].get_calibration_offset().clone();
+            // match result {
+            //     Ok(_) => true,
+            //     Err(_) => return Err(()),
+            // };
         }
         Ok(())
-    }
-
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // right now this just gets the bytes
-        // but the special settings probably should be consisted as member variables and copied back to the storage struct
-
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-    }
-
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
     }
 }

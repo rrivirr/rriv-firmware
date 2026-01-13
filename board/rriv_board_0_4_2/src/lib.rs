@@ -3,9 +3,12 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use alloc::format;
 use i2c_hung_fix::try_unhang_i2c;
+use one_wire_bus::crc::crc8;
+use stm32f1xx_hal::time::MilliSeconds;
+use stm32f1xx_hal::timer::CounterUs;
 
+use core::fmt::{self, Display};
 use core::mem;
 use core::{
     cell::RefCell,
@@ -20,24 +23,20 @@ use cortex_m::{
     peripheral::NVIC,
 };
 
-
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Pin};
-use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::gpio::Pin;
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
     afio::MAPR,
-    gpio::{Dynamic, PinModeError},
+    gpio::Dynamic,
     pac::TIM3,
-    time::MilliSeconds,
-    timer::CounterMs,
     watchdog::IndependentWatchdog,
 };
 
-use rtt_target::rprintln;
 use stm32f1xx_hal::rcc::{Clocks, CFGR};
 use stm32f1xx_hal::{
     gpio::{self, OpenDrain, Output},
@@ -54,8 +53,7 @@ use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rriv_board::{
-    RRIVBoard, RXProcessor, SensorDriverServices, TelemetryDriverServices,
-    EEPROM_TOTAL_SENSOR_SLOTS,
+    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SensorDriverServices, SerialRxPeripheral, TelemetryDriverServices
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
@@ -73,6 +71,10 @@ use pin_groups::*;
 
 type RedLed = gpio::Pin<'A', 9, Output<OpenDrain>>;
 
+pub const HSE_MHZ: u32 = 8;
+pub const SYSCLK_MHZ: u32 = 48;
+pub const PCLK_MHZ: u32 = 24;
+
 static WAKE_LED: Mutex<RefCell<Option<RedLed>>> = Mutex::new(RefCell::new(None));
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
@@ -81,8 +83,10 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
 static USART_RX: Mutex<RefCell<Option<Rx<pac::USART2>>>> = Mutex::new(RefCell::new(None));
 static USART_TX: Mutex<RefCell<Option<Tx<pac::USART2>>>> = Mutex::new(RefCell::new(None));
 
-static RX_PROCESSOR: Mutex<RefCell<Option<Box<&dyn RXProcessor>>>> = Mutex::new(RefCell::new(None));
-static USART_RX_PROCESSOR: Mutex<RefCell<Option<Box<&dyn RXProcessor>>>> =
+static RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> = Mutex::new(RefCell::new(None));
+static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
+    Mutex::new(RefCell::new(None));
+static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
 #[repr(C)]
@@ -97,6 +101,7 @@ type BoardI2c2 = BlockingI2c<I2C2, (pin_groups::I2c2Scl, pin_groups::I2c2Sda)>;
 pub struct Board {
     pub uid: [u8; 12],
     pub delay: DelayUs<TIM3>,
+    pub precise_delay: PreciseDelayUs,
     // // pub power_control: PowerControl,
     pub gpio: DynamicGpioPins,
     pub gpio_cr: GpioCr,
@@ -111,37 +116,35 @@ pub struct Board {
     pub storage: Storage,
     pub debug: bool,
     pub file_epoch: i64,
-    pub one_wire_bus: OneWire<OneWirePin>,
+    pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
-    pub counter: CounterMs<TIM4>,
+    pub counter: CounterUs<TIM4>,
 }
 
 impl Board {
     pub fn start(&mut self) {
-        rprintln!("starting board");
+        defmt::println!("starting board");
         // self.power_control.cycle_3v(&mut self.delay);
 
-        // self.internal_adc.enable(&mut self.delay);
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
         self.storage.create_file(timestamp);
 
-        // TODO: this is for the NOX sensor, needs to be configured by drivers
-        self.gpio
-            .gpio6
-            .make_push_pull_output(&mut self.gpio_cr.gpioc_crh);
+        // setting the pin for receiving telemetry on UART5
+        self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
+        self.get_sensor_driver_services().write_gpio_pin(2, false);
+
     }
 
     pub fn sleep_mcu(&mut self) {
-
         // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
-        // TODO: evaluate the benefit of having a separate clock source for the watch dog.  when would the main clock fail?
-        // TODO: we would disable the secondary clock input using a MOSFET, or we can just use another timer as a custom watch dog that triggers an interrupt (like the C code)
+        // EDIT: there is not alternative source for indep watchdog, it's always HSI
+        // EDIT: therefore field mode must restart with indep watchdog disabled
 
         self.internal_rtc.set_alarm(5000); // 5 seconds?
         self.internal_rtc.listen_alarm();
-        rprintln!("will sleep");
-        
+        defmt::println!("will sleep");
+
         // disable interrupts
         NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
         NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
@@ -159,30 +162,26 @@ impl Board {
 
         cortex_m::asm::isb();
 
-
         // re-enable interrupts
         unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
         unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
         unsafe { NVIC::unmask(pac::Interrupt::USART2) };
 
-        rprintln!("woke from sleep");
-
+        defmt::println!("woke from sleep");
     }
 
-    pub fn enter_stop_mode(&mut self){
-
-        
+    pub fn enter_stop_mode(&mut self) {
         //           debug("setting up EXTI");
         //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
         // 	*bb_perip(&EXTI_BASE->RTSR, EXTI_RTC_ALARM_BIT) = 1;
 
         // in addition to the RTCALARM interrupt, the rtc must route through EXTI to wake the MCU up from stop mode.
         let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        device_peripherals.EXTI.imr.write(|w| w
-            .mr17().set_bit() // interrupt mask bit 17 enables RTC EXTI
+        device_peripherals.EXTI.imr.write(
+            |w| w.mr17().set_bit(), // interrupt mask bit 17 enables RTC EXTI
         );
-        device_peripherals.EXTI.rtsr.write(|w| w
-            .tr17().set_bit() // rising trigger bit 17 enables RTC EXTI
+        device_peripherals.EXTI.rtsr.write(
+            |w| w.tr17().set_bit(), // rising trigger bit 17 enables RTC EXTI
         );
 
         // clocks
@@ -194,93 +193,118 @@ impl Board {
         //     .pclk1(24.MHz())
         //     .adcclk(14.MHz())
         //     .freeze(flash_acr);
+    }
 
+    fn disable_interrupts(&self) {
+        // disable interrupts
+        cortex_m::interrupt::disable();
+    }
 
+    fn enable_interrupts(&self) {
+        // If the interrupts were active before our `disable` call, then re-enable
+        // them. Otherwise, keep them disabled
+        let primask = cortex_m::register::primask::read();
+        if primask.is_active() {
+            unsafe { cortex_m::interrupt::enable() }
+        }
+    }
+
+    fn do_critical_section<T, F>(&self, f: F) -> T
+    where
+        F: Fn() -> T,
+    {
+        cortex_m::interrupt::free(|_cs| f())
     }
 }
+
+
 
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
         self.watchdog.feed();
 
         self.file_epoch = self.epoch_timestamp();
-        // TODO: implement a peek rprint here with a peeked bool
-        // TODO: don't interfere with other code that needs async usart
-        // if rriv_board::RRIVBoard::unread_usart_message(self) {
-        //     let mut message = [0u8; 40];
-        //     rriv_board::RRIVBoard::get_usart_response(self, &mut message);
-        //     util::remove_invalid_utf8(&mut message);
-        //     match core::str::from_utf8(&message){
-        //         Ok(message) => rprintln!("got usart message: {}", message),
-        //         Err(e) => rprintln!("{:?}", e),
-        //     }
-        // }
     }
 
-    fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
+    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral,  processor: Box<&'static mut dyn RXProcessor>) {
         cortex_m::interrupt::free(|cs| {
-            let mut global_rx_binding = RX_PROCESSOR.borrow(cs).borrow_mut();
+
+            let mut global_rx_binding  = match peripheral {
+                SerialRxPeripheral::CommandSerial => {
+                    RX_PROCESSOR.borrow(cs).borrow_mut()
+                },
+                SerialRxPeripheral::SerialPeripheral1 => {
+                    USART2_RX_PROCESSOR.borrow(cs).borrow_mut()
+                }
+                SerialRxPeripheral::SerialPeripheral2 => {
+                    UART5_RX_PROCESSOR.borrow(cs).borrow_mut()
+                }
+            };
+                            
             *global_rx_binding = Some(processor);
+
         });
     }
 
-    fn set_usart_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>) {
-        cortex_m::interrupt::free(|cs| {
-            let mut global_rx_binding = USART_RX_PROCESSOR.borrow(cs).borrow_mut();
-            *global_rx_binding = Some(processor);
-        });
-    }
-
-    fn critical_section<T, F>(&self, f: F) -> T
-    where
-        F: Fn() -> T,
+    fn critical_section(&self, f: fn())
     {
         cortex_m::interrupt::free(|_cs| f())
     }
 
     // // use this to talk out on serial to other UART modules, RS 485, etc
-    fn usart_send(&mut self, string: &str) {
-        // set control bit for sending
-        let _ = self.gpio.gpio6.set_high(); // origi
-                                            // self.gpio.gpio6.set_low();
-                                            // rriv_board::RRIVBoard::delay_ms(self, 100);
+    fn usart_send(&mut self, bytes: &[u8]) {
 
         cortex_m::interrupt::free(|cs| {
             // USART
-            let bytes = string.as_bytes();
-            for char in bytes.iter() {
-                // rprintln!("char {}", char);
+            for byte in bytes.iter() {
+                // defmt::println!("char {}", char);
                 let t: &RefCell<Option<Tx<USART2>>> = USART_TX.borrow(cs);
                 if let Some(tx) = t.borrow_mut().deref_mut() {
-                    _ = nb::block!(tx.write(char.clone()));
+                    _ = nb::block!(tx.write(byte.clone()));
                 }
             }
 
-            // let c = 0b00001101;
-            // let t: &RefCell<Option<Tx<USART2>>> = USART_TX.borrow(cs);
-            // if let Some(tx) = t.borrow_mut().deref_mut() {
-            //     _ = nb::block!(tx.write(c.clone()));
-            // }
         });
 
         rriv_board::RRIVBoard::delay_ms(self, 2);
-        let _ = self.gpio.gpio6.set_low(); // origi
-                                           // self.gpio.gpio6.set_high();
-
-        // set control bit for receiving
-        // rriv_board::RRIVBoard::delay_ms(self, 70);
+        
     }
 
-    fn usb_serial_send(&mut self, string: &str) {
-        usb_serial_send(string, &mut self.delay);
-    }
-
-    // outputs to serial and also echos to rtt
-    fn serial_debug(&mut self, string: &str) {
-        rprintln!("{:?}", string);
-        if self.debug {
-            rriv_board::RRIVBoard::usb_serial_send(self, format!("{{\"debug\":\"{}\"}}\n",string).as_str());
+    fn usb_serial_send(&mut self, arg: fmt::Arguments) { // TODO: ok so the formatter doesn't below in the board level, it can go into a util in the datalogger app level
+        let mut buf = [0u8; 500];
+        match format_no_std::show(
+            &mut buf,
+            arg
+        ) {
+            Ok(message) => {
+                usb_serial_send(message, &mut self.delay);
+                defmt::println!("{}", message); // TODO: this uses format!
+            }
+            Err(e) => {
+                defmt::println!("format error {}", defmt::Debug2Format(&e));
+            },
         }
+    }
+
+    // outputs to serial (which also echos to rtt)
+    fn serial_debug(&mut self, args: fmt::Arguments) {
+
+        let mut buf = [0u8; 64];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(string) => {
+                if self.debug {
+                    rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{{\"debug\":\"{}\"}}\n", string));
+                } else {
+                    defmt::println!("{}", string);
+                }
+            }
+            Err(_) => {},
+        }
+
+        
     }
 
     fn store_datalogger_settings(
@@ -329,11 +353,11 @@ impl RRIVBoard for Board {
         let millis = epoch * 1000;
         // DateTime::from_timestamp_millis(micros);
         let datetime = NaiveDateTime::from_timestamp_millis(millis);
-        // rprintln!("{:?}", datetime);
+        // defmt::println!("{:?}", datetime);
         if let Some(datetime) = datetime {
             match ds3231.set_datetime(&datetime) {
                 Ok(_) => {}
-                Err(err) => rprintln!("Error {:?}", err),
+                Err(err) => defmt::println!("Error set epoch {:?}", defmt::Debug2Format(&err)),
             }
         }
         let _result = ds3231.datetime();
@@ -348,18 +372,17 @@ impl RRIVBoard for Board {
 
         match result {
             Ok(date_time) => {
-                // rprintln!("got DS3231 time {:?}", date_time.and_utc().timestamp());
+                // defmt::println!("got DS3231 time {:?}", date_time.and_utc().timestamp());
                 date_time.and_utc().timestamp()
             }
             Err(err) => {
-                rprintln!("DS3231 error {:?}", err);
+                defmt::println!("DS3231 error {:?}", defmt::Debug2Format(&err));
                 return 0; // this could fail back to some other clock
             }
         }
     }
 
     // also crystal time, systick?
-
 
     fn timestamp(&mut self) -> i64 {
         return self.internal_rtc.current_time().into(); // internal RTC
@@ -389,7 +412,7 @@ impl RRIVBoard for Board {
             .measure_battery_level(&mut self.internal_adc, &mut self.delay)
         {
             Ok(value) => return value as i16,
-            Err(err) => return -1,
+            Err(_err) => return -1,
         }
     }
 
@@ -403,12 +426,25 @@ impl RRIVBoard for Board {
         self.debug = debug;
     }
 
-    fn write_log_file(&mut self, data: &str) {
-        self.storage.write(data.as_bytes(), self.file_epoch);
+    fn write_log_file(&mut self, args: fmt::Arguments) {
+        // self.storage.write(data.as_bytes(), self.file_epoch);
+
+        let mut buf = [0u8; 100];
+        match format_no_std::show(
+            &mut buf,
+            args
+        ) {
+            Ok(string) => {
+                self.storage.write(string.as_bytes(), self.file_epoch);
+            }
+            Err(_) => {
+                defmt::println!("format error writing log file")
+            },
+        }
     }
 
     fn flush_log_file(&mut self) {
-        todo!("flush_log_file");
+        self.storage.flush();
     }
 
     fn dump_eeprom(&mut self) {
@@ -420,44 +456,60 @@ impl RRIVBoard for Board {
             if i % rriv_board::EEPROM_SENSOR_SETTINGS_SIZE == 0 {
                 rriv_board::RRIVBoard::usb_serial_send(
                     self,
-                    format!("\n{}:", i / rriv_board::EEPROM_SENSOR_SETTINGS_SIZE).as_str(),
+                    format_args!("\n{}:", i / rriv_board::EEPROM_SENSOR_SETTINGS_SIZE),
                 );
             }
-            rriv_board::RRIVBoard::usb_serial_send(self, format!("{}", &buffer[i]).as_str());
+            rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{}", &buffer[i]));
         }
-        rriv_board::RRIVBoard::usb_serial_send(self, "}\n"); // } ends the transmissions
+        rriv_board::RRIVBoard::usb_serial_send(self, format_args!("}}\n")); // } ends the transmissions
     }
 
     fn get_uid(&mut self) -> [u8; 12] {
         return self.uid;
     }
 
-    fn set_serial_number(&mut self, serial_number: [u8;rriv_board::EEPROM_SERIAL_NUMBER_SIZE]) -> bool {
+    fn set_serial_number(
+        &mut self,
+        serial_number: [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE],
+    ) -> bool {
         let existing_serial_number = self.get_serial_number();
-        if existing_serial_number != [255,255,255,255,255] {
+        if existing_serial_number != [255, 255, 255, 255, 255] {
             return false;
         }
         eeprom::write_serial_number_to_eeprom(self, &serial_number);
         return true;
     }
 
-    fn get_serial_number(&mut self) -> [u8;rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
+    fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
+    }
+    
+    fn rs485_send(&mut self, message: &[u8]) {
+        cortex_m::interrupt::free(|_cs| {
+            for char in message.iter() {
+            // rprintln!("char {}", char);
+            _ = nb::block!( components::uart5::write(char.clone()));   
+            }
+        });
     }
 }
 
 macro_rules! control_services_impl {
     () => {
-        fn usb_serial_send(&mut self, string: &str) {
-            rriv_board::RRIVBoard::usb_serial_send(self, string);
+        fn usb_serial_send(&mut self, args : fmt::Arguments ) {
+            rriv_board::RRIVBoard::usb_serial_send(self, args);
         }
 
-        fn usart_send(&mut self, string: &str) {
-            rriv_board::RRIVBoard::usart_send(self, string);
+        fn usart_send(&mut self, bytes: &[u8]) {
+            rriv_board::RRIVBoard::usart_send(self, bytes);
         }
 
-        fn serial_debug(&mut self, string: &str) {
-            rriv_board::RRIVBoard::serial_debug(self, string);
+        fn rs485_send(&mut self, message: &[u8]) {
+            rriv_board::RRIVBoard::rs485_send(self, message);
+        }
+
+        fn serial_debug(&mut self, args: fmt::Arguments) {
+            rriv_board::RRIVBoard::serial_debug(self, args);
         }
 
         fn delay_ms(&mut self, ms: u16) {
@@ -474,8 +526,6 @@ macro_rules! control_services_impl {
     };
 }
 
-type OneWireGpio1 = OneWire<Pin<'B', 8, Dynamic>>;
-
 #[macro_export]
 macro_rules! write_gpio {
     ($gpio:ident, $value:expr) => {
@@ -484,33 +534,43 @@ macro_rules! write_gpio {
         } else {
             let _ = $gpio.set_low();
         }
+    };
+}
+
+macro_rules! read_pin {
+    ($pin: ident) => {
+        match $pin.is_high() {
+            Ok(is_high) => Ok(is_high),
+            Err(err) => {
+                defmt::println!("{:?}", defmt::Debug2Format(&err));
+                Err(())
+            }
+        }
     }
 }
 
 macro_rules! set_pin_mode {
     ($pin: ident, $cr: ident, $mode: ident) => {
         match $mode {
-                rriv_board::gpio::GpioMode::FloatingInput => {
-                    $pin.make_floating_input($cr);
-                },
-                rriv_board::gpio::GpioMode::PullUpInput => {
-                    $pin.make_pull_up_input($cr);
-                }
-                rriv_board::gpio::GpioMode::PullDownInput => {
-                    $pin.make_pull_down_input($cr);
-                },
-                rriv_board::gpio::GpioMode::PushPullOutput => {
-                    $pin.make_push_pull_output($cr); 
-                }
-                rriv_board::gpio::GpioMode::OpenDrainOutput => {
-                    $pin.make_open_drain_output($cr);
-                },
-                rriv_board::gpio::GpioMode::None => todo!()
+            rriv_board::gpio::GpioMode::FloatingInput => {
+                $pin.make_floating_input($cr);
             }
+            rriv_board::gpio::GpioMode::PullUpInput => {
+                $pin.make_pull_up_input($cr);
+            }
+            rriv_board::gpio::GpioMode::PullDownInput => {
+                $pin.make_pull_down_input($cr);
+            }
+            rriv_board::gpio::GpioMode::PushPullOutput => {
+                $pin.make_push_pull_output($cr);
+            }
+            rriv_board::gpio::GpioMode::OpenDrainOutput => {
+                $pin.make_open_drain_output($cr);
+            }
+            rriv_board::gpio::GpioMode::None => todo!(),
+        }
     };
 }
-
-
 
 impl SensorDriverServices for Board {
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
@@ -522,7 +582,7 @@ impl SensorDriverServices for Board {
                     AdcError::NotConfigured => "Internal ADC Not Configured",
                     AdcError::ReadError => "Internal ADC Read Error",
                 };
-                rriv_board::RRIVBoard::usb_serial_send(self, &error_string);
+                rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{}", &error_string));
                 return 0;
             }
         }
@@ -548,7 +608,7 @@ impl SensorDriverServices for Board {
             Err(e) => {
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem reading I2C2 {:X?} {:?}", addr, e),
+                    format_args!("Problem reading I2C2 {:X?} {:?}", addr, e),
                 );
                 for i in 0..buffer.len() {
                     buffer[i] = 0b11111111; // error value
@@ -572,7 +632,7 @@ impl SensorDriverServices for Board {
                 };
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem writing I2C2 {:X?} {}", addr, kind),
+                    format_args!("Problem writing I2C2 {:X?} {}", addr, kind),
                 );
                 return Err(());
             }
@@ -593,57 +653,95 @@ impl SensorDriverServices for Board {
                 };
                 rriv_board::RRIVBoard::serial_debug(
                     self,
-                    &format!("Problem writing I2C2 {:X?} {}", addr, kind),
+                    format_args!("Problem writing I2C2 {:X?} {}", addr, kind),
                 );
                 return Err(());
             }
         }
     }
 
-    // fn borrow_one_wire_bus(&mut self) -> &mut dyn rriv_board::OneWireBusInterface  {
-
-    //     return &mut self.one_wire_bus;
-
-    // }
-
     fn one_wire_send_command(&mut self, command: u8, address: u64) {
         let address = Address(address);
 
-        match self
-            .one_wire_bus
-            .send_command(command, Some(&address), &mut self.delay)
-        {
-            Ok(_) => rprintln!("sent command ok"),
-            Err(e) => rprintln!("{:?}", e),
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.send_command(command, Some(&address), &mut self.precise_delay) {
+                Ok(_) => defmt::println!("sent command ok"),
+                Err(e) => defmt::println!("{:?}", defmt::Debug2Format(&e)),
+            }
+        } else {
+            defmt::println!("one wire bus not available")
         }
     }
 
-  
-
     fn one_wire_reset(&mut self) {
-        let _ = self.one_wire_bus.reset(&mut self.delay);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.reset(&mut self.precise_delay) {
+                Ok(found_device) => {
+                    if !found_device {
+                        defmt::println!("no one wire device found");
+                    }
+                }
+                Err(err) => defmt::println!("one_wire_reset: {:?}", defmt::Debug2Format(&err)),
+            }
+        } else {
+            defmt::println!("one wire bus not available");
+        }
     }
 
     fn one_wire_skip_address(&mut self) {
-        let _ = self.one_wire_bus.skip_address(&mut self.delay);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.skip_address(&mut self.precise_delay) {
+                Ok(_) => {}
+                Err(err) => defmt::println!("one_wire_skip_address: {:?}", defmt::Debug2Format(&err)),
+            }
+        } else {
+            defmt::println!("one wire bus not available");
+        }
     }
 
     fn one_wire_write_byte(&mut self, byte: u8) {
-        let _ = self.one_wire_bus.write_byte(byte, &mut self.delay);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.write_byte(byte, &mut self.precise_delay) {
+                Ok(_) => {}
+                Err(err) => defmt::println!("one_wire_write_byte: {:?}", defmt::Debug2Format(&err)),
+            }
+        } else {
+            defmt::println!("one wire bus not available");
+        }
     }
 
     fn one_wire_match_address(&mut self, address: u64) {
         let address = Address(address);
-        _ = self.one_wire_bus.match_address(&address, &mut self.delay);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.match_address(&address, &mut self.precise_delay) {
+                Ok(_) => {}
+                Err(err) => defmt::println!("one_wire_match_address: {:?}", defmt::Debug2Format(&err)),
+            }
+        } else {
+            defmt::println!("one wire bus not available");
+        }
     }
 
-    fn one_wire_read_bytes(&mut self, output: &mut [u8]) {
-        let _ = self.one_wire_bus.read_bytes(output, &mut self.delay);
-        // TODO
-        match check_crc8::<one_wire_bus::OneWireError<OneWireGpio1>>(output) {
-            Ok(_) => return,
-            Err(_) => rprintln!("1wire crc error"),
+    fn one_wire_read_bytes(&mut self, output: &mut [u8]) -> Result<(), ()> {
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.read_bytes(output, &mut self.precise_delay) {
+                Ok(_) => {
+                    defmt::println!("one_wire_read_bytes {:?}", output);
+                }
+                Err(err) => {
+                    defmt::println!("one_wire_read_bytes {:?}", defmt::Debug2Format(&err));
+                }
+            }
+        } else {
+            defmt::println!("one wire bus not available");
         }
+        // TODO
+        if crc8(output) != 0 {
+            defmt::println!("one wire bad CRC"); // how do we tell the caller??
+            return Err(());
+        }
+
+        Ok(())
     }
 
     fn one_wire_bus_start_search(&mut self) {
@@ -651,32 +749,37 @@ impl SensorDriverServices for Board {
     }
 
     fn one_wire_bus_search(&mut self) -> Option<u64> {
-        match self.one_wire_bus.device_search(
-            self.one_wire_search_state.as_ref(),
-            false,
-            &mut self.delay,
-        ) {
-            Ok(Some((device_address, state))) => {
-                self.one_wire_search_state = Some(state);
-                return Some(device_address.0);
+        if let Some(one_wire_bus) = &mut self.one_wire_bus {
+            match one_wire_bus.device_search(
+                self.one_wire_search_state.as_ref(),
+                false,
+                &mut self.precise_delay,
+            ) {
+                Ok(Some((device_address, state))) => {
+                    self.one_wire_search_state = Some(state);
+                    return Some(device_address.0);
+                }
+                Ok(None) => {
+                    defmt::println!("no more devices 1wire");
+                    return None;
+                }
+                Err(e) => {
+                    defmt::println!("1wire error{:?}", defmt::Debug2Format(&e));
+                    return None;
+                }
             }
-            Ok(None) => {
-                rprintln!("no devices 1wire");
-                return None;
-            }
-            Err(e) => {
-                rprintln!("1wire error{:?}", e);
-                return None;
-            }
+        } else {
+            defmt::println!("one wire bus not available");
+            return None;
         }
     }
 
-      fn write_gpio_pin(&mut self, pin: u8, value: bool) {
+    fn write_gpio_pin(&mut self, pin: u8, value: bool) {
         match pin {
             1 => {
                 let gpio = &mut self.gpio.gpio1;
                 write_gpio!(gpio, value);
-            },
+            }
             2 => {
                 let gpio = &mut self.gpio.gpio2;
                 write_gpio!(gpio, value);
@@ -712,16 +815,42 @@ impl SensorDriverServices for Board {
         };
     }
     
-    fn read_gpio_pin(&mut self, pin: u8) -> bool {
+    fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             1 => {
-                match self.gpio.gpio1.is_high() {
-                    Ok(is_high) => todo!(),
-                    Err(err) => todo!(),
-                }
-            }
+                let pin =  &mut self.gpio.gpio1;
+                return read_pin!(pin);
+            },
+            2 => {
+                let pin =  &mut self.gpio.gpio2;
+                return read_pin!(pin);
+            },
+            3 => {
+                let pin =  &mut self.gpio.gpio3;
+                return read_pin!(pin);
+            },
+            4 => {
+                let pin =  &mut self.gpio.gpio4;
+                return read_pin!(pin);
+            },
+            5 => {
+                let pin =  &mut self.gpio.gpio5;
+                return read_pin!(pin);
+            },
+            6 => {
+                let pin =  &mut self.gpio.gpio6;
+                return read_pin!(pin);
+            },
+            7 => {
+                let pin =  &mut self.gpio.gpio7;
+                return read_pin!(pin);
+            },
+            8 => {
+                let pin =  &mut self.gpio.gpio8;
+                return read_pin!(pin);
+            },
             _ => {
-                todo!()
+                return Err(());
             }
         }
     }
@@ -731,7 +860,7 @@ impl SensorDriverServices for Board {
         match pin {
             1 => {
                 let cr = &mut self.gpio_cr.gpiob_crh;
-                let pin = &mut self.gpio.gpio1;
+                let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
                 set_pin_mode!(pin, cr, mode);
             }
             2 => {
@@ -771,10 +900,16 @@ impl SensorDriverServices for Board {
             }
             _ => {}
         }
-        
-  
-        
     }
+  
+    fn disable_interrupts(&self) {
+        self.disable_interrupts();
+    }
+
+    fn enable_interrupts(&self) {
+        self.enable_interrupts();
+    }
+    
 }
 
 impl TelemetryDriverServices for Board {
@@ -787,16 +922,12 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    rprintln!("serial rx byte: {}", c);
-                    // USART_UNREAD_MESSAGE = true;
-                    // if USART_RECEIVE_INDEX < USART_RECEIVE_SIZE - 1 {
-                    //     USART_RECEIVE[USART_RECEIVE_INDEX] = c;
-                    //     USART_RECEIVE_INDEX = USART_RECEIVE_INDEX + 1;
-                    // }
+                    defmt::println!("serial rx byte: {}", c);
 
-                    let r = USART_RX_PROCESSOR.borrow(cs);
+                    let r = USART2_RX_PROCESSOR.borrow(cs);
+
                     if let Some(processor) = r.borrow_mut().deref_mut() {
-                        processor.process_character(c.clone());
+                        processor.process_byte(c.clone());
                     }
                 }
             }
@@ -834,19 +965,12 @@ fn usb_interrupt(cs: &CriticalSection) {
 
     match serial.read(&mut buf) {
         Ok(count) if count > 0 => {
-            // Echo back in upper case
+            // defmt::println!("count: {}", count);
             for c in buf[0..count].iter() {
+                // defmt::println!("tx byte: {:X}", c);
                 let r = RX_PROCESSOR.borrow(cs);
                 if let Some(processor) = r.borrow_mut().deref_mut() {
-                    processor.process_character(c.clone());
-                }
-                // use PA9 to flash RGB led
-                if let Some(led) = WAKE_LED.borrow(cs).borrow_mut().deref_mut() {
-                    if led.is_low() {
-                        led.set_high();
-                    } else {
-                        led.set_low();
-                    }
+                    processor.process_byte(c.clone());
                 }
             }
             serial.write(&buf[0..count]).ok();
@@ -862,45 +986,12 @@ pub fn build() -> Board {
     board
 }
 
-pub struct OneWirePin {
-    pin: Pin<'D', 2, Dynamic>,
-}
-
-impl InputPin for OneWirePin {
-    type Error = PinModeError;
-
-    fn is_high(&self) -> Result<bool, Self::Error> {
-        self.is_low().map(|b| !b)
-    }
-
-    fn is_low(&self) -> Result<bool, Self::Error> {
-        // unsafely access the pin state of GPIO B8
-        // because the hal doesn't currently implement a IO pin type later change to that
-        // this is safe because this is a one wire protocol
-        // and we don't need the mode of the pin to be checked.
-        unsafe { Ok((*crate::pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0) }
-    }
-}
-
-impl OutputPin for OneWirePin {
-    type Error = PinModeError;
-
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        let result = self.pin.set_low();
-        return result;
-    }
-
-    fn set_high(&mut self) -> Result<(), Self::Error> {
-        let result = self.pin.set_high();
-        return result;
-    }
-}
-
 pub struct BoardBuilder {
     pub uid: Option<[u8; 12]>,
 
     // chip features
     pub delay: Option<DelayUs<TIM3>>,
+    pub precise_delay: Option<PreciseDelayUs>,
 
     // pins groups
     pub gpio: Option<DynamicGpioPins>,
@@ -918,7 +1009,7 @@ pub struct BoardBuilder {
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
-    pub counter: Option<CounterMs<TIM4>>,
+    pub counter: Option<CounterUs<TIM4>>,
 }
 
 impl BoardBuilder {
@@ -928,6 +1019,7 @@ impl BoardBuilder {
             i2c1: None,
             i2c2: None,
             delay: None,
+            precise_delay: None,
             gpio: None,
             gpio_cr: None,
             internal_adc: None,
@@ -944,66 +1036,52 @@ impl BoardBuilder {
     }
 
     pub fn build(self) -> Board {
-        let mut one_wire_option = None;
         let mut gpio_cr = self.gpio_cr.unwrap();
-        // steal the gpio5 pin to build a one wire
-        // this is probably how we want to build a one wire in general
-        // we don't need to worry about the unsafeness, just get the pin we want
-        // the board logic can ensure the safeness, or it can be the operators responsibility
-        unsafe {
-            let device_peripherals = pac::Peripherals::steal();
-            let gpiod = device_peripherals.GPIOD.split();
 
-            let gpio5 = gpiod.pd2;
-            let mut gpio5 = gpio5.into_dynamic(&mut gpio_cr.gpiod_crl);
-            gpio5.make_open_drain_output(&mut gpio_cr.gpiod_crl);
+        let mut one_wire = None;
+        let mut internal_adc = self.internal_adc.unwrap();
+        let pin = internal_adc.take_port_5();
+        let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
+        let _ = pin.set_high();
+        pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
+        let pin: OneWirePin<Pin<'C', 0, Dynamic>> = OneWirePin { pin };
 
-            let gpio5 = OneWirePin { pin: gpio5 };
-
-            one_wire_option = match OneWire::new(gpio5) {
-                Ok(one_wire) => Some(one_wire),
-                Err(e) => {
-                    rprintln!("{:?} bad one wire bus", e);
-                    panic!("bad one wire bus");
-                }
-            };
-        }
-
-        if one_wire_option.is_none() {
-            rprintln!("bad one wire creation");
-        }
-        let one_wire = one_wire_option.unwrap();
-
-        // mcu device registers
+        one_wire = match OneWire::new(pin) {
+            Ok(one_wire) => Some(one_wire),
+            Err(e) => {
+                defmt::println!("{:?} bad one wire bus", defmt::Debug2Format(&e));
+                panic!("bad one wire bus");
+            }
+        };
 
         // TODO: just one GPIO pin for the moment
         let mut gpio = self.gpio.unwrap();
         gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
 
-        // let one_wire_bus_rriv = OneWireGpio1 {
-        //     one_wire
-        // };
+        let mut watchdog = self.watchdog.unwrap();
+        watchdog.feed();
 
         Board {
             uid: self.uid.unwrap(),
             i2c1: self.i2c1,
             i2c2: self.i2c2.unwrap(),
             delay: self.delay.unwrap(),
+            precise_delay: self.precise_delay.unwrap(),
             gpio: gpio,
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
-            internal_adc: self.internal_adc.unwrap(),
+            internal_adc: internal_adc,
             external_adc: self.external_adc.unwrap(),
             battery_level: self.battery_level.unwrap(),
             rgb_led: self.rgb_led.unwrap(),
             oscillator_control: self.oscillator_control.unwrap(),
             internal_rtc: self.internal_rtc.unwrap(),
             storage: self.storage.unwrap(),
-            debug: true,
+            debug: false,
             file_epoch: 0,
             one_wire_bus: one_wire,
             one_wire_search_state: None,
-            watchdog: self.watchdog.unwrap(),
+            watchdog: watchdog,
             counter: self.counter.unwrap(),
         }
     }
@@ -1018,27 +1096,26 @@ impl BoardBuilder {
         // Freeze the configuration of all the clocks in the system
         // and store the frozen frequencies in `clocks`
         let clocks = cfgr
-            .use_hse(8.MHz())
-            .sysclk(48.MHz())
-            .pclk1(24.MHz())
-            .adcclk(14.MHz())
+            .use_hse(HSE_MHZ.MHz())
+            .sysclk(SYSCLK_MHZ.MHz())
+            .pclk1(PCLK_MHZ.MHz())
+            // .adcclk(14.MHz())
             .freeze(flash_acr);
 
         assert!(clocks.usbclk_valid());
 
-        rprintln!("{:?}", clocks);
+        defmt::println!("{:?}", defmt::Debug2Format(&clocks));
 
         clocks
     }
 
     fn setup_serial(
         pins: pin_groups::SerialPins,
-        cr: &mut GpioCr,
         mapr: &mut MAPR,
         usart: USART2,
         clocks: &Clocks,
     ) {
-        // rprintln!("initializing serial");
+        // defmt::println!("initializing serial");
 
         let mut serial = Hal_Serial::new(
             usart,
@@ -1046,14 +1123,14 @@ impl BoardBuilder {
             mapr,
             // Config::default().baudrate(38400.bps()).wordlength_8bits().parity_none().stopbits(StopBits::STOP1), // this worked for the nox sensor
             Config::default()
-                .baudrate(115200.bps())
+                .baudrate(38400.bps()) // going slower for uart5 and rs485 for now
                 .wordlength_8bits()
                 .parity_none()
                 .stopbits(StopBits::STOP1), // this appears to be right for the RAK 3172
             &clocks,
         );
 
-        // rprintln!("serial rx.listen()");
+        // defmt::println!("serial rx.listen()");
 
         serial.rx.listen();
 
@@ -1062,7 +1139,7 @@ impl BoardBuilder {
             USART_TX.borrow(cs).replace(Some(serial.tx));
             // WAKE_LED.borrow(cs).replace(Some(led)); // TODO: this needs to be updated.  entire rgb_led object needs to be shared.
         });
-        // rprintln!("unmasking USART2 interrupt");
+        // defmt::println!("unmasking USART2 interrupt");
         unsafe {
             NVIC::unmask(pac::Interrupt::USART2);
         }
@@ -1110,7 +1187,6 @@ impl BoardBuilder {
 
     pub fn setup_i2c1(
         pins: pin_groups::I2c1Pins,
-        cr: &mut GpioCr,
         i2c1: I2C1,
         mapr: &mut MAPR,
         clocks: &Clocks,
@@ -1167,10 +1243,14 @@ impl BoardBuilder {
     }
 
     fn setup(&mut self) {
-        rprintln!("board new");
+        defmt::println!("board new");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
+
+        let uid = Uid::fetch();
+        defmt::println!("uid: {:X}", uid.bytes());
+        self.uid = Some(uid.bytes());
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1192,7 +1272,7 @@ impl BoardBuilder {
             external_adc_pins,
             internal_adc_pins,
             battery_level_pins,
-            dynamic_gpio_pins,
+            mut dynamic_gpio_pins,
             i2c1_pins,
             i2c2_pins,
             mut oscillator_control_pins,
@@ -1207,6 +1287,13 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
+        dynamic_gpio_pins
+            .gpio6
+            .make_push_pull_output(&mut gpio_cr.gpioc_crh);
+
+        // let mut high = true;
+        let precise_delay = PreciseDelayUs::new();
+
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
@@ -1217,17 +1304,12 @@ impl BoardBuilder {
 
         BoardBuilder::setup_serial(
             serial_pins,
-            &mut gpio_cr,
             &mut afio.mapr,
             device_peripherals.USART2,
             &clocks,
         );
 
         self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
-
-        let uid = Uid::fetch();
-        rprintln!("uid: {:X?}", uid.bytes());
-        self.uid = Some(uid.bytes());
 
 
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
@@ -1252,7 +1334,6 @@ impl BoardBuilder {
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
 
-
         // unsafe { NVIC::unmask(pac::interrupt::WWDG) }; // is this the EWI ?
         // NVIC::mask(pac::interrupt::WWDG);
         // device_peripherals.WWDG.cr.write( |w| unsafe { w
@@ -1265,7 +1346,7 @@ impl BoardBuilder {
         //
         // the IndependentWatchdog won't trigger an interrupt.  it also can't be disabled.
 
-        rprintln!("unhang I2C1 if hung");
+        defmt::println!("unhang I2C1 if hung");
 
         let mut scl1 = i2c1_pins
             .i2c1_scl
@@ -1283,8 +1364,8 @@ impl BoardBuilder {
             30,
         ) {
             Ok(_) => {}
-            Err(e) => {
-                rprintln!("Couln't reset i2c1");
+            Err(_e) => {
+                defmt::println!("Couln't reset i2c1");
                 usb_serial_send("{\"status\":\"i2c1 failed, restarting\"}", &mut delay);
                 loop {}
             } // wait for IDWP to reset.   actually we can just hardware reset here?
@@ -1292,20 +1373,19 @@ impl BoardBuilder {
 
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
-        // rprintln!("starting i2c");
-        core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required
+        // defmt::println!("starting i2c");
+        core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
-            &mut gpio_cr,
             device_peripherals.I2C1,
             &mut afio.mapr,
             &clocks,
         );
-        rprintln!("set up i2c1 done");
+        defmt::println!("set up i2c1 done");
 
-        // rprintln!("skipping unhang I2C2 if hung");
+        // defmt::println!("skipping unhang I2C2 if hung");
 
-        rprintln!("unhang I2C2 if hung");
+        defmt::println!("unhang I2C2 if hung");
 
         let mut scl2 = i2c2_pins
             .i2c2_scl
@@ -1326,7 +1406,7 @@ impl BoardBuilder {
                 match ok {
                     i2c_hung_fix::Sucess::BusNotHung => {}
                     i2c_hung_fix::Sucess::FixedHungBus => {
-                        rprintln!("Fixed hung bus");
+                        defmt::println!("Fixed hung bus");
                         loop {} // wait for IDWD to reset
                     }
                 }
@@ -1341,36 +1421,35 @@ impl BoardBuilder {
 
         let mut i2c2 =
             BoardBuilder::setup_i2c2(i2c2_pins, &mut gpio_cr, device_peripherals.I2C2, &clocks);
-        rprintln!("set up i2c2 done");
+        defmt::println!("set up i2c2 done");
 
-        rprintln!("i2c1 scanning...");
+        defmt::println!("i2c1 scanning...");
 
         for addr in 0x00_u8..0x7F {
             // Write the empty array and check the slave response.
-            // rprintln!("trying {:02x}", addr);
+            // defmt::println!("trying {:02x}", addr);
             let mut buf = [b'\0'; 1];
             if i2c1.read(addr, &mut buf).is_ok() {
-                rprintln!("{:02x} good", addr);
+                defmt::println!("{:02x} good", addr);
             }
 
             delay.delay_ms(10_u32);
         }
-        rprintln!("scan is done");
+        defmt::println!("scan is done");
 
         watchdog.feed();
 
-        rprintln!("i2c2 scanning...");
-        rprintln!();
+        defmt::println!("i2c2 scanning...");
         for addr in 0x00_u8..0x7F {
             // Write the empty array and check the slave response.
-            // rprintln!("trying {:02x}", addr);
+            // defmt::println!("trying {:02x}", addr);
             let mut buf = [b'\0'; 1];
             if i2c2.read(addr, &mut buf).is_ok() {
-                rprintln!("{:02x} good", addr);
+                defmt::println!("{:02x} good", addr);
             }
             delay.delay_ms(10_u32);
         }
-        rprintln!("scan is done");
+        defmt::println!("scan is done");
 
         watchdog.feed();
 
@@ -1413,12 +1492,13 @@ impl BoardBuilder {
         self.storage = Some(storage);
 
         self.delay = Some(delay);
+        self.precise_delay = Some(precise_delay);
 
         // the millis counter
-        let mut counter: CounterMs<TIM4> = device_peripherals.TIM4.counter_ms(&clocks);
-        match counter.start((u16::MAX as u32).millis()) {
-            Ok(_) => rprintln!("Millis counter start ok"),
-            Err(err) => rprintln!("Millis counter start not ok {:?}", err),
+        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        match counter.start(2.micros()) {
+            Ok(_) => defmt::println!("Millis counter start ok"),
+            Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
         self.counter = Some(counter);
 
@@ -1426,7 +1506,11 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        rprintln!("done with setup");
+        defmt::println!("setting up RS485 serial b");
+        setup_serialb(device_peripherals.UART5, &clocks);
+
+        defmt::println!("done with setup");
+
     }
 }
 
@@ -1445,21 +1529,21 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
         while written < bytes.len() {
             match serial.write(&bytes[written..bytes.len()]) {
                 Ok(bytes_written) => {
-                    // rprintln!("usb bytes written {}", bytes_written);
+                    // defmt::println!("usb bytes written {}", bytes_written);
                     written = written + bytes_written;
                 }
                 Err(err) => {
                     match err {
                         UsbError::WouldBlock => {
                             if would_block_count > 100 {
-                                rprintln!("USBWouldBlock limit exceeded");
+                                defmt::println!("USBWouldBlock limit exceeded");
                                 return;
                             }
                             would_block_count = would_block_count + 1; // handle hung blocking condition.  possibly caused by client not reading and buffer full.
                             delay.delay_ms(1);
                         }
                         _ => {
-                            rprintln!("{:?}", err);
+                            defmt::println!("usb error {:?}", defmt::Debug2Format(&err));
                         } // UsbError::ParseError => todo!(),
                           // UsbError::BufferOverflow => todo!(),
                           // UsbError::EndpointOverflow => todo!(),
@@ -1475,8 +1559,6 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
 }
 
 pub fn write_panic_to_storage(message: &str) {
-    let core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
-
     let device_peripherals = unsafe { pac::Peripherals::steal() };
     let rcc = device_peripherals.RCC.constrain();
     let mut flash = device_peripherals.FLASH.constrain();
@@ -1484,10 +1566,10 @@ pub fn write_panic_to_storage(message: &str) {
 
     let clocks = rcc
         .cfgr
-        .use_hse(8.MHz())
-        .sysclk(48.MHz())
-        .pclk1(24.MHz())
-        .adcclk(14.MHz())
+        .use_hse(HSE_MHZ.MHz())
+        .sysclk(SYSCLK_MHZ.MHz())
+        .pclk1(PCLK_MHZ.MHz())
+        // .adcclk(14.MHz())
         .freeze(&mut flash.acr);
 
     let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
@@ -1521,5 +1603,4 @@ pub fn write_panic_to_storage(message: &str) {
     storage.create_file(0);
     storage.write(message.as_bytes(), 0);
     storage.flush();
-
 }

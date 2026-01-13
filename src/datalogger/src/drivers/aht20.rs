@@ -1,8 +1,8 @@
 use core::{f64::MAX, num::Wrapping};
 
-use rtt_target::rprintln;
 use serde_json::json;
 use util::any_as_u8_slice;
+
 
 use crate::sensor_name_from_type_id;
 
@@ -10,6 +10,7 @@ use super::types::*;
 
 
 const AHTX0_I2CADDR_DEFAULT:u8  = 0x38;   ///< AHT default i2c address
+#[allow(unused)]
 const AHTX0_I2CADDR_ALTERNATE:u8  =  0x39; ///< AHT alternate i2c address
 const AHTX0_CMD_CALIBRATE:u8  =  0xE1;     ///< Calibration command
 const AHTX0_CMD_TRIGGER:u8  =  0xAC;       ///< Trigger reading command
@@ -19,8 +20,7 @@ const AHTX0_STATUS_CALIBRATED:u8  =  0x08; ///< Status bit for calibrated
 
 #[derive(Copy, Clone)]
 pub struct AHT20SpecialConfiguration {
-    wait_time: usize,
-    empty: [u8; 28],
+    wait_time: usize
 }
 
 impl AHT20SpecialConfiguration {
@@ -31,10 +31,9 @@ impl AHT20SpecialConfiguration {
         unsafe { *settings }
     }
 
-    pub fn parse_from_values(value: serde_json::Value) -> Result<AHT20SpecialConfiguration, &'static str> {
+    pub fn parse_from_values(_value: serde_json::Value) -> Result<AHT20SpecialConfiguration, &'static str> {
         Ok( Self {
-            wait_time: 0,
-            empty: [0; 28]
+            wait_time: 0
         })
     }
 }
@@ -47,7 +46,6 @@ pub struct AHT20 {
     enabled: bool
 }
 
-pub struct ConfigurationPayload {}
 
 impl AHT20 {
     fn get_status(board: &mut dyn rriv_board::SensorDriverServices) -> u8 {
@@ -63,7 +61,7 @@ impl AHT20 {
         let mut attempted = 0;
         while (AHT20::get_status(board) & AHTX0_STATUS_BUSY) != 0 {
             if attempted < 3 { // only output a few messages so we don't overload the usb serial
-                rprintln!("AHT20 is busy");
+                defmt::println!("AHT20 is busy");
             }
             board.delay_ms(10);
             attempted = attempted + 1;
@@ -116,7 +114,8 @@ impl SensorDriver for AHT20 {
         match board.ic2_write(AHTX0_I2CADDR_DEFAULT, &[AHTX0_CMD_SOFTRESET]) {
             Ok(_) => {},
             Err(err) => {
-                rprintln!("Failed to setup AHTX0 {:?}", err);
+                board.serial_debug(format_args!("Failed to setup AHTX0 {:?}", err));
+                defmt::println!("Failed to setup AHTX0 {:?}", err);
                 self.enabled = false;
                 return;
             }
@@ -125,7 +124,7 @@ impl SensorDriver for AHT20 {
 
         self.enabled = AHT20::loop_until_ready(board);
         if !self.enabled {
-            board.serial_debug("AHT20 Not Found");
+            board.serial_debug(format_args!("AHT20 Not Found"));
             return;
         }
 
@@ -133,7 +132,7 @@ impl SensorDriver for AHT20 {
             AHT20::self_calibrate(board);
 
             if !AHT20::is_calibrated(board) {
-                rprintln!("Failed to calibrate AHTX0");
+                defmt::println!("Failed to calibrate AHTX0");
                 return;
             }
         }
@@ -155,7 +154,7 @@ impl SensorDriver for AHT20 {
         match board.ic2_write(AHTX0_I2CADDR_DEFAULT, &cmd) {
             Ok(_) => {},
             Err(err) => {
-                rprintln!("Failed write to AHT20 {:?}", err);
+                defmt::println!("Failed write to AHT20 {:?}", err);
                 self.humidity = MAX;
                 self.temperature = MAX
             },
@@ -167,7 +166,7 @@ impl SensorDriver for AHT20 {
         match board.ic2_read(AHTX0_I2CADDR_DEFAULT, &mut data){
             Ok(_) => {},
             Err(err) => {
-                rprintln!("Failed write to AHT20 {:?}", err);
+                defmt::println!("Failed write to AHT20 {:?}", err);
                 self.humidity = MAX;
                 self.temperature = MAX
             },
@@ -195,7 +194,7 @@ impl SensorDriver for AHT20 {
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
         if !self.enabled{ 
-           return Ok(-1.0f64) 
+           return Ok(-9999.0f64) 
         }
         match index {
             0 => Ok(self.humidity),
@@ -223,25 +222,9 @@ impl SensorDriver for AHT20 {
     }
     
     fn clear_calibration(&mut self) {
-        rprintln!("not implemented");
+        defmt::println!("not implemented");
     }
-    
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // TODO: this can become a utility or macro function
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
 
-        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
-        for i in 0..8 {
-            rprintln!("saving {:#b}", special_settings_bytes[i]);
-        }
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-        rprintln!("saving {:X?}", storage);
-    }
-       
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-    }
 }
 
 impl AHT20 {

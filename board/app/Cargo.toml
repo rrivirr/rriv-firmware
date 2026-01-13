@@ -10,17 +10,18 @@ cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 
 # Panic behaviour, see https://crates.io/keywords/panic-impl for alternatives
-panic-halt = "0.2.0"
-# panic-abort = "0.3.2"
-# panic_rtt = "0.3.0"
+# panic-halt = "0.2.0"
+# we use a custom panic handler that we implemented ourselves
+
 
 
 unwrap-infallible = "0.1.5"
-rtt-target = "0.4.0"
+rtt-target = { version = "0.6.1", features =  ["defmt"] }
 embedded-alloc = "0.5.0"
 rriv_board_0_4_2 = { path = "../rriv_board_0_4_2" }
 datalogger = { path = "../../src/datalogger" }
 rriv_board = { path = "../rriv_board", features = ["24LC08"]}
+defmt = "1.0.1"
 
 [dependencies.stm32f1xx-hal]
 version = "0.10.0"
