@@ -1,3 +1,16 @@
+# [1.4.0](https://github.com/rrivirr/rriv-firmware/compare/v1.3.0...v1.4.0) (2026-01-13)
+
+
+### Bug Fixes
+
+* enable both single and mux ring temp drivers ([9780c79](https://github.com/rrivirr/rriv-firmware/commit/9780c79439db11d28d456e313c155ead943acc7a))
+
+
+### Features
+
+* basic mux test working ([14b6b78](https://github.com/rrivirr/rriv-firmware/commit/14b6b78f5b91984b01e509638ff902e7e346dfa7))
+* configurable number of sensors ([ef86451](https://github.com/rrivirr/rriv-firmware/commit/ef86451c5d9c02a08131cbb80b234a7dfb298b75))
+
 # [1.3.0](https://github.com/rrivirr/rriv-firmware/compare/v1.2.0...v1.3.0) (2026-01-13)
 
 
