@@ -603,8 +603,8 @@ impl DataLogger {
                             board.usb_serial_send(format_args!("{}",&output));
                         }
                         Err(_) => {
-                            defmt::println!("{}", "Error writing measured");
-                            board.usb_serial_send(format_args!("{}","Error writing measured"));
+                            defmt::println!("{}", "Error getting measurement");
+                            board.usb_serial_send(format_args!("{}","Error"));
                         }
                     }
 
