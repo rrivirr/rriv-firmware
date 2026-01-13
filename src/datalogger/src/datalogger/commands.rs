@@ -120,8 +120,7 @@ pub fn build_driver(
         }
     }
 
-    Err("build fn missing") // panic?
-
+    Err("build fn missing") 
 }
 
 pub fn find_empty_slot(
