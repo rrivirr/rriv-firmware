@@ -1,28 +1,24 @@
-#![cfg_attr(not(test), no_std)]
-
-use control_interface::command_recognizer::{CommandData, CommandRecognizer};
+use control_interface::command_recognizer::{BUFFER_SIZE, CommandData, CommandRecognizer};
 use control_interface::command_registry::CommandType;
 use rriv_board::{RRIVBoard, RXProcessor};
 
 extern crate alloc;
 use alloc::boxed::Box;
-use alloc::format;
 use serde_json::Value;
 
 use core::borrow::BorrowMut;
 use core::ffi::CStr;
 use serde::{Deserialize, Serialize};
 
-use rtt_target::rprintln;
 
 
 use crate::datalogger::payloads::*;
 
 static mut COMMAND_DATA: CommandData = CommandData::default();
+static mut PENDING_MESSAGE_COUNT: usize = 0;
+static mut COMMAND: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
 
-// pub struct CommandService {
-//     // registry: CommandRegistry,
-// }
+
 
 #[derive(Serialize, Deserialize)]
 struct CLICommand<'a> {
@@ -31,50 +27,37 @@ struct CLICommand<'a> {
     subcommand: Option<Box<str>>
 }
 
-// impl CommandService {
-// pub fn new() -> Self {
-//     // set the static, shareable command data
-//     // CommandService {
-//     //     registry: CommandRegistry::new(),
-//     // }
-// }
 
 /// set the global rx processor
 pub fn setup(board: &mut impl RRIVBoard) {
     let char_processor = Box::<CharacterProcessor>::leak(Box::new(CharacterProcessor::new()));
 
     // pass a pointer to the lleaked processor to Board::set_rx_processor
-    board.set_rx_processor(Box::new(char_processor));
+    board.set_serial_rx_processor( rriv_board::SerialRxPeripheral::CommandSerial, Box::new(char_processor));
 }
 
-/// register a command with two &strs, object and action, and a C function pointer that matches registry.register_command's second argument
-/// this calls registry.get_command_from_parts to get a Command object, then calls registry.register_command
-// pub fn register_command(
-//     &mut self,
-//     object: &str,
-//     action: &str,
-//     ffi_cb: extern "C" fn(*const c_char),
-// ) {
-//     let command = self.registry.get_command_from_parts(object, action);
-//     self.registry.register_command(command, ffi_cb);
-// }
 
 fn pending_message_count(board: &impl RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
         let command_data = COMMAND_DATA.borrow_mut();
-        CommandRecognizer::pending_message_count(&command_data)
+        PENDING_MESSAGE_COUNT = CommandRecognizer::pending_message_count(&command_data);
     };
 
-    board.critical_section(get_pending_message_count)
+    board.critical_section(get_pending_message_count);
+    let pending_message_count = unsafe { PENDING_MESSAGE_COUNT };
+    return pending_message_count;
 }
 
-fn take_command(board: &impl RRIVBoard) -> Result<[u8; 500], ()> {
+fn take_command(board: &impl RRIVBoard) -> Result<[u8; BUFFER_SIZE], ()> {
     let do_take_command = || unsafe {
         let command_data = COMMAND_DATA.borrow_mut();
-        Ok(CommandRecognizer::take_command(command_data))
+        COMMAND = CommandRecognizer::take_command(command_data);
     };
 
-    board.critical_section(do_take_command)
+    board.critical_section(do_take_command);
+
+    let command = unsafe { COMMAND };
+    Ok(command)
 }
 
 pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPayload, CommandError>> {
@@ -82,16 +65,16 @@ pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPaylo
         if let Ok(command_bytes) = take_command(board) {
             let command_cstr = CStr::from_bytes_until_nul(&command_bytes).unwrap(); // TODO: do we really need CStr here?  I don't think so...
             let command_identification_result = identify_serial_command(command_cstr);
-            // rprintln!("{:?}", command_identification_result);
+            // defmt::println!("{:?}", command_identification_result);
             match command_identification_result {
                 Ok(command_type) => {
                     let result: Result<CommandPayload, _> =
                         get_command_payload(command_type, command_cstr);
-                    // rprintln!("{:?}", result);
+                    // defmt::println!("{:?}", result);
                     return Some(result);
                 }
                 Err(error) => {
-                    rprintln!("{:?} {:?}", error, command_cstr);
+                    defmt::println!("{:?} {:?}", defmt::Debug2Format(&error), defmt::Debug2Format(&command_cstr));
                     return Some(Err(error))
                 }
             }
@@ -102,13 +85,9 @@ pub fn get_pending_command(board: &impl RRIVBoard) -> Option<Result<CommandPaylo
 
 pub fn get_command_from_parts(object: &str, action: &str, subcommmand: Option<Box<str>>) -> CommandType {
     if let Some(subcommand) = subcommmand {
-        let command_str = format!("{}_{}_{}", object, action, subcommand);
-        rprintln!("{:?}", command_str);
-        CommandType::from_str(&command_str)
+        CommandType::from((object, action, subcommand.as_ref()) )
     } else {
-        let command_str = format!("{}_{}", object, action);
-        rprintln!("{:?}", command_str);
-        CommandType::from_str(&command_str)
+        CommandType::from((object, action, ""))
     }
 }
 
@@ -133,7 +112,7 @@ where
     T: Deserialize<'a>,
 {
     let command_data_str = command_cstr.to_str().unwrap();
-    rprintln!("{}", command_data_str);
+    defmt::println!("{}", command_data_str);
 
     return serde_json::from_str::<T>(command_data_str);
 }
@@ -187,7 +166,7 @@ fn get_command_payload(
                 parse_command_to_payload!(SensorListPayload, CommandPayload::SensorList, command_cstr);
             },
         CommandType::SensorCalibratePoint => {
-                // rprintln!("parsing SensorCalibratePoint");
+                // defmt::println!("parsing SensorCalibratePoint");
                 parse_command_to_payload!(SensorCalibratePointPayload, CommandPayload::SensorCalibratePoint, command_cstr);
             },
         CommandType::SensorCalibrateList => {
@@ -257,7 +236,7 @@ impl<'a> CharacterProcessor {
 }
 
 impl<'a, 'b> RXProcessor for CharacterProcessor {
-    fn process_character(&self, character: u8) {
+    fn process_byte(&mut self, character: u8) {
         unsafe {
             let command_data = COMMAND_DATA.borrow_mut();
             CommandRecognizer::process_character(command_data, character);

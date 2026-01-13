@@ -1,11 +1,8 @@
 use alloc::boxed::Box;
-use rtt_target::rprintln;
-
 use crate::drivers::{ types::{SensorDriver, SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE}};
-use util::{any_as_u8_slice};
 
 
-const SENSOR_NAMES: [&str; 9] = [
+const SENSOR_NAMES: [&str; 11] = [
     "no_match",
     "generic_analog",
     "atlas_ec",
@@ -15,6 +12,8 @@ const SENSOR_NAMES: [&str; 9] = [
     "timed_switch_2",
     "ds18b20",
     "k30_co2",
+    "ring_temp_sim",
+    "groundwater_rtu"
 ];
 
 pub fn sensor_type_id_from_name(name: &str) -> Result<u16, ()> {
@@ -84,7 +83,10 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::generic_analog::GenericAnalog,
         crate::drivers::generic_analog::GenericAnalogSpecialConfiguration
     )); 
-    driver_create_functions[2] = None;
+    driver_create_functions[2] = Some(driver_create_functions!(
+        crate::drivers::atlas_ec::AtlasEC,
+        crate::drivers::atlas_ec::AtlasECSpecialConfiguration
+    ));
     driver_create_functions[3] = Some(driver_create_functions!(
         crate::drivers::aht20::AHT20,
         crate::drivers::aht20::AHT20SpecialConfiguration
@@ -108,6 +110,14 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
     driver_create_functions[8] = Some(driver_create_functions!(
         crate::drivers::k30_co2::K30CO2, 
         crate::drivers::k30_co2::K30CO2SpecialConfiguration
+    ));
+    driver_create_functions[9] = Some(driver_create_functions!(
+        crate::drivers::ring_temperature_sim::RingTemperatureDriver,
+        crate::drivers::ring_temperature_sim::RingTemperatureDriverSpecialConfiguration
+    ));
+    driver_create_functions[10] = Some(driver_create_functions!(
+        crate::drivers::modbus::ModbusDriver,
+        crate::drivers::modbus::ModbusDriverSpecialConfiguration
     ));
 
     driver_create_functions

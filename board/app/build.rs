@@ -46,6 +46,7 @@ fn main() {
     macos_copy_memory_x();
     // https://doc.rust-lang.org/rustc/command-line-arguments.html#option-l-search-path
     println!("cargo:rustc-link-search=./target/thumbv7m-none-eabi/debug");
+
     // println!("cargo:rustc-link-lib=static=rriv_0_4");
 
     let branch = Command::new("git")

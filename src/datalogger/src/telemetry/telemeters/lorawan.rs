@@ -1,15 +1,14 @@
 use core::fmt::Write;
 
-use rriv_board::gpio::GpioMode;
 use rriv_board::RRIVBoard;
-use rtt_target::rprintln;
 use serde_json::json;
 use util::str_from_utf8;
 
-use crate::drivers::resources::gpio::GpioRequest;
+use crate::telemetry::codecs::naive_codec;
+use crate::{drivers::resources::gpio::GpioRequest, telemetry::telemeters::Telemeter};
 use crate::services::usart_service;
 use alloc::string::{String,ToString};
-use alloc::format;
+use alloc::boxed::Box;
 
 #[derive(Clone, Copy)]
 enum RakWireless3172Step {
@@ -84,15 +83,15 @@ impl RakWireless3172 {
         self.watch = watch;
     }
 
-    fn send_and_increment_step(&mut self, board: &mut impl RRIVBoard, message: &str) {
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+    fn send_and_increment_step(&mut self, board: &mut dyn RRIVBoard, message: &str) {
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);        
         self.usart_send_time = board.timestamp();
         self.telemetry_step = self.telemetry_step.next();
-        rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+        defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
     }
 
-    fn check_ok_or_restart(&mut self, board: &mut impl RRIVBoard) {
+    fn check_ok_or_restart(&mut self, board: &mut dyn RRIVBoard) {
         match usart_service::take_command(board) {
             Ok(message) => {
                 let mut message = message;
@@ -102,17 +101,24 @@ impl RakWireless3172 {
                         Some(index) => {
                             if index == 0 {
                                 self.telemetry_step = self.telemetry_step.next();
-                                rprintln!("trying telemetry step {}", self.telemetry_step as u8);
+                                defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
+                                return;
+                            } else {
+                                board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                                defmt::println!("telem not ok: {}", message);
+                                self.telemetry_step = RakWireless3172Step::Begin;
                                 return;
                             }
                         }
                         None => {
-                            rprintln!("telem not ok: {}", message);
+                            board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                            defmt::println!("telem not ok: {}", message);
                             self.telemetry_step = RakWireless3172Step::Begin;
                             return;
                         }
                     },
-                    Err(_) => {
+                    Err(e) => {
+                        defmt::println!("telem message not ok: {:?}", defmt::Debug2Format(&e));
                         self.telemetry_step = RakWireless3172Step::Begin; // bad message
                         return;
                     }
@@ -122,9 +128,9 @@ impl RakWireless3172 {
         }
 
         // need to check for a timeout here
-        // rprintln!("no message, checking timeout");
+        // defmt::println!("no message, checking timeout");
         if board.timestamp() - self.usart_send_time > 2 {
-            rprintln!("timed out, going to step 0");
+            defmt::println!("timed out, going to step 0");
             self.telemetry_step = RakWireless3172Step::Begin;
         }
     }
@@ -132,7 +138,7 @@ impl RakWireless3172 {
     // TODO: need a command recieved queue, just like for USB
     // AT_BUSY_ERROR
     // Restricted_Wait_158785
-    fn check_joined(&mut self, board: &mut impl RRIVBoard) {
+    fn check_joined(&mut self, board: &mut dyn RRIVBoard) {
         while match usart_service::take_command(board) {
             Ok(message) => {
                 // handle join
@@ -142,7 +148,7 @@ impl RakWireless3172 {
 
                 if message.contains("+EVT") || message.contains("AT+") || message.contains("Restricted"){
                     if self.watch {
-                        board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str())
+                        board.usb_serial_send(format_args!("LoRaWAN: {}\n", message))
                     }
                 }
 
@@ -150,7 +156,7 @@ impl RakWireless3172 {
                     Some(index) => {
                         if index == 0 {
                             self.telemetry_step = self.telemetry_step.next();
-                            rprintln!("Joined!!");
+                            defmt::println!("Joined!!");
                             return;
                         }
                         true
@@ -168,119 +174,22 @@ impl RakWireless3172 {
         }
     }
 
-    pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
-        match self.telemetry_step {
-            RakWireless3172Step::Begin => {
-                rprintln!("trying telemetry step {}", self.telemetry_step as u8);
-                self.send_and_increment_step(board, "AT+JOIN=0");
-            }
-            RakWireless3172Step::StopJoinConfirm => {
-                self.check_ok_or_restart(board);
-            }
-            RakWireless3172Step::SetBand => {
-                self.send_and_increment_step(board, "AT+BAND=5");
-            }
-            RakWireless3172Step::SetBandConfirm => {
-                self.check_ok_or_restart(board);
-            }
-            RakWireless3172Step::SetMask => {
-                self.send_and_increment_step(board, "AT+MASK=0002");
-            }
-            RakWireless3172Step::SetMaskConfirm => {
-                self.check_ok_or_restart(board);
-            }
-            RakWireless3172Step::StartJoin => {
-                self.send_and_increment_step(board, "AT+JOIN=1:0:15:100");
-            }
-            RakWireless3172Step::StartJoinConfirm => {
-                self.check_ok_or_restart(board);
-            }
-            RakWireless3172Step::CheckJoined => {
-                self.check_joined(board);
-            }
-            _ => {}
-        }
-
-        // rprintln!("done setting up lorawan")
-    }
-
-    pub fn transmit(&mut self, board: &mut impl RRIVBoard, payload: &[u8]) {
-        // AT+SEND=14:696E746572727570743
-
-        let mut s = String::with_capacity(payload.len() * 2);
-        for byte in payload {
-            write!(&mut s, "{:02X}", byte);
-        }
-
-        let command = format!("AT+SEND={}:{}\r\n", payload.len(), s.as_str());
-        board.usart_send(command.as_str());
-        self.last_transmission = board.timestamp();
-    }
-
-    pub fn ready_to_transmit(&mut self, board: &mut impl RRIVBoard) -> bool {
-        if self.status() != "Joined" {
-            return false;
-        }
-
-        if board.timestamp() < self.last_transmission + 10 {
-            false
-        } else {
-            true
-        }
-    }
-
-    pub fn process_events(&mut self, board: &mut impl RRIVBoard) {
-        
-        match self.telemetry_step {
-            RakWireless3172Step::Joined => {},
-            _ => return
-        }
-        
-        // TODO: event processing could be combined for all EVT and OK and AT
-        // this probably means adding a local queue for retreived messages
-        while match usart_service::take_command(board) {
-            Ok(message) => {
-                let mut message = message;
-                let message = str_from_utf8(&mut message);
-                let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan: {}", message);
-
-                // handle other events
-                if message.contains("+EVT") || message.contains("AT") || message.contains("Restricted"){
-                    if self.watch {
-                        board.usb_serial_send(format!("LoRaWAN: {}\n", message).as_str())
-                    }
-                    if message.starts_with("AT_NO_NETWORK_JOINED") {
-                        self.telemetry_step = RakWireless3172Step::Begin;
-                    } else if message.starts_with("AT_BUSY_ERROR") {
-                        // duty cycle or other busyness
-                    } else {
-
-                    }
-
-                }
-                true
-            }
-            Err(_) => false,
-        } {}
-    }
-
-    pub fn get_identity(&mut self, board: &mut impl RRIVBoard) -> Result<String,()>{
+     pub fn get_identity(&mut self, board: &mut dyn RRIVBoard) -> Result<String,()>{
         // get Dev EUI and Join EUI sychronously from the board
 
         let mut dev_eui: String = String::new(); // TODO: consider handling this in more pure no_std
         let mut join_eui: String = String::new();
 
         let message = "AT+DEVEUI=?";
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);
         board.delay_ms(1000); // let the chip respond
         while match usart_service::take_command(board) { // because other async stuff could happen in the meantime
             Ok(message) => {
                 let mut message = message;
                 let message = str_from_utf8(&mut message);
                 let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan2: {}", message);
+                defmt::println!("lorawan2: {}", message);
 
                 let mut continuing: bool = true;
                 // handle the response we are looking for
@@ -301,15 +210,15 @@ impl RakWireless3172 {
         } {}
 
         let message = "AT+APPEUI=?";
-        let prepared_message = format!("{}\r\n", message);
-        board.usart_send(&prepared_message);
+        let prepared_message = format_args!("{}\r\n", message);
+        usart_service::format_and_send(board, prepared_message);
         board.delay_ms(1000); // let the chip respond
         while match usart_service::take_command(board) { // because other async stuff could happen in the meantime
             Ok(message) => {
                 let mut message = message;
                 let message = str_from_utf8(&mut message);
                 let message = message.unwrap_or("invalid message");
-                rprintln!("lorawan2: {}", message);
+                defmt::println!("lorawan2: {}", message);
 
                 let mut continuing: bool = true;
                 // handle the response we are looking for
@@ -340,8 +249,116 @@ impl RakWireless3172 {
         Ok(identity)
 
     }
+}
 
-    pub fn get_requested_gpios(&self) -> GpioRequest {
+impl Telemeter for RakWireless3172 {
+    fn run_loop_iteration(&mut self, board: &mut dyn RRIVBoard) {
+        match self.telemetry_step {
+            RakWireless3172Step::Begin => {
+                defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
+                self.send_and_increment_step(board, "AT+JOIN=0");
+            }
+            RakWireless3172Step::StopJoinConfirm => {
+                self.check_ok_or_restart(board);
+            }
+            RakWireless3172Step::SetBand => {
+                self.send_and_increment_step(board, "AT+BAND=5");
+            }
+            RakWireless3172Step::SetBandConfirm => {
+                self.check_ok_or_restart(board);
+            }
+            RakWireless3172Step::SetMask => {
+                self.send_and_increment_step(board, "AT+MASK=0002");
+            }
+            RakWireless3172Step::SetMaskConfirm => {
+                self.check_ok_or_restart(board);
+            }
+            RakWireless3172Step::StartJoin => {
+                self.send_and_increment_step(board, "AT+JOIN=1:0:15:100");
+            }
+            RakWireless3172Step::StartJoinConfirm => {
+                self.check_ok_or_restart(board);
+            }
+            RakWireless3172Step::CheckJoined => {
+                self.check_joined(board);
+            }
+            _ => {}
+        }
+
+        // defmt::println!("done setting up lorawan")
+    }
+
+    fn transmit(&mut self, board: &mut dyn RRIVBoard, values: &[i16]) {
+        // AT+SEND=14:696E746572727570743
+
+
+        let mut payload: [u8; naive_codec::MAX_BYTES] = [0; naive_codec::MAX_BYTES];
+        let size = naive_codec::encode(board.epoch_timestamp(), &values, &mut payload);
+       
+
+        let mut s = String::with_capacity(payload.len() * 2);
+        for byte in &payload {
+            match write!(&mut s, "{:02X}", byte) {
+                Ok(_) => {},
+                Err(err) => defmt::println!("{}", defmt::Debug2Format(&err)),
+            }
+        }
+
+        let args = format_args!("AT+SEND={}:{}\r\n", payload.len(), s.as_str()); 
+        usart_service::format_and_send(board, args);
+        self.last_transmission = board.timestamp();
+    }
+
+    fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
+        if self.status() != "Joined" {
+            return false;
+        }
+
+        if board.timestamp() < self.last_transmission + 10 {
+            false
+        } else {
+            true
+        }
+    }
+
+    // return binary command request here, if we got one.
+    fn process_events(&mut self, board: &mut dyn RRIVBoard) {
+        
+        match self.telemetry_step {
+            RakWireless3172Step::Joined => {},
+            _ => return
+        }
+        
+        // TODO: event processing could be combined for all EVT and OK and AT
+        // this probably means adding a local queue for retreived messages
+        while match usart_service::take_command(board) {
+            Ok(message) => {
+                let mut message = message;
+                let message = str_from_utf8(&mut message);
+                let message = message.unwrap_or("invalid message");
+                defmt::println!("lorawan: {}", message);
+
+                // handle other events
+                if message.contains("+EVT") || message.contains("AT") || message.contains("Restricted"){
+                    if self.watch {
+                        board.usb_serial_send(format_args!("LoRaWAN: {}\n", message))
+                    }
+                    if message.starts_with("AT_NO_NETWORK_JOINED") {
+                        self.telemetry_step = RakWireless3172Step::Begin;
+                    } else if message.starts_with("AT_BUSY_ERROR") {
+                        // duty cycle or other busyness
+                    } else {
+
+                    }
+
+                }
+                true
+            }
+            Err(_) => false,
+        } {}
+    }
+
+    fn get_requested_gpios(&self) -> GpioRequest {
         let mut request = GpioRequest::none();
         request.use_usart();
         return request;

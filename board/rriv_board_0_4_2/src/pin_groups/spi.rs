@@ -1,9 +1,13 @@
 use stm32f1xx_hal::gpio::*;
 use crate::pins::*;
 
+// The 2nd SPI interface, for future use
 pub struct Spi1Pins {
+  #[allow(unused)]
   pub sck: Pin<'A', 5, Alternate>,
+  #[allow(unused)]
   pub miso: Pin<'A', 6>,
+  #[allow(unused)]
   pub mosi: Pin<'A', 7, Alternate>,
   // pub sd_card_chip_select: Pin<'C', 8, Output>
 }
