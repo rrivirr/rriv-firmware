@@ -5,7 +5,7 @@ use crate::drivers::{ types::{SensorDriver, SensorDriverGeneralConfiguration, SE
 use util::{any_as_u8_slice};
 
 
-const SENSOR_NAMES: [&str; 9] = [
+const SENSOR_NAMES: [&str; 10] = [
     "no_match",
     "generic_analog",
     "atlas_ec",
@@ -15,6 +15,7 @@ const SENSOR_NAMES: [&str; 9] = [
     "timed_switch_2",
     "ds18b20",
     "k30_co2",
+    "adc_temperature",
 ];
 
 pub fn sensor_type_id_from_name(name: &str) -> Result<u16, ()> {
@@ -108,6 +109,10 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
     driver_create_functions[8] = Some(driver_create_functions!(
         crate::drivers::k30_co2::K30CO2, 
         crate::drivers::k30_co2::K30CO2SpecialConfiguration
+    ));
+    driver_create_functions[9] = Some(driver_create_functions!(
+            crate::drivers::adc_temperature::ADCTemperatureDriver,
+            crate::drivers::adc_temperature::ADCTemperatureDriverSpecialConfiguration
     ));
 
     driver_create_functions

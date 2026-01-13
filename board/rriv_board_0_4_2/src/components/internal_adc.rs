@@ -90,5 +90,10 @@ impl InternalAdc {
     
   }
 
+  pub fn read_tempertature(&mut self) -> i32 {
+    
+    let res = self.adc.read_temp();
+    return res;
+  }
 
 }
