@@ -14,15 +14,15 @@ const MULTIPLEXER_ADDRESS: u8 = 0x70;
 // TODO: calibration offsets for all 6 sensors need to be stored and loaded into this driver, and written to EEPROM.
 
 #[derive(Copy, Clone)]
-pub struct RingTemperatureDriverSpecialConfiguration {
+pub struct RingMuxTemperatureDriverSpecialConfiguration {
     channels: usize,
     sensors: usize,
     calibration_offset: [i16; 8], // 16
     address_offset: u8, // 1
 }
 
-impl RingTemperatureDriverSpecialConfiguration {
-    pub fn parse_from_values(value: serde_json::Value) -> Result<RingTemperatureDriverSpecialConfiguration, &'static str> {
+impl RingMuxTemperatureDriverSpecialConfiguration {
+    pub fn parse_from_values(value: serde_json::Value) -> Result<RingMuxTemperatureDriverSpecialConfiguration, &'static str> {
         
         let mut channels = 0;
         match &value["channels"] {
@@ -74,10 +74,10 @@ impl RingTemperatureDriverSpecialConfiguration {
 
     pub fn new_from_bytes(
         bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
-    ) -> RingTemperatureDriverSpecialConfiguration {
+    ) -> RingMuxTemperatureDriverSpecialConfiguration {
         let settings = bytes
             .as_ptr()
-            .cast::<RingTemperatureDriverSpecialConfiguration>();
+            .cast::<RingMuxTemperatureDriverSpecialConfiguration>();
         unsafe { *settings }
     }
 }
@@ -85,17 +85,17 @@ impl RingTemperatureDriverSpecialConfiguration {
 const TEMPERATURE_SENSORS_ON_RING: usize = 8;
 const MAX_CHANNELS: usize = 8;
 
-pub struct RingTemperatureDriver {
+pub struct RingMuxTemperatureDriver {
     general_config: SensorDriverGeneralConfiguration,
-    special_config: RingTemperatureDriverSpecialConfiguration,
+    special_config: RingMuxTemperatureDriverSpecialConfiguration,
     measured_parameter_values: [f64; TEMPERATURE_SENSORS_ON_RING * 2 * MAX_CHANNELS], // 8 channels
     sensor_drivers: [MCP9808TemperatureDriver; TEMPERATURE_SENSORS_ON_RING],
 }
 
-impl RingTemperatureDriver {
+impl RingMuxTemperatureDriver {
     pub fn new(
         general_config: SensorDriverGeneralConfiguration,
-        special_config: RingTemperatureDriverSpecialConfiguration,
+        special_config: RingMuxTemperatureDriverSpecialConfiguration,
     ) -> Self {
 
         let mut addresses = [0u8; TEMPERATURE_SENSORS_ON_RING];
@@ -113,7 +113,7 @@ impl RingTemperatureDriver {
             addresses[i] = addresses[i] + special_config.address_offset;
         }
 
-        RingTemperatureDriver {
+        RingMuxTemperatureDriver {
             general_config,
             special_config,
             measured_parameter_values: [0.0; TEMPERATURE_SENSORS_ON_RING * 2 * 8],
@@ -233,7 +233,7 @@ impl RingTemperatureDriver {
 
 const INDEX_TO_BYTE_CHAR: [u8; TEMPERATURE_SENSORS_ON_RING] = [b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H'];
 
-impl SensorDriver for RingTemperatureDriver {
+impl SensorDriver for RingMuxTemperatureDriver {
 
     // TODO: this should come from a derived trait
     fn get_configuration_json(&mut self) -> serde_json::Value {
