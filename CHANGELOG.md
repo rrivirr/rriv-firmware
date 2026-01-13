@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/rrivirr/rriv-firmware/compare/v1.2.0...v1.3.0) (2026-01-13)
+
+
+### Features
+
+* adc_internal temperature driver ([89778db](https://github.com/rrivirr/rriv-firmware/commit/89778db4c0759f713016ec38fa9500f67624cff4))
+
 # [1.2.0](https://github.com/rrivirr/rriv-firmware/compare/v1.1.12...v1.2.0) (2025-12-08)
 
 
