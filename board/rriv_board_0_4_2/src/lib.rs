@@ -133,6 +133,7 @@ impl Board {
         // setting the pin for receiving telemetry on UART5
         self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
         self.get_sensor_driver_services().write_gpio_pin(2, false);
+        defmt::println!("board started");
 
     }
 
@@ -1123,10 +1124,11 @@ impl BoardBuilder {
             mapr,
             // Config::default().baudrate(38400.bps()).wordlength_8bits().parity_none().stopbits(StopBits::STOP1), // this worked for the nox sensor
             Config::default()
-                .baudrate(38400.bps()) // going slower for uart5 and rs485 for now
+                .baudrate(115200.bps())// this appears to be right for the RAK 3172
+                // .baudrate(38400.bps()) // going slower for uart5 and rs485 for now
                 .wordlength_8bits()
                 .parity_none()
-                .stopbits(StopBits::STOP1), // this appears to be right for the RAK 3172
+                .stopbits(StopBits::STOP1), 
             &clocks,
         );
 
