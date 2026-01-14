@@ -358,14 +358,9 @@ impl SensorDriver for TimedSwitch2 {
         }
 
         if toggle_state { 
-            defmt::println!("toggle state timed switch");
-            self.state = match self.state {
-                0 => 1,
-                1 => 0,
-                _ => 0,
-            };
-            defmt::println!("toggled to {}", self.state );
-            board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+            defmt::println!("toggled to {}", gpio_state);
+            // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
+            board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
             self.last_state_updated_at = timestamp;
         }
     }
