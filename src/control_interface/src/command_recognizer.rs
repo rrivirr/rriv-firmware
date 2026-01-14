@@ -37,6 +37,7 @@ impl CommandRecognizer {
             // we are already recieving, but we got another start chart
             // therefore, we want to restart
             receiving = false; // we will re-do the starting clause below
+            command_data.buffer[command_data.cur] = [b'\0'; BUFFER_SIZE];
         }
 
         if receiving && (character == b'\r' || character == b'\n') {
