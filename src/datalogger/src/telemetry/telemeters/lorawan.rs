@@ -104,14 +104,14 @@ impl RakWireless3172 {
                                 defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
                                 return;
                             } else {
-                                board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                                // board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
                                 defmt::println!("telem not ok: {}", message);
                                 self.telemetry_step = RakWireless3172Step::Begin;
                                 return;
                             }
                         }
                         None => {
-                            board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                            // board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
                             defmt::println!("telem not ok: {}", message);
                             self.telemetry_step = RakWireless3172Step::Begin;
                             return;
@@ -256,6 +256,13 @@ impl Telemeter for RakWireless3172 {
         match self.telemetry_step {
             RakWireless3172Step::Begin => {
                 defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
+                let mut drained = false;
+                while drained == false {
+                    drained = match usart_service::take_command(board) {
+                        Ok(_) => false,
+                        Err(_) => true,
+                    }
+                }
                 self.send_and_increment_step(board, "AT+JOIN=0");
             }
             RakWireless3172Step::StopJoinConfirm => {
@@ -292,19 +299,19 @@ impl Telemeter for RakWireless3172 {
         // AT+SEND=14:696E746572727570743
 
 
-        let mut payload: [u8; naive_codec::MAX_BYTES] = [0; naive_codec::MAX_BYTES];
-        let size = naive_codec::encode(board.epoch_timestamp(), &values, &mut payload);
+        let mut bytes: [u8; naive_codec::MAX_BYTES] = [0; naive_codec::MAX_BYTES];
+        let size = naive_codec::encode(board.epoch_timestamp(), &values, &mut bytes);
        
 
-        let mut s = String::with_capacity(payload.len() * 2);
-        for byte in &payload {
+        let mut s = String::with_capacity(size * 2);
+        for byte in &bytes[0..size] {
             match write!(&mut s, "{:02X}", byte) {
                 Ok(_) => {},
                 Err(err) => defmt::println!("{}", defmt::Debug2Format(&err)),
             }
         }
 
-        let args = format_args!("AT+SEND={}:{}\r\n", payload.len(), s.as_str()); 
+        let args = format_args!("AT+SEND={}:{}\r\n", size, s.as_str()); 
         usart_service::format_and_send(board, args);
         self.last_transmission = board.timestamp();
     }

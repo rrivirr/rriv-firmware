@@ -59,6 +59,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
     let cur = message_data.cur;
     let pos: usize = message_data.command_pos;
 
+    // defmt::println!("{}", character);
     if message_data.cur == message_data.end {
         defmt::println!("usart circular buffer is full");
         return;
@@ -67,7 +68,20 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
     let end_of_string =  character == b'\n' && pos > 0 && message_data.buffer[cur][pos - 1] == b'\r';
     let overflow = pos >= USART_BUFFER_SIZE - 1;
 
-    if end_of_string || overflow {
+    if  overflow {
+        // we have overrun the buffer, so throw it out
+        defmt::println!("usart receive overrun, throw it out");
+        let mut message = message_data.buffer[cur].clone();
+        match str_from_utf8(&mut message)  {
+            Ok(message) =>  defmt::println!("{}", message),
+            Err(_) => {},
+        }
+        message_data.buffer[cur] = [b'\0'; USART_BUFFER_SIZE];
+        message_data.command_pos = 0;
+        return;    
+    } 
+
+    if end_of_string {
         // command is done
         let mut message = message_data.buffer[cur].clone();
         match str_from_utf8(&mut message)  {
@@ -86,7 +100,7 @@ pub fn process_character(message_data: &mut MessageData, character: u8) {
     message_data.buffer[cur][pos] = character;
     if pos < USART_BUFFER_SIZE - 1 { 
         message_data.command_pos = message_data.command_pos + 1;
-    }
+    } 
 }
 
 fn _pending_message_count(message_data: &MessageData) -> usize {
@@ -138,12 +152,13 @@ pub fn take_command(board: &dyn RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()
 
 
 pub fn format_and_send(board: &mut dyn RRIVBoard, args: fmt::Arguments){
-     let mut buf = [0u8;50];
+     let mut buf = [0u8;200];
         match format_no_std::show(
             &mut buf,
             args
         ) {
             Ok(message) => {
+                defmt::println!("{}", message);
                 board.usart_send(message.as_bytes());
             }
             Err(e) => {

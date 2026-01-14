@@ -366,14 +366,13 @@ impl DataLogger {
                                                                   // fileSystemWriteCache->flushCache();
                     if self.interactive_logging {
                         self.write_raw_measurement_to_storage(board);
-                    }
-
-
-                    self.process_telemetry(board);
-                    
+                    }                    
 
                     self.last_interactive_log_time = board.timestamp();
                 }
+                
+                self.process_telemetry(board);
+
             }
             DataLoggerMode::Field => {
                 // run measurement cycle
@@ -726,6 +725,7 @@ impl DataLogger {
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
+                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
                         board.set_debug(false);
                         self.set_telemeter_watch(false);
                         persist = true;
