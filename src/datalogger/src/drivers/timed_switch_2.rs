@@ -80,6 +80,33 @@ impl TimedSwitch2SpecialConfiguration {
             _ => {}
         };
 
+        match &values["period"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_f64() {
+                    let period = number as f32;
+                    if period <= 0.0 {
+                        return Err("period is invalid")
+                    }
+                    self.period = period;
+                }
+            }
+            _ => {}
+        }
+
+        match &values["ratio"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_f64() {
+                    let ratio = number as f32;
+                    if ratio < 0.0 || ratio > 1.0 {
+                        return Err("ratio is invalid")
+                    }
+                    self.ratio = ratio;
+                }
+            }
+            _ => {}
+        } 
+
+
         Ok(())
     }
 
@@ -369,6 +396,8 @@ impl SensorDriver for TimedSwitch2 {
             "on_time_s": self.special_config.on_time_s,
             "off_time_s": self.special_config.off_time_s,
             "gpio_pin": self.special_config.gpio_pin,
+            "period" : self.special_config.period,
+            "ratio" : self.special_config.ratio,
             "initial_state" : initial_state_str,        
         })
     }
