@@ -1,3 +1,10 @@
+# [1.5.0-beta.4](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.3...v1.5.0-beta.4) (2026-01-14)
+
+
+### Bug Fixes
+
+* lorawan flow fixes ([fc43564](https://github.com/rrivirr/rriv-firmware/commit/fc43564d2dfa46933ee0d2e4780640100d7a8c82))
+
 # [1.5.0-beta.3](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.2...v1.5.0-beta.3) (2026-01-13)
 
 
