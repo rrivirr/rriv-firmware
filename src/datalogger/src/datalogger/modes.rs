@@ -34,6 +34,7 @@ pub enum DataLoggerSerialTxMode { //
     Normal,
     Quiet,
     Watch,
+    #[allow(unused)]
     Interactive
 }
 

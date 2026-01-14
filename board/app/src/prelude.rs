@@ -15,9 +15,9 @@ const RAM_END: usize = 0x20010000;
 fn alloc_heap() {
     {
         let heap_size: usize = RAM_END - cortex_m_rt::heap_start() as usize;
-        // rtt_target::rprintln!("heap start: {}", cortex_m_rt::heap_start() as usize);
-        // rtt_target::rprintln!("ram end: {}", RAM_END);
-        // rtt_target::rprintln!("heap size: {}", heap_size);
+        // rtt_target::defmt::println!("heap start: {}", cortex_m_rt::heap_start() as usize);
+        // rtt_target::defmt::println!("ram end: {}", RAM_END);
+        // rtt_target::defmt::println!("heap size: {}", heap_size);
         unsafe { HEAP.init(cortex_m_rt::heap_start() as usize, heap_size) }
     }
 }

@@ -1,6 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 extern crate alloc;
 use alloc::boxed::Box;
+use core::fmt;
+
 
 pub mod gpio;
 
@@ -18,19 +20,28 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
 pub trait RXProcessor: Send + Sync {
-    fn process_character(&'static self, character: u8);
+    fn process_byte(&mut self, byte: u8);
+}
+
+pub enum SerialRxPeripheral{
+    CommandSerial,
+    SerialPeripheral1,
+    SerialPeripheral2
 }
 
 // Board Services Used by Control Logic and Drivers
 macro_rules! control_services {
     () => {
-        fn usb_serial_send(&mut self, string: &str); // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
+        fn usb_serial_send(&mut self, arg: fmt::Arguments);
+                // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
                                                  // maybe rrivctl_send
-        fn usart_send(&mut self, string: &str);
-        fn serial_debug(&mut self, string: &str);    
+        fn usart_send(&mut self, bytes: &[u8]);
+        fn rs485_send(&mut self, message : &[u8]);
+        fn serial_debug(&mut self, args: fmt::Arguments);
         fn delay_ms(&mut self, ms: u16);
         fn timestamp(&mut self) -> i64;
         fn millis(&mut self) -> u32;
+
     };
 }
 
@@ -40,10 +51,8 @@ pub trait RRIVBoard: Send {
     fn run_loop_iteration(&mut self);
 
     // Core Services
-    fn set_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>);
-    fn set_usart_rx_processor(&mut self, processor: Box<&'static dyn RXProcessor>);
-    fn critical_section<T, F>(&self, f: F) -> T where F: Fn() -> T;
-
+    fn set_serial_rx_processor(&mut self, peripheral: SerialRxPeripheral, processor: Box<&'static mut dyn RXProcessor>);
+    fn critical_section(&self, f: fn());
     // Storage Services
     fn store_datalogger_settings(&mut self, bytes: &[u8;EEPROM_DATALOGGER_SETTINGS_SIZE]);
     fn retrieve_datalogger_settings(&mut self, buffer: &mut [u8;EEPROM_DATALOGGER_SETTINGS_SIZE]);
@@ -54,7 +63,7 @@ pub trait RRIVBoard: Send {
     fn set_debug(&mut self, debug: bool);
 
     // Data Logging
-    fn write_log_file(&mut self, data: &str);
+    fn write_log_file(&mut self, args: fmt::Arguments);
     fn flush_log_file(&mut self);
 
 
@@ -112,7 +121,8 @@ pub trait SensorDriverServices {
 
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool);
-    fn read_gpio_pin(&mut self, pin: u8) -> bool;
+    fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()>;
+
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
 
     // fn borrow_one_wire_bus(&mut self) -> &mut dyn OneWireBusInterface;
@@ -122,13 +132,15 @@ pub trait SensorDriverServices {
     fn one_wire_skip_address(&mut self);
     fn one_wire_write_byte(&mut self, byte: u8);
     fn one_wire_match_address(&mut self, address: u64);
-    fn one_wire_read_bytes(&mut self, output: &mut [u8] );
+    fn one_wire_read_bytes(&mut self, output: &mut [u8]) -> Result<(), ()>;
     fn one_wire_bus_start_search(&mut self);
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 
     control_services!();
 
     fn read_temp_adc(&mut self) -> i32;
+    fn disable_interrupts(&self);
+    fn enable_interrupts(&self);
     
 }
 

@@ -1,15 +1,11 @@
-use alloc::format;
 use rriv_board::{RRIVBoard, EEPROM_TOTAL_SENSOR_SLOTS};
-use rtt_target::rprintln;
 use serde_json::{json, Value};
-use util::any_as_u8_slice;
 extern crate alloc;
 use crate::alloc::string::ToString;
-use crate::datalogger::bytes;
 use crate::datalogger::payloads::{
-    SensorCalibratePointPayload, SensorRemovePayload, SensorSetPayload, SensorSetPayloadValues,
+    SensorCalibratePointPayload, SensorSetPayloadValues,
 };
-use crate::drivers::types::{SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE};
+use crate::drivers::types::{SensorDriverGeneralConfiguration};
 use alloc::boxed::Box;
 
 use crate::protocol::responses;
@@ -25,11 +21,11 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
     if let Some(param) = payload.parameter {
         match param {
             serde_json::Value::String(param) => {
-                rprintln!("{:?}", param.as_str());
+                defmt::println!("{:?}", param.as_str());
                 match param.as_str() {
                     "epoch" => {
                         let epoch = board.epoch_timestamp();
-                        board.usb_serial_send(format!("{:}\n", epoch).as_str());
+                        board.usb_serial_send(format_args!("{:}\n", epoch));
                     }
                     "version" => {
                         let mut branch = "none";
@@ -53,9 +49,11 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
                             "br":branch,
                             "ref":gitref
                         });
+
+
                         responses::send_command_response_message(
                             board,
-                            format!("{}\n", response).as_str(),
+                            response.to_string().as_str(),
                         );
                     }
                     "eeprom" => {
@@ -71,13 +69,13 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
             }
             err => {
                 responses::send_command_response_message(board, "Bad param in command");
-                rprintln!("Bad epoch {:?}", err);
+                defmt::println!("Bad epoch {:?}", defmt::Debug2Format(&err));
                 return;
             }
         }
     } else {
         let epoch = board.epoch_timestamp();
-        board.usb_serial_send(format!("{:}", epoch).as_str());
+        board.usb_serial_send(format_args!("{:}", epoch));
     }
 }
 
@@ -94,16 +92,23 @@ pub fn build_driver(
 ) -> Result<Box<dyn SensorDriver>, &'static str> {
    
 
-    rprintln!("looking up funcs");
+    defmt::println!("looking up funcs");
     let registry = crate::registry::get_registry();
-    let create_function = registry[usize::from(payload_values.sensor_type_id)];
+    if payload_values.sensor_type_id.is_none() {
+        return Err(
+            "sensor type not specified"
+        )
+    }
+
+    let sensor_type_id = payload_values.sensor_type_id.unwrap();
+    let create_function = registry[usize::from(sensor_type_id)];
 
     if let Some(functions) = create_function {
         let sensor_id = match payload_values.sensor_id {
             Some(id) => id,
             None => [0;6],
         };
-        let general_settings = SensorDriverGeneralConfiguration::new(sensor_id, payload_values.sensor_type_id);
+        let general_settings = SensorDriverGeneralConfiguration::new(sensor_id, sensor_type_id);
 
         match functions.0(general_settings, raw_payload_values) {
             Err(message) => {
@@ -115,8 +120,7 @@ pub fn build_driver(
         }
     }
 
-    Err("build fn missing") // panic?
-
+    Err("build fn missing") 
 }
 
 pub fn find_empty_slot(
@@ -181,7 +185,7 @@ pub fn find_empty_slot(
 //         slot = empty_slot
 //     };
 
-//     rprintln!("looking up funcs");
+//     defmt::println!("looking up funcs");
 //     let registry = crate::registry::get_registry();
 //     let create_function = registry[usize::from(sensor_type_id)];
 
@@ -259,7 +263,7 @@ pub fn make_unique_sensor_id(
         let sensor_id_scan = sensor_id.clone();
         while i < driver_ids.len() && changed == false {
             let mut same = true;
-            for (j, (u1, u2)) in driver_ids[i].iter().zip(sensor_id_scan.iter()).enumerate() {
+            for (_j, (u1, u2)) in driver_ids[i].iter().zip(sensor_id_scan.iter()).enumerate() {
                 // if hey are equal..
                 if u1 != u2 {
                     same = false;
@@ -288,7 +292,7 @@ pub fn list_sensors(
     board: &mut impl RRIVBoard,
     drivers: &[Option<Box<dyn SensorDriver>>; rriv_board::EEPROM_TOTAL_SENSOR_SLOTS],
 ) {
-    board.usb_serial_send("{\"sensors\":[");
+    board.usb_serial_send(format_args!("{{\"sensors\":["));
     let mut first = true;
     for i in 0..drivers.len() {
         // create json and output it
@@ -296,7 +300,7 @@ pub fn list_sensors(
             if first {
                 first = false
             } else {
-                board.usb_serial_send(",");
+                board.usb_serial_send(format_args!(","));
             }
 
             let mut id_bytes = driver.get_id();
@@ -318,11 +322,10 @@ pub fn list_sensors(
             });
             let string = json.to_string();
             let str = string.as_str();
-            board.usb_serial_send(str);
+            board.usb_serial_send(format_args!("{}", str));
         }
     }
-    board.usb_serial_send("]}");
-    board.usb_serial_send("\n");
+    board.usb_serial_send(format_args!("]}}\n"));
 }
 
 fn value_length(target: &[u8], value: &[u8]) -> usize {
@@ -359,7 +362,7 @@ use alloc::string::String;
 pub fn sensor_add_calibration_point_arguments<'a>(
     payload: &'a SensorCalibratePointPayload,
 ) -> Result<(&'a String, f64), &'static str> {
-    rprintln!("Sensor calibrate point payload");
+    defmt::println!("Sensor calibrate point payload");
 
     let id = match payload.id {
         serde_json::Value::String(ref payload_id) => payload_id,
@@ -393,7 +396,7 @@ pub fn sensor_add_calibration_point_arguments<'a>(
 //             let count = driver.get_measured_parameter_count() / 2; // TODO: get_measured_parameter_count, vs get_output_parameter_count
 //             let mut values = Box::new([0_f64; 10]); // TODO: max of 10, should we make this dynamic?
 //             for j in 0..count {
-//                 rprintln!("{:?}", j);
+//                 defmt::println!("{:?}", j);
 //                 let value = match driver.get_measured_parameter_value(j * 2) {
 //                     Ok(value) => value,
 //                     Err(_) => {

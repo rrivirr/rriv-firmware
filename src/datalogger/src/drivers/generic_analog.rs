@@ -2,9 +2,7 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 use bitfield_struct::bitfield;
-use rtt_target::{rprintln};
 use serde_json::json;
-use util::any_as_u8_slice;
 
 pub struct GenericAnalog {
     general_config: SensorDriverGeneralConfiguration,
@@ -44,9 +42,10 @@ impl SensorDriver for GenericAnalog {
         })
     }
 
+    #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         self.m = self.special_config.m as f64;
-        // rprintln!("loading {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
+        // defmt::println!("loading {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
         self.b = self.special_config.b as f64;
     }
  
@@ -65,22 +64,18 @@ impl SensorDriver for GenericAnalog {
     }
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        let mut value = 0;
-        match self.special_config.settings.adc_select() {
-            0 => {
-                value = board.query_internal_adc(self.special_config.sensor_port);
-            }
-            1 => {
-                value = board.query_external_adc(self.special_config.sensor_port);
-            }
-            2_usize.. => todo!("other adcs not implemented"),
-        }
+        let value = 
+            match self.special_config.settings.adc_select() {
+                0 => {
+                    board.query_internal_adc(self.special_config.sensor_port)
+                }
+                1 => {
+                    board.query_external_adc(self.special_config.sensor_port)
+                }
+                2_usize.. => todo!("other adcs not implemented"),
+            };
         self.measured_parameter_values[0] = value.into();
         self.measured_parameter_values[1] = self.m * value as f64 + self.b;
-    }
-
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        // no actuators
     }
 
     fn clear_calibration(&mut self) {
@@ -93,7 +88,7 @@ impl SensorDriver for GenericAnalog {
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
         for i in 0..pairs.len() {
             let pair = &pairs[i];
-            rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+            defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
         }
 
         if pairs.len() != 2 {
@@ -105,10 +100,10 @@ impl SensorDriver for GenericAnalog {
 
         self.m = (cal2.point - cal1.point) / (cal2.values[0] - cal1.values[0]);
         self.b = cal1.point - self.m * cal1.values[0];
-        rprintln!("calibration: {} {}", self.m, self.b);
+        defmt::println!("calibration: {} {}", self.m, self.b);
         self.special_config.m = self.m as f32;
         self.special_config.b = self.b as f32;
-        rprintln!(
+        defmt::println!(
             "calibration: {} {}",
             self.special_config.m,
             self.special_config.b
@@ -117,19 +112,6 @@ impl SensorDriver for GenericAnalog {
         Ok(())
     }
 
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // TODO: this can become a utility or macro function
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
-        for i in 0..8 {
-            rprintln!("saving {:#b}", special_settings_bytes[i]);
-        }
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-        rprintln!("saving {:X?}", storage);
-    }
 }
 
 impl GenericAnalog {
@@ -171,7 +153,6 @@ pub struct GenericAnalogSpecialConfiguration {
     b: f32,                                // 4
     sensor_port: u8,                       // 1
     settings: GenericAnalogDriverBitfield, // 1
-    empty: [u8; 22],                       // 22
 }
 
 impl GenericAnalogSpecialConfiguration {
@@ -217,21 +198,20 @@ impl GenericAnalogSpecialConfiguration {
             m: 0_f32,
             b: 0_f32,
             sensor_port: sensor_port,
-            settings: bitfield,
-            empty: [b'\0'; 22],
+            settings: bitfield
         })
     }
 
     pub fn new_from_bytes(
         bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
     ) -> GenericAnalogSpecialConfiguration {
-        rprintln!("loading: {:X?}", bytes);
+        defmt::println!("loading: {:X}", bytes);
         for i in 0..8 {
-            rprintln!("loading {:#b}", bytes[i]);
+            defmt::println!("loading {:#b}", bytes[i]);
         }
         let settings: *const GenericAnalogSpecialConfiguration = bytes.as_ptr().cast::<GenericAnalogSpecialConfiguration>();
         let settings = unsafe { *settings };
-        // rprintln!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
+        // defmt::println!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
 
         settings
     }

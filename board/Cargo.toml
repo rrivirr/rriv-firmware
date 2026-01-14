@@ -15,7 +15,7 @@ lto = true          # link-time optimizations
 strip = true
 
 [profile.dev]
-#opt-level = 'z'     # optimize for size and don't unroll loops
+opt-level = 'z'     # optimize for size and don't unroll loops
 codegen-units = 1 # setting this to 1 causes better optimizations, but slower code. setting it higher makes compiling parallelizable
 debug =  true      # 
 lto =  false       # link-time optimizations

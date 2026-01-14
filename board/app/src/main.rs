@@ -7,12 +7,13 @@
 
 use core::prelude::rust_2024::*;
 use cortex_m_rt::entry;
-use rtt_target::{rtt_init_print};
-use stm32f1xx_hal::{flash::FlashExt, pac::{self, TIM3}, time::{MicroSeconds, MilliSeconds}, timer::{DelayMs, DelayUs}};
+use rriv_board_0_4_2::{HSE_MHZ, PCLK_MHZ, SYSCLK_MHZ};
+use rtt_target::{rtt_init_defmt};
+use stm32f1xx_hal::{flash::FlashExt, pac::TIM3, timer::DelayMs};
 
 pub mod prelude;
 
-use stm32f1xx_hal::prelude::*;
+use stm32f1xx_hal::{pac, prelude::*};
 
 extern crate rriv_board;
 
@@ -22,15 +23,11 @@ use crate::rriv_board::RRIVBoard;
 extern crate datalogger;
 use datalogger::DataLogger;
 
-use rtt_target::rprintln;
-
-extern crate alloc;
-use alloc::format;
 
 
 #[entry]
 fn main() -> ! {
-    rtt_init_print!();
+    rtt_init_defmt!();
     prelude::init();
 
     let mut board = rriv_board_0_4_2::build();
@@ -49,21 +46,21 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    rprintln!("Panicked!");
+    defmt::println!("Panicked!");
     if let Some(location) = _info.location() {
-        rprintln!("at {}", location);
+        defmt::println!("at {}", location);
     }
     
-    rprintln!("with message: {}", _info.message());
+    defmt::println!("with message: {}", defmt::Display2Format(&_info.message()));
     let device_peripherals = unsafe { pac::Peripherals::steal() };
     
     let rcc = device_peripherals.RCC.constrain();
     let mut flash = device_peripherals.FLASH.constrain();
     let clocks = rcc.cfgr
-            .use_hse(8.MHz())
-            .sysclk(48.MHz())
-            .pclk1(24.MHz())
-            .adcclk(14.MHz())
+            .use_hse(HSE_MHZ.MHz())
+            .sysclk(SYSCLK_MHZ.MHz())
+            .pclk1(PCLK_MHZ.MHz())
+            // .adcclk(14.MHz())
             .freeze(&mut flash.acr);
 
     let mut delay: DelayMs<TIM3> = device_peripherals.TIM3.delay(&clocks);
@@ -75,10 +72,10 @@ fn panic(_info: &PanicInfo) -> ! {
     // }
     rriv_board_0_4_2::usb_serial_send(_info.message().as_str().unwrap_or_default(), &mut delay);
     rriv_board_0_4_2::usb_serial_send("\"}\n", &mut delay);
-    rprintln!("send json panic");
+    defmt::println!("send json panic");
 
     // we use format! here because we didn't find another good way yet.
-    rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
+    // rriv_board_0_4_2::write_panic_to_storage(format!("Panick: {} \n", _info.message().as_str().unwrap_or_default()).as_str());
 
     loop {}
 }

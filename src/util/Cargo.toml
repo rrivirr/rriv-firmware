@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+format_no_std = "1.2.0"
+rtt-target = { version = "0.6.1", features =  ["defmt"] }
+defmt = "1.0.1"
+

@@ -7,12 +7,16 @@ use crate::datalogger::payloads::DataloggerSettingsValues;
 
 const DATALOGGER_SETTINGS_UNUSED_BYTES: usize = 13;
 #[bitfield(u8)]
+#[derive(PartialEq)]
 pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub external_adc_enabled: bool,
 
     #[bits(1)]
-    pub enable_telemetry: bool,
+    pub enable_lorawan_telemetry: bool,
+
+    #[bits(1)]
+    pub enable_modbus_rtu: bool,
 
     #[bits(1)]
     pub debug_includes_values: bool,
@@ -23,11 +27,11 @@ pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub log_raw_data: bool,
 
-    #[bits(3)]
+    #[bits(2)]
     unused: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct DataloggerSettings {
     pub deployment_identifier: [u8; 16],
     pub logger_name: [u8; 8],
@@ -70,7 +74,7 @@ impl DataloggerSettings {
         let mut bytes: [u8; EEPROM_DATALOGGER_SETTINGS_SIZE] =
             [0; EEPROM_DATALOGGER_SETTINGS_SIZE];
         let bytes_ref = unsafe { any_as_u8_slice(self) };
-        bytes.clone_from_slice(bytes_ref);
+        bytes[0..bytes_ref.len()].clone_from_slice(bytes_ref);
         bytes
     }
 
@@ -91,7 +95,7 @@ impl DataloggerSettings {
         }
 
         if self.sleep_interval > 60_u16 * 4 {
-            settings.interactive_logging_interval = 15_u16;
+            settings.sleep_interval = 15_u16;
         }
 
 
@@ -118,19 +122,6 @@ impl DataloggerSettings {
         settings
     }
 
-    pub fn get_site_name(&mut self) -> &str {
-        util::str_from_utf8(&mut self.site_name).unwrap()
-    }
-
-    pub fn get_logger_name(&mut self) -> &str {
-        util::str_from_utf8(&mut self.logger_name).unwrap()
-    }
-
-    pub fn get_deployment_identifier(&mut self) -> &str {
-        util::str_from_utf8(&mut self.deployment_identifier).unwrap()
-    }
-
-
     pub fn with_values(self, values: DataloggerSettingsValues ) -> DataloggerSettings{
         let mut settings = DataloggerSettings::new();
         settings.deployment_identifier = values.deployment_identifier.unwrap_or(self.deployment_identifier);
@@ -143,7 +134,8 @@ impl DataloggerSettings {
         settings.start_up_delay = values.start_up_delay.unwrap_or(self.start_up_delay);
         settings.delay_between_bursts = values.delay_between_bursts.unwrap_or(self.delay_between_bursts);
         settings.mode = values.mode.unwrap_or(self.mode);
-        settings.toggles.set_enable_telemetry(values.enable_telemetry.unwrap_or(self.toggles.enable_telemetry()));
+        settings.toggles.set_enable_lorawan_telemetry(values.enable_lorawan_telemetry.unwrap_or(self.toggles.enable_lorawan_telemetry()));
+        settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
         settings
     }
 

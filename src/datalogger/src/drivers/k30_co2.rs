@@ -3,9 +3,7 @@ use core::num::Wrapping;
 use crate::sensor_name_from_type_id;
 
 use super::types::*;
-use rtt_target::{rprintln};
 use serde_json::json;
-use util::any_as_u8_slice;
 
 pub struct K30CO2 {
     general_config: SensorDriverGeneralConfiguration,
@@ -37,6 +35,7 @@ impl SensorDriver for K30CO2 {
         })
     }
 
+    #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
         self.m = self.special_config.m as f64;
         self.b = self.special_config.b as f64;
@@ -84,15 +83,15 @@ impl SensorDriver for K30CO2 {
         command[2] = CO2_VALUE_ADDRESS; // MSB of RAM address is 0;
         let checksum: Wrapping<u8> = Wrapping(command[0]) + Wrapping(command[1]) + Wrapping(command[2]);
         command[3] = checksum.0;
-        rprintln!("command {:X?}", command);
+        defmt::println!("command {:X}", command);
 
         let mut response: [u8; 4] = [0; 4];
         self.measured_parameter_values[0] = -1 as f64;
 
         match board.ic2_write(I2C_ADDRESS, &command) {
-            Ok(_) => rprintln!("request sent ok"),
+            Ok(_) => defmt::println!("request sent ok"),
             Err(err) => {
-                rprintln!("i2c err: {:?}", err);
+                defmt::println!("i2c err: {:?}", err);
                 self.measured_parameter_values[0] = -1 as f64;
                 return;
             }
@@ -103,17 +102,17 @@ impl SensorDriver for K30CO2 {
         
         match board.ic2_read(I2C_ADDRESS, &mut response){
             Ok(_) => {
-                rprintln!("response {:X?}", response);
+                defmt::println!("response {:X}", response);
                 // check if read is complete
                 if response[0] != READ_COMPLETE_STATUS { // read is incomplete
-                    rprintln!("Read incomplete");
+                    defmt::println!("Read incomplete");
                     return; // TODO: retry the read
                 }
 
                 // validate checksum
                 let checksum: Wrapping<u8> = Wrapping(response[0]) + Wrapping(response[1]) + Wrapping(response[2]);
                 if response[3] != checksum.0 {
-                    rprintln!("Invalid checksum");
+                    defmt::println!("Invalid checksum");
                     return; // TODO: retry the read
                 }
 
@@ -127,17 +126,12 @@ impl SensorDriver for K30CO2 {
                 self.measured_parameter_values[0] = value as f64; // / 100_f64;
             },
             Err(err) => { 
-                rprintln!("i2c err: {:?}", err);
+                defmt::println!("i2c err: {:?}", err);
                 self.measured_parameter_values[0] = -1 as f64
             },
         }
-
-       
     }
 
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        // no actuators
-    }
 
     fn clear_calibration(&mut self) {
         self.m = 0_f64;
@@ -149,7 +143,7 @@ impl SensorDriver for K30CO2 {
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
         for i in 0..pairs.len() {
             let pair = &pairs[i];
-            rprintln!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
+            defmt::println!("calib pair{:?} {} {}", i, pair.point, pair.values[0]);
         }
 
         if pairs.len() != 2 {
@@ -161,10 +155,10 @@ impl SensorDriver for K30CO2 {
 
         self.m = (cal2.point - cal1.point) / (cal2.values[0] - cal1.values[0]);
         self.b = cal1.point - self.m * cal1.values[0];
-        rprintln!("calibration: {} {}", self.m, self.b);
+        defmt::println!("calibration: {} {}", self.m, self.b);
         self.special_config.m = self.m as f32;
         self.special_config.b = self.b as f32;
-        rprintln!(
+        defmt::println!(
             "calibration: {} {}",
             self.special_config.m,
             self.special_config.b
@@ -173,19 +167,6 @@ impl SensorDriver for K30CO2 {
         Ok(())
     }
 
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        // TODO: this can become a utility or macro function
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        // rprintln!("saving {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
-        for i in 0..8 {
-            rprintln!("saving {:#b}", special_settings_bytes[i]);
-        }
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
-        rprintln!("saving {:X?}", storage);
-    }
 }
 
 impl K30CO2 {
@@ -207,28 +188,27 @@ impl K30CO2 {
 pub struct K30CO2SpecialConfiguration {
     m: f32,                                // 4
     b: f32,                                // 4
-    empty: [u8; 24],                       // 24
 }
 
 impl K30CO2SpecialConfiguration {
+    #[allow(unused)]
     pub fn parse_from_values(value: serde_json::Value) -> Result<K30CO2SpecialConfiguration, &'static str> {
         Ok( Self {
             m: 0_f32,
             b: 0_f32,
-            empty: [b'\0'; 24]
         } )
     }
 
     pub fn new_from_bytes(
         bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
     ) -> K30CO2SpecialConfiguration {
-        rprintln!("loading: {:X?}", bytes);
+        defmt::println!("loading: {:X}", bytes);
         for i in 0..8 {
-            rprintln!("loading {:#b}", bytes[i]);
+            defmt::println!("loading {:#b}", bytes[i]);
         }
         let settings: *const K30CO2SpecialConfiguration = bytes.as_ptr().cast::<K30CO2SpecialConfiguration>();
         let settings = unsafe { *settings };
-        // rprintln!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
+        // defmt::println!("loading {:#b} {} {} {}", settings.b, settings.b, settings.b as f64, (settings.b as f64) );
 
         settings
     }
