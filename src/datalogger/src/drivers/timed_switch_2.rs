@@ -228,6 +228,7 @@ impl SensorDriver for TimedSwitch2 {
                 self.state = 1;
                 self.last_duty_cycle_update = millis;
                 self.duty_cycle_state = true;
+                self.last_state_updated_at = timestamp;
             }
         } else if self.state == 1 {
             // heater is on
@@ -258,6 +259,7 @@ impl SensorDriver for TimedSwitch2 {
                 toggle_state = true;
                 gpio_state = false;
                 self.state = 0;
+                self.last_state_updated_at = timestamp;
             }
         }
 
@@ -265,7 +267,6 @@ impl SensorDriver for TimedSwitch2 {
             rprintln!("toggled to {}", gpio_state);
             // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
             board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
-            self.last_state_updated_at = timestamp;
         }
     }
     
