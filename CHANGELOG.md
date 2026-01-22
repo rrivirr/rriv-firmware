@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/rrivirr/rriv-firmware/compare/v1.4.0...v1.4.1) (2026-01-22)
+
+
+### Bug Fixes
+
+* off_time now working ([48c3110](https://github.com/rrivirr/rriv-firmware/commit/48c3110e0b79bd3f8a8a67225e440273f7a52234))
+
 # [1.4.0](https://github.com/rrivirr/rriv-firmware/compare/v1.3.0...v1.4.0) (2026-01-13)
 
 
