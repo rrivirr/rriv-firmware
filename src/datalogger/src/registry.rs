@@ -115,7 +115,7 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
             crate::drivers::adc_temperature::ADCTemperatureDriver,
             crate::drivers::adc_temperature::ADCTemperatureDriverSpecialConfiguration
     ));
-    driver_create_functions[5] = Some(driver_create_functions!(
+    driver_create_functions[10] = Some(driver_create_functions!(
         crate::drivers::ring_w_mux::RingMuxTemperatureDriver,
         crate::drivers::ring_w_mux::RingMuxTemperatureDriverSpecialConfiguration
     ));
