@@ -463,7 +463,7 @@ impl DataLogger {
         }    
 
 
-        let mut values: [i16; 26] = [MAX; 26]; // need 26 here to support all the values from the 3d groundwater flow sensor
+        let mut values: [i16; 8*3*2 + 6] = [MAX; 8*3*2 + 6]; // support all the values from the 3d groundwater flow sensor
         // let mut bits: [u8; 12] = [0_u8; 12];
         let mut k = 0; // index of value into the values array
         for i in 0..self.sensor_drivers.len() {
@@ -739,7 +739,9 @@ impl DataLogger {
     }
 
     fn set_telemeter_watch(&mut self, watch: bool) {
-
+        if let Some(tele) = &mut self.lorawan_telemeter {
+            tele.set_watch(watch);
+        }
     }
 
     pub fn execute_command(&mut self, board: &mut impl RRIVBoard, command_payload: CommandPayload) {

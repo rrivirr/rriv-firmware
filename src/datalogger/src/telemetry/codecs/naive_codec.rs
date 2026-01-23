@@ -3,7 +3,7 @@ use core::i16::MAX;
 
 use alloc::boxed::Box;
 
-const MAX_VALUES: usize = 22;
+const MAX_VALUES: usize = 8*3*2 + 6; //
 const BYTES_PER_VALUE: usize = 2;
 pub const MAX_BYTES: usize = 8 + MAX_VALUES * BYTES_PER_VALUE;
 
