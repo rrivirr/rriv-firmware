@@ -239,13 +239,17 @@ impl SensorDriver for RingMuxTemperatureDriver {
     fn get_configuration_json(&mut self) -> serde_json::Value {
         // let sensor_id_str: [u8; 6] = core::str::from_utf8(self.get_id());
 
-        let sensor_name_bytes = sensor_name_from_type_id(self.get_type_id().into());
-        let sensor_name_str = core::str::from_utf8(&sensor_name_bytes).unwrap_or_default();
-
+        let mut sensor_name = sensor_name_from_type_id(self.get_type_id().into());
+        let sensor_name = match util::str_from_utf8(&mut sensor_name) {
+            Ok(sensor_name) => sensor_name,
+            Err(_) => "Invalid",
+        };
         json!({
             "id" : self.get_id(),
-            "type" : sensor_name_str,
-            "calibration_offset": self.special_config.calibration_offset
+            "type" : sensor_name,
+            "calibration_offset": self.special_config.calibration_offset,
+            "channels": self.special_config.channels,
+            "sensors": self.special_config.sensors
         })
     }
 
