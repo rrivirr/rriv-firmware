@@ -739,7 +739,9 @@ impl DataLogger {
     }
 
     fn set_telemeter_watch(&mut self, watch: bool) {
-
+        if let Some(tele) = &mut self.lorawan_telemeter {
+            tele.set_watch(watch);
+        }
     }
 
     pub fn execute_command(&mut self, board: &mut impl RRIVBoard, command_payload: CommandPayload) {
