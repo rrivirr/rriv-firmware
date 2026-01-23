@@ -355,7 +355,9 @@ impl Telemeter for RakWireless3172 {
                     } else if message.starts_with("AT_BUSY_ERROR") {
                         // duty cycle or other busyness
                     } else {
-
+                        // LoRaWAN: +EVT:RX_1:-60:11:UNICAST:10:41
+                        // 41 is the payload here
+                        // we need to pass back to the datalogger, and let the datalogger apply the change
                     }
 
                 }
