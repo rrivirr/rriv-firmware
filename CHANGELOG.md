@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/rrivirr/rriv-firmware/compare/v1.4.1...v1.4.2) (2026-01-23)
+
+
+### Bug Fixes
+
+* typo in registry ([a421775](https://github.com/rrivirr/rriv-firmware/commit/a42177518e7b7027d529f954f4efe04d2659e638))
+
 ## [1.4.1](https://github.com/rrivirr/rriv-firmware/compare/v1.4.0...v1.4.1) (2026-01-22)
 
 
