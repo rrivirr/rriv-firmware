@@ -139,7 +139,7 @@ impl ExternalAdc {
 
 
         let channel_command = build_channel_register_set_command(channel_register);
-        rprintln!("set channel reg: {}", channel_command[1]);
+        defmt::println!("set channel reg: {}", channel_command[1]);
         self.send_i2c(i2c, &channel_command); // writing to the channel register restarts the channel cycle.
 
         let mut buffer: [u8; 2] = [0; 2];
@@ -147,7 +147,7 @@ impl ExternalAdc {
         // MSB and LSB need to be swapped in order to change to little endian
         let conversion_result = ConversionResultRegister::from_be_bytes(buffer);
         let value = conversion_result.conv_result();
-        rprintln!(
+        defmt::println!(
             "EXADC: conversion result {} : {}   {:?}",
             conversion_result.channel(),
             value,
@@ -171,8 +171,8 @@ impl ExternalAdc {
         let configuration_command =
             build_configuration_register_set_command(configuration_register); // swaps to big endian
         self.send_i2c(i2c, &configuration_command);
-        rprintln!(
-            "send config reg: {:X?} {:08b} {:08b} {:08b}",
+        defmt::println!(
+            "send config reg: {:X} {:08b} {:08b} {:08b}",
             configuration_command,
             configuration_command[0],
             configuration_command[1],
@@ -180,23 +180,23 @@ impl ExternalAdc {
         );
         let mut buffer: [u8; 2] = [0; 2];
         self.read_i2c(i2c, ADC_CONFIGURATION_REGISTER_ADDRESS, &mut buffer);
-        rprintln!("config reg: {:X?}", buffer);
+        defmt::println!("config reg: {:X}", buffer);
     }
 
     fn send_i2c(&mut self, i2c: &mut BoardI2c1, bytes: &[u8]) {
-        rprintln!("send i2c {:X?}", bytes);
+        defmt::println!("send i2c {:X}", bytes);
         match i2c.write(ADC_I2C_ADDRESS, bytes) {
             Ok(_) => {}
-            Err(err) => rprintln!("{:?}", err),
+            Err(err) => defmt::println!("{:?}", defmt::Debug2Format(&err)),
         }
     }
 
     fn read_i2c(&mut self, i2c: &mut BoardI2c1, register_address: u8, buffer: &mut [u8]) {
         let address_bytes: [u8; 1] = [register_address];
-        rprintln!("read i2c {:X?}", address_bytes);
+        defmt::println!("read i2c {:X}", address_bytes);
         match i2c.write_read(ADC_I2C_ADDRESS, &address_bytes, buffer) {
             Ok(_) => {}
-            Err(err) => rprintln!("{:?}", err),
+            Err(err) => defmt::println!("{=?}", defmt::Debug2Format(&err)),
         }
     }
 }

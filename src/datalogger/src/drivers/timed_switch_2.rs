@@ -1,10 +1,9 @@
 use core::time;
 
-use rriv_board::gpio::{self, GpioMode};
-use rtt_target::rprintln;
+use rriv_board::gpio::{GpioMode};
 use serde_json::json;
 
-use crate::{any_as_u8_slice, sensor_name_from_type_id};
+use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
@@ -22,6 +21,94 @@ pub struct TimedSwitch2SpecialConfiguration {
 }
 
 impl TimedSwitch2SpecialConfiguration {
+
+    pub fn update_from_values(&mut self, values: serde_json::Value) -> Result<(),&'static str>{
+        match &values["on_time_s"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            self.on_time_s = number;
+                        }
+                        Err(_) => return Err("invalid on time")
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        match &values["off_time_s"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    let number: Result<usize, _> = number.try_into();
+                    match number {
+                        Ok(number) => {
+                            self.off_time_s = number;
+                        }
+                        Err(_) => return Err("invalid off time")
+                    }
+                }
+            },
+            _ => {}
+        }
+
+         match &values["gpio_pin"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_u64() {
+                    if number >= 1 && number <= 8 { //TODO: this is annoying to have to code into each driver
+                       self.gpio_pin = number as u8;
+                    } else {
+                        return Err("invalid pin");
+                    }           
+                } 
+            }
+            _ => {}
+        }
+
+        match &values["initial_state"] {
+            serde_json::Value::String(s) => {
+                let val = s.as_str();
+                let initial_state: bool = match s.to_ascii_lowercase().as_str() {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err("invalid initial state"),
+                };
+                self.initial_state = initial_state;
+                return Ok(());
+            },
+            _ => {}
+        };
+
+        match &values["period"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_f64() {
+                    let period = number as f32;
+                    if period <= 0.0 {
+                        return Err("period is invalid")
+                    }
+                    self.period = period;
+                }
+            }
+            _ => {}
+        }
+
+        match &values["ratio"] {
+            serde_json::Value::Number(number) => {
+                if let Some(number) = number.as_f64() {
+                    let ratio = number as f32;
+                    if ratio < 0.0 || ratio > 1.0 {
+                        return Err("ratio is invalid")
+                    }
+                    self.ratio = ratio;
+                }
+            }
+            _ => {}
+        } 
+
+
+        Ok(())
+    }
 
     pub fn parse_from_values(value: serde_json::Value) -> Result<TimedSwitch2SpecialConfiguration, &'static str> {
         // should we return a Result object here? because we are parsing?  parse_from_values?
@@ -61,12 +148,11 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
-        let mut gpio_pin : Option<u8> = None;
-        match &value["gpio_pin"] {
+        let gpio_pin = match &value["gpio_pin"] {
             serde_json::Value::Number(number) => {
                 if let Some(number) = number.as_u64() {
                     if number >= 1 && number <= 8 { //TODO: this is annoying to have to code into each driver
-                        gpio_pin = Some(number as u8);
+                        Some(number as u8)
                     } else {
                         return Err("invalid pin");
                     }           
@@ -77,17 +163,9 @@ impl TimedSwitch2SpecialConfiguration {
             _ => {
                 return Err("gpio pin is required")
             }
-        }
+        };
 
-        let mut initial_state  = false;
-        match &value["initial_state"] {
-            serde_json::Value::Bool(value) => {
-                initial_state = *value;
-            }
-            _ => {
-                return Err("initial state is requiresd")
-            }
-        }
+       
 
         let mut period: f32 = 10.0;
         match &value["period"] {
@@ -119,6 +197,20 @@ impl TimedSwitch2SpecialConfiguration {
             }
         } 
 
+        
+
+        // initial_state must be a string "on" or "off" (case-insensitive)
+        let s = match &value["initial_state"] {
+            serde_json::Value::String(s) => s.as_str(),
+            _ => return Err("initial_state must be the string \"on\" or \"off\""),
+        };
+        
+        let initial_state: bool = match s.to_ascii_lowercase().as_str() {
+            "on" => true,
+            "off" => false,
+            _ => return Err("invalid initial state"),
+        };
+      
         let gpio_pin = gpio_pin.unwrap_or_default();
         Ok ( Self {
             on_time_s,
@@ -184,6 +276,7 @@ impl SensorDriver for TimedSwitch2 {
         self.last_duty_cycle_update = millis;
         self.duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
         self.duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - self.duty_cycle_on_time;
+        // defmt::println!("Initial state is set to {}", self.state);
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -199,18 +292,21 @@ impl SensorDriver for TimedSwitch2 {
         return 1;
     }
 
+    #[allow(unused)]
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
         Ok(self.state as f64)
     }
 
+    #[allow(unused)]
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8;16] {
         let mut rval = [0u8;16];
-        rval[0..7].clone_from_slice("heater\0".as_bytes());
+        rval[0..7].clone_from_slice("switch\0".as_bytes());
         return rval;
     }
 
+    #[allow(unused)]
     fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
-        //
+        // switch does not take measurement
     }
 
     fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
@@ -222,7 +318,7 @@ impl SensorDriver for TimedSwitch2 {
         if self.state == 0 {
             // heater is off
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
-                rprintln!("state is 0, toggle triggered");
+                defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
                 gpio_state = true;
                 self.state = 1;
@@ -255,7 +351,7 @@ impl SensorDriver for TimedSwitch2 {
 
             // end of on_time (outer cycle)
             if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
-                rprintln!("state is 1, toggle triggered");
+                defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
                 gpio_state = false;
                 self.state = 0;
@@ -264,19 +360,10 @@ impl SensorDriver for TimedSwitch2 {
         }
 
         if toggle_state { 
-            rprintln!("toggled to {}", gpio_state);
+            defmt::println!("toggled to {}", gpio_state);
             // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
             board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
         }
-    }
-    
-    fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]) {
-        
-        let generic_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.general_config) };
-        let special_settings_bytes: &[u8] = unsafe { any_as_u8_slice(&self.special_config) };
-
-        copy_config_into_partition(0, generic_settings_bytes, storage);
-        copy_config_into_partition(1, special_settings_bytes, storage);
     }
     
     fn get_configuration_json(&mut self) -> serde_json::Value {
@@ -294,21 +381,32 @@ impl SensorDriver for TimedSwitch2 {
             Err(_) => "Invalid",
         };
 
+        let initial_state_str: &str = match self.special_config.initial_state {
+            true => "ON",
+            false => "OFF"
+        };  
+
         json!({
             "id" : sensor_id,
             "type" : sensor_name,
             "on_time_s": self.special_config.on_time_s,
             "off_time_s": self.special_config.off_time_s,
             "gpio_pin": self.special_config.gpio_pin,
-            "initial_state" : self.special_config.initial_state
+            "period" : self.special_config.period,
+            "ratio" : self.special_config.ratio,
+            "initial_state" : initial_state_str,        
         })
     }
     
-    fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
-        todo!()
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>{
+        
+        match self.special_config.update_from_values(values){
+            Ok(_) => {                
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        }
+        
     }
-    
-    fn clear_calibration(&mut self) {
-        todo!()
-    }
+   
 }
