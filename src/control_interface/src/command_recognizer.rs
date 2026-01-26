@@ -1,11 +1,11 @@
 // https://ferrous-systems.com/blog/test-embedded-app/
 
-// use rtt_target::rprintln;
+// use rtt_target::defmt::println;
 
 
 
-pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker
-pub const BUFFER_SIZE: usize = 500;
+pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, TODO: what a waste!
+pub const BUFFER_SIZE: usize = 200;
 
 pub struct CommandData {
     receiving: bool,
@@ -30,12 +30,14 @@ impl CommandData {
 pub struct CommandRecognizer {}
 impl CommandRecognizer {
     pub fn process_character(command_data: &mut CommandData, character: u8) {
-        let receiving = command_data.receiving;
-        let starting = character == b'{';
+        let mut receiving = command_data.receiving;
+        let starting = character == b'{'; // no support for nested objects
 
         if receiving && starting {
-            // meaningless character
-            return;
+            // we are already recieving, but we got another start chart
+            // therefore, we want to restart
+            receiving = false; // we will re-do the starting clause below
+            command_data.buffer[command_data.cur] = [b'\0'; BUFFER_SIZE];
         }
 
         if receiving && (character == b'\r' || character == b'\n') {

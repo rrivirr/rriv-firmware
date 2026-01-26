@@ -18,7 +18,8 @@ pub struct DataloggerSettingsValues {
     pub delay_between_bursts: Option<u16>,
     pub bursts_per_measurement_cycle: Option<u8>,
     pub mode: Option<u8>,
-    pub enable_telemetry: Option<bool>,
+    pub enable_lorawan_telemetry: Option<bool>,
+    pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
 }
 
@@ -34,7 +35,8 @@ pub struct DataloggerSetPayload {
     pub bursts_per_cycle: Option<u8>,
     pub start_up_delay: Option<u16>,
     pub mode: Option<Value>,
-    pub enable_telemetry: Option<bool>,
+    pub enable_lorawan_telemetry: Option<bool>,
+    pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
     // pub user_note: Option<Value>, // not implemented for now
     // pub user_value: Option<i16>
@@ -100,13 +102,18 @@ impl DataloggerSetPayload {
             datalogger_settings_values.start_up_delay = Some(start_up_delay);
         }
 
-        if let Some(enable_telemetry) = self.enable_telemetry {
-            datalogger_settings_values.enable_telemetry = Some(enable_telemetry);
+        if let Some(enable_lorawan_telemetry) = self.enable_lorawan_telemetry {
+            datalogger_settings_values.enable_lorawan_telemetry = Some(enable_lorawan_telemetry);
         }
 
         if let Some(interactive_logging) = self.interactive_logging {
             datalogger_settings_values.interactive_logging = Some(interactive_logging);
         }
+
+        if let Some(enable_modbus_rtu) = self.enable_modbus_rtu {
+            datalogger_settings_values.enable_modbus_rtu = Some(enable_modbus_rtu);
+        }
+
 
         datalogger_settings_values
     }
@@ -131,47 +138,59 @@ pub struct SensorSetPayload {
     pub object: Value,
     pub action: Value,
     pub id: Option<Value>, // option
-    pub r#type: Value,     // option
+    pub r#type: Option<Value>,     
 }
 
 pub struct SensorSetPayloadValues {
-    pub sensor_type_id: u16,
+    pub sensor_type_id: Option<u16>,
     pub sensor_id: Option<[u8; 6]>,
 }
 
 impl SensorSetPayload {
     pub fn  convert(&self) -> Result<SensorSetPayloadValues, &'static str> {
-        let sensor_type_id = match &self.r#type {
-            serde_json::Value::String(sensor_type) => {
-                match crate::registry::sensor_type_id_from_name(&sensor_type) {
-                    Ok(sensor_type_id) => sensor_type_id,
-                    Err(_) => {
-                        // responses::send_command_response_message(board, "sensor type not found");
-                        return Err("sensor type not found");
-                    }
-                }
-            }
-            _ => {
-                // responses::send_command_response_message(board, "sensor type not specified");
-                return Err("sensor type not specified");
-            }
-        };
 
         let mut sensor_id = None;
         if let Some(payload_id) = &self.id {
             match payload_id {
                 serde_json::Value::String(id) => {
                     let mut prepared_id: [u8; 6] = [0; 6];
-                    prepared_id[0..id.len()].copy_from_slice(id.as_bytes());
+                    if id.len() > 6 {
+                        defmt::println!("WARNING: Sensor id too long, truncating to 6 characters.\n");
+                    }
+                    prepared_id[0..id.len().min(6)].copy_from_slice(&id.as_bytes()[0..id.len().min(6)]);
                     sensor_id = Some(prepared_id);
                 }
                 _ => {
-                    // make a unique id
-                            // let mut sensor_id: [u8; 6] = [b'0'; 6]; // base default value
-                    // make_unique_sensor_id(drivers, sensor_id)
+                    // a unique ID will be created later
                 }
             };
         }
+
+        let mut sensor_type_id= None;
+        if let Some(sensor_type) = &self.r#type {
+            match &sensor_type {
+                serde_json::Value::String(sensor_type) => {
+                    match crate::registry::sensor_type_id_from_name(&sensor_type) {
+                        Ok(sensor_type) => sensor_type_id = Some(sensor_type),
+                        Err(_) => {
+                            // responses::send_command_response_message(board, "sensor type not found");
+                            return Err("sensor type not found");
+                        }
+                    }
+                }
+                _ => {
+                    // responses::send_command_response_message(board, "sensor type not specified");
+                    return Err("sensor type not specified");
+                }
+            }
+        } else {
+            if sensor_id.is_none() {
+                return Err("sensor type required for adding driver");
+            }
+        }
+       
+
+
         
         let values = SensorSetPayloadValues {
             sensor_id: sensor_id,
@@ -365,7 +384,7 @@ pub struct SensorCalibrateSubcommand<'a> {
 // TODO: these impls should be derived or ??
 
 impl SensorCalibrateFitPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -384,7 +403,7 @@ impl SensorCalibrateFitPayload {
 }
 
 impl SensorCalibrateClearPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -403,7 +422,7 @@ impl SensorCalibrateClearPayload {
 }
 
 impl SensorCalibrateListPayload {
-    pub fn convert(&self) -> Result<SensorCalibrateSubcommand, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateSubcommand<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
@@ -430,7 +449,7 @@ pub struct SensorCalibrateRemove<'a> {
 }
 
 impl SensorCalibrateRemovePayload {
-    pub fn convert(&self) -> Result<SensorCalibrateRemove, &'static str> {
+    pub fn convert(&'_ self) -> Result<SensorCalibrateRemove<'_>, &'static str> {
         let id = match self.id {
             serde_json::Value::String(ref payload_id) => payload_id,
             _ => {
