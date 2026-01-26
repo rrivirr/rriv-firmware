@@ -1,3 +1,16 @@
+# [1.5.0-beta.5](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.4...v1.5.0-beta.5) (2026-01-23)
+
+
+### Bug Fixes
+
+* enough bytes for groundwater sensor 3 ring ([d36f8c0](https://github.com/rrivirr/rriv-firmware/commit/d36f8c053c41fa4f2d2edc6f71f1b11cfef032dd))
+* make enough bytes available ([b2ed734](https://github.com/rrivirr/rriv-firmware/commit/b2ed7344b54871266155006074275b3d83d53865))
+* reset buffer if restarting receive ([1f6f566](https://github.com/rrivirr/rriv-firmware/commit/1f6f5663cbb2d4c93e17591c55ff7ca0fde73496))
+* ring w mux params ([85561cd](https://github.com/rrivirr/rriv-firmware/commit/85561cd490ebd06ceb8d9925000b43af8e0d4905))
+* toggling got clobbered my merge ([e4b88c5](https://github.com/rrivirr/rriv-firmware/commit/e4b88c5295bded9ef0f0cd8e100affb75df57398))
+* update for period and ratio ([b101123](https://github.com/rrivirr/rriv-firmware/commit/b1011231ddd709b89d51475817c7781e844ca8ba))
+* watch telemeter ([795ea29](https://github.com/rrivirr/rriv-firmware/commit/795ea29ea04891f929a0ca825a929870022dfb08))
+
 # [1.5.0-beta.4](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0-beta.3...v1.5.0-beta.4) (2026-01-14)
 
 
