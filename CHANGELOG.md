@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0...v1.5.1) (2026-01-26)
+
+
+### Bug Fixes
+
+* force rerun of failed build ([b292f7b](https://github.com/rrivirr/rriv-firmware/commit/b292f7b31c456305ee1ca4c797ec6367b565b044))
+
 # [1.5.0](https://github.com/rrivirr/rriv-firmware/compare/v1.4.2...v1.5.0) (2026-01-26)
 
 
