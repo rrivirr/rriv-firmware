@@ -1,3 +1,61 @@
+# [1.5.0](https://github.com/rrivirr/rriv-firmware/compare/v1.4.2...v1.5.0) (2026-01-26)
+
+
+### Bug Fixes
+
+* cleaned up a lot of warnings ([f8be740](https://github.com/rrivirr/rriv-firmware/commit/f8be740aed4e027c29bc13488e8d4ad6c49249b1))
+* correct name of firmware elfs ([64057c6](https://github.com/rrivirr/rriv-firmware/commit/64057c67ee05d8c2f39c718cfad4065842f09fc1))
+* debug false, cleanup ([10ef797](https://github.com/rrivirr/rriv-firmware/commit/10ef797e995fe296419efbf3d70cc0552f219094))
+* duplicated char bug ([57ffb9f](https://github.com/rrivirr/rriv-firmware/commit/57ffb9ff94a9f395a64de8f38f145e4406b2ce47))
+* empty bytes no longer necessary ([07e8cf6](https://github.com/rrivirr/rriv-firmware/commit/07e8cf6a3145e84fd277729998fc274b1e50ab8c))
+* empty bytes not necessary ([0aabb26](https://github.com/rrivirr/rriv-firmware/commit/0aabb2644f677434d115b90aba29dc4255f7ec4d))
+* enough bytes for groundwater sensor 3 ring ([d36f8c0](https://github.com/rrivirr/rriv-firmware/commit/d36f8c053c41fa4f2d2edc6f71f1b11cfef032dd))
+* enough bytes for groundwater sensor 3 ring ([58154d9](https://github.com/rrivirr/rriv-firmware/commit/58154d93ab6e40fdcc58ebb17e03847f45e4d6f0))
+* error handling and formatting ([1eeb343](https://github.com/rrivirr/rriv-firmware/commit/1eeb343d2d46c3b9c408f220d9e16c053a093918))
+* handled ID lenght > 6 ([fa7b88e](https://github.com/rrivirr/rriv-firmware/commit/fa7b88e61be67e449160d29f2731d0df3d17f210))
+* indexes and messages ([50de01b](https://github.com/rrivirr/rriv-firmware/commit/50de01b6fe78b46a4e20c2981dafb13cdaa26254))
+* lorawan flow fixes ([fc43564](https://github.com/rrivirr/rriv-firmware/commit/fc43564d2dfa46933ee0d2e4780640100d7a8c82))
+* make enough bytes available ([b2ed734](https://github.com/rrivirr/rriv-firmware/commit/b2ed7344b54871266155006074275b3d83d53865))
+* make enough bytes available ([c5e52cc](https://github.com/rrivirr/rriv-firmware/commit/c5e52ccf43d3dae533a62400853ed61e68d04664))
+* max value count for modbus telemeter ([330ce88](https://github.com/rrivirr/rriv-firmware/commit/330ce8854ca2d28b1dc092c8b5aa74a62fa9c61f))
+* minor compiler errors ([de55a09](https://github.com/rrivirr/rriv-firmware/commit/de55a09085f04fc40722bfe62218f392484c6110))
+* modified I2C addresses ([9ef8c09](https://github.com/rrivirr/rriv-firmware/commit/9ef8c099f20dbaf793b45ae94f5fa6e450195e59))
+* only create file when writing ([1d9d287](https://github.com/rrivirr/rriv-firmware/commit/1d9d287bb0192bbf33fc9a2b24f4a078375cd0f3))
+* only create file when writing ([c3df727](https://github.com/rrivirr/rriv-firmware/commit/c3df727347176f978c96ebb315dabfbb57ca65ca))
+* RAK3172 handle initial messages that can fill buffers freezing usart comms ([faff203](https://github.com/rrivirr/rriv-firmware/commit/faff203042a0ba12fe4d2eca4144e45e0a9d2a39))
+* reducing firmware size, cleaning up ([9d599d2](https://github.com/rrivirr/rriv-firmware/commit/9d599d2f58b4573c9b279c8252ace2da1970ade5))
+* removed the use of format! from out codes ([a88982f](https://github.com/rrivirr/rriv-firmware/commit/a88982f1667022bfcb9a84af424014cd96c7cc36))
+* reset buffer if restarting receive ([1f6f566](https://github.com/rrivirr/rriv-firmware/commit/1f6f5663cbb2d4c93e17591c55ff7ca0fde73496))
+* reset buffer if restarting receive ([0c43ef3](https://github.com/rrivirr/rriv-firmware/commit/0c43ef34ff469ea8c1bcd368f05d9c3c9eb00241))
+* restore millis ([4506480](https://github.com/rrivirr/rriv-firmware/commit/4506480c81d2c6251e19bd190b9befcacef06d18))
+* ring w mux params ([85561cd](https://github.com/rrivirr/rriv-firmware/commit/85561cd490ebd06ceb8d9925000b43af8e0d4905))
+* ring w mux params ([b5fba36](https://github.com/rrivirr/rriv-firmware/commit/b5fba367a8e43584a637fd8bd56ef390f886bfac))
+* run build automation with ref ([a3cbac0](https://github.com/rrivirr/rriv-firmware/commit/a3cbac0a4d7dcf7a87eb3d0e5df1446c664d2f4f))
+* some cleanup ([cdb9f72](https://github.com/rrivirr/rriv-firmware/commit/cdb9f723dcf7262c149f9210bc75be737f74ee57))
+* toggling got clobbered my merge ([e4b88c5](https://github.com/rrivirr/rriv-firmware/commit/e4b88c5295bded9ef0f0cd8e100affb75df57398))
+* toggling got clobbered my merge ([5023362](https://github.com/rrivirr/rriv-firmware/commit/502336255b210d916995100943d5c525da43107c))
+* update for period and ratio ([b101123](https://github.com/rrivirr/rriv-firmware/commit/b1011231ddd709b89d51475817c7781e844ca8ba))
+* update for period and ratio ([69fa770](https://github.com/rrivirr/rriv-firmware/commit/69fa7707e06df4fd4d5e7e07a480cc1fe03100c7))
+* watch telemeter ([795ea29](https://github.com/rrivirr/rriv-firmware/commit/795ea29ea04891f929a0ca825a929870022dfb08))
+* watch telemeter ([2a37475](https://github.com/rrivirr/rriv-firmware/commit/2a37475ccdd451385f075b62190abc9b0142d460))
+
+
+### Features
+
+* adc port 5 as one wire working ([f710513](https://github.com/rrivirr/rriv-firmware/commit/f71051345ecf9f3345a42ee4051d74fd46b548c8))
+* initial integration of atlas ec sensor ([7999799](https://github.com/rrivirr/rriv-firmware/commit/799979923aaba25ec1cbc6684e8a5c50efdc6ba6))
+* initial_state with on and off strings [#94](https://github.com/rrivirr/rriv-firmware/issues/94) ([a8ed638](https://github.com/rrivirr/rriv-firmware/commit/a8ed638b03920e9150292dc2aacf6174179aa467))
+* merged beta into main ([183ef6f](https://github.com/rrivirr/rriv-firmware/commit/183ef6f99d4c1a76ab7aca123bc561fa5ed47985))
+* merged in defmt ([cfdae12](https://github.com/rrivirr/rriv-firmware/commit/cfdae12a53a32f6956dbd6296967073597b4af52))
+* modbus driver ([8f5970a](https://github.com/rrivirr/rriv-firmware/commit/8f5970a83380d293c29c32d1d03c76a296cd114b))
+* rs485 communication minimally working ([cec6f5f](https://github.com/rrivirr/rriv-firmware/commit/cec6f5fe12b51779444d44010744048d9e059d36))
+* secondary UART ([695b29d](https://github.com/rrivirr/rriv-firmware/commit/695b29d6175a10db9f05e210b5aaf975ded9d5d5))
+* send varialbe number of driver measurements over lorawan ([512a437](https://github.com/rrivirr/rriv-firmware/commit/512a43777dd4fe1bad81092a7ab76e4b7355251d))
+* set up and fixes to groundwater_rtu driver ([7f5b4db](https://github.com/rrivirr/rriv-firmware/commit/7f5b4db800a25b82736801ba6bd3de5419e74982))
+* setup processing for modbus rtu ([02de62c](https://github.com/rrivirr/rriv-firmware/commit/02de62c3470244d2192629f76373a4a510239dac))
+* support to set sensor settings individually ([f03c712](https://github.com/rrivirr/rriv-firmware/commit/f03c7125e732ac8c060b1fdbf81bd133f6cdaf02))
+* switch to defmt ([56b7b43](https://github.com/rrivirr/rriv-firmware/commit/56b7b43918f5aa2d25b8a45f10745ead0c3f1cc1))
+
 ## [1.4.2](https://github.com/rrivirr/rriv-firmware/compare/v1.4.1...v1.4.2) (2026-01-23)
 
 
