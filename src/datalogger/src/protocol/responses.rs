@@ -52,7 +52,9 @@ pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[Ca
 pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]){
     defmt::println!("{:?}", serial_number);
     let serial_number = util::str_from_utf8(&mut serial_number).unwrap_or_default();
-    let uid = format_args!("{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}",            
+    defmt::println!("uid {}", uid);
+
+    let arg = format_args!("{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}",            
             uid[0],
             uid[1],
             uid[2],
@@ -65,7 +67,22 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
             uid[9],
             uid[10],
             uid[11]);
-    let uid = uid.as_str();
+    let mut buf:[u8;12] = [0u8; 12];
+    let error = "error";
+    let mut uid: &str = error;
+    match format_no_std::show(
+            &mut buf,
+            arg 
+        ) {
+            Ok(formatted) => {
+                defmt::println!("{}", formatted); // TODO: this uses format!
+                uid = formatted;
+            }
+            Err(e) => {
+                defmt::println!("format error {}", defmt::Debug2Format(&e));
+            },
+        }
+
     let json = json!({
         "serial_number": serial_number,
         "uid": uid,
