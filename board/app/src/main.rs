@@ -31,10 +31,19 @@ fn main() -> ! {
     prelude::init();
 
     let mut board = rriv_board_0_4_2::build();
+    defmt::println!("board built");  board.delay_ms(1000);
+
     board.start(); // not needed, for debug only
+    defmt::println!("board started");  board.delay_ms(1000);
+    
     let mut datalogger = DataLogger::new();
+    defmt::println!("datalogger built");  board.delay_ms(1000);
+    
     datalogger.setup(&mut board);
+    defmt::println!("datalogger set up");  board.delay_ms(1000);
+    
     board.watchdog.feed(); // make sure we leave enough time for the panic handler
+    
     loop {
         board.run_loop_iteration();
         datalogger.run_loop_iteration(&mut board);
