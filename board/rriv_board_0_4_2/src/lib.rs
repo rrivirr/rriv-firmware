@@ -131,8 +131,11 @@ impl Board {
         self.storage.create_file(timestamp);
 
         // setting the pin for receiving telemetry on UART5
-        self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
-        self.get_sensor_driver_services().write_gpio_pin(2, false);
+        // this crashes the mcu hard, maybe only if something isn't plugged in
+        // defmt::println!("set up pin 2"); rriv_board::RRIVBoard::delay_ms(self, 1000);
+        // self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
+        // self.get_sensor_driver_services().write_gpio_pin(2, false);
+        // defmt::println!("pin 2 set up"); rriv_board::RRIVBoard::delay_ms(self, 1000);
         defmt::println!("board started");
 
     }
