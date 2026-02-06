@@ -1,3 +1,11 @@
+## [1.5.2](https://github.com/rrivirr/rriv-firmware/compare/v1.5.1...v1.5.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* skip pin configuration thats crashing the mcu ([8b42576](https://github.com/rrivirr/rriv-firmware/commit/8b4257668af61a27abb4fc4bcbeba2884643298c))
+* uid output formatting ([c68fe31](https://github.com/rrivirr/rriv-firmware/commit/c68fe31d14501e3a9152d8c2bcca261ec2def9e6))
+
 ## [1.5.1](https://github.com/rrivirr/rriv-firmware/compare/v1.5.0...v1.5.1) (2026-01-26)
 
 
