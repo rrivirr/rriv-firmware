@@ -51,7 +51,7 @@ impl SensorDriver for ADCTemperatureDriver {
     }
 
     #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
     }
 
     getters!();
@@ -73,7 +73,7 @@ impl SensorDriver for ADCTemperatureDriver {
         return [b't', b'e', b'm', b'p', b'e', b'r', b'a', b't', b'u', b'r', b'e', b'\0', b'\0', b'\0', b'\0', b'\0'];
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         
         self.measured_parameter_values[0] = board.read_temp_adc() as f64; // example conversion
     }
@@ -89,7 +89,7 @@ impl SensorDriver for ADCTemperatureDriver {
     }
    
     #[allow(unused)]
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
     }
         
 }

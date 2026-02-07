@@ -48,7 +48,7 @@ pub struct AHT20 {
 
 
 impl AHT20 {
-    fn get_status(board: &mut dyn rriv_board::SensorDriverServices) -> u8 {
+    fn get_status(board: &mut dyn rriv_board::RRIVBoard) -> u8 {
         let mut buffer: [u8; 1] = [0; 1];
         match board.ic2_read(AHTX0_I2CADDR_DEFAULT, &mut buffer) {
             Ok(_) => return buffer[0],
@@ -56,7 +56,7 @@ impl AHT20 {
         }
     }
 
-    fn loop_until_ready(board: &mut dyn rriv_board::SensorDriverServices) -> bool {
+    fn loop_until_ready(board: &mut dyn rriv_board::RRIVBoard) -> bool {
         let attempts = 10; // wait for up to 250ms
         let mut attempted = 0;
         while (AHT20::get_status(board) & AHTX0_STATUS_BUSY) != 0 {
@@ -72,7 +72,7 @@ impl AHT20 {
         return true;
     }
 
-    fn is_calibrated(board: &mut dyn rriv_board::SensorDriverServices) -> bool {
+    fn is_calibrated(board: &mut dyn rriv_board::RRIVBoard) -> bool {
         if (AHT20::get_status(board) & AHTX0_STATUS_CALIBRATED) > 0 {
             return true;
         } else {
@@ -80,7 +80,7 @@ impl AHT20 {
         }
     }
 
-    fn self_calibrate(board: &mut dyn rriv_board::SensorDriverServices){
+    fn self_calibrate(board: &mut dyn rriv_board::RRIVBoard){
         let cmd = [AHTX0_CMD_CALIBRATE, 0x08, 0x00];
         let _ = board.ic2_write(AHTX0_I2CADDR_DEFAULT, &cmd);
 
@@ -105,7 +105,7 @@ impl SensorDriver for AHT20 {
 
        
     // TODO: should setup take board as a param?
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         // 20ms startup time after power cycle.  
         // This is already handled by board startup times
         // board.delay_ms(20);
@@ -144,7 +144,7 @@ impl SensorDriver for AHT20 {
 
     getters!();
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         if !self.enabled {
             return;
         }

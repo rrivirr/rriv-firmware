@@ -178,7 +178,7 @@ impl RingMuxTemperatureDriver {
         }
     }
 
-    fn enable_channel(&self, channel: usize, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn enable_channel(&self, channel: usize, board: &mut dyn rriv_board::RRIVBoard) {
         
         let message: [u8; 1] = [1 << channel];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
@@ -188,7 +188,7 @@ impl RingMuxTemperatureDriver {
     }
 
     #[allow(unused)]
-    fn enable_all_channels(&self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn enable_all_channels(&self, board: &mut dyn rriv_board::RRIVBoard) {
         
         let message: [u8; 1] = [0xFF];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
@@ -198,7 +198,7 @@ impl RingMuxTemperatureDriver {
     }
 
     #[allow(unused)]
-    fn disable_channel(&self, channel: usize, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn disable_channel(&self, channel: usize, board: &mut dyn rriv_board::RRIVBoard) {
         
         let mut message: [u8; 1] = [0];
         
@@ -216,7 +216,7 @@ impl RingMuxTemperatureDriver {
         }
     }
 
-    fn disable_all_channels(&self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn disable_all_channels(&self, board: &mut dyn rriv_board::RRIVBoard) {
         
         let message: [u8; 1] = [0];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
@@ -253,7 +253,7 @@ impl SensorDriver for RingMuxTemperatureDriver {
         })
     }
 
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
             self.sensor_drivers[i].setup(board);
         }
@@ -295,7 +295,7 @@ impl SensorDriver for RingMuxTemperatureDriver {
         return buf2;
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         
         for c in 0..self.special_config.channels {
             // Enable channel c on the multiplexer
@@ -376,6 +376,6 @@ impl SensorDriver for RingMuxTemperatureDriver {
         Ok(())
     }
 
-    fn update_actuators(&mut self, _board: &mut dyn rriv_board::SensorDriverServices) {
+    fn update_actuators(&mut self, _board: &mut dyn rriv_board::RRIVBoard) {
     }
 }

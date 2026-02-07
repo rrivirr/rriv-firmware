@@ -57,7 +57,7 @@ impl SensorDriver for AtlasEC {
     getters!();
 
 
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
         // Wake device just in cast
         let message: [u8; 2] = [SLEEP_CTRL, 1];
@@ -84,7 +84,7 @@ impl SensorDriver for AtlasEC {
         return identifier;
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         
         let message = [DATA_AVAILABLE];
         let mut available = [0u8];

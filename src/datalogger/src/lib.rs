@@ -183,7 +183,7 @@ impl DataLogger {
                     }
                 };
 
-                driver.setup(board.get_sensor_driver_services());
+                driver.setup(board);
                 self.sensor_drivers[i] = Some(driver);
             }
         }
@@ -509,7 +509,7 @@ impl DataLogger {
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
-                driver.take_measurement(board.get_sensor_driver_services());
+                driver.take_measurement(board);
             }
         }
     }
@@ -517,7 +517,7 @@ impl DataLogger {
     fn update_actuators(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
-                driver.update_actuators(board.get_sensor_driver_services());
+                driver.update_actuators(board);
             }
         }
     }
@@ -859,7 +859,7 @@ impl DataLogger {
 
              
 
-                driver.setup(board.get_sensor_driver_services());
+                driver.setup(board);
 
                 let mut configuration_bytes: [u8; EEPROM_SENSOR_SETTINGS_SIZE] =
                     [0; EEPROM_SENSOR_SETTINGS_SIZE];
@@ -961,7 +961,7 @@ impl DataLogger {
                 if let Some(index) = self.get_driver_slot_by_id(args.0) {
                     if let Some(driver) = &mut self.sensor_drivers[index] {
                         // read sensor values
-                        driver.take_measurement(board.get_sensor_driver_services());
+                        driver.take_measurement(board);
 
                         let count = driver.get_measured_parameter_count() / 2; // TODO: get_measured_parameter_count, vs get_output_parameter_count
                         let mut values = Box::new([0_f64; 10]); // TODO: max of 10, should we make this dynamic?

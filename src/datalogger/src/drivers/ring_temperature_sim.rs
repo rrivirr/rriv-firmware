@@ -127,7 +127,7 @@ impl SensorDriver for RingTemperatureDriver {
         })
     }
 
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
             // self.sensor_drivers[i].setup(board);
         }
@@ -165,7 +165,7 @@ impl SensorDriver for RingTemperatureDriver {
         return buf2;
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
 
             self.measured_parameter_values[i * 2] = 22.2;
