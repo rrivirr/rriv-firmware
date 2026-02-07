@@ -114,7 +114,7 @@ impl Ds18b20 {
 impl SensorDriver for Ds18b20 {
     
     #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         
     }
 
@@ -147,7 +147,7 @@ impl SensorDriver for Ds18b20 {
         return buf;
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         defmt::println!("starting take measurement");
         board.one_wire_reset();
         board.one_wire_skip_address();

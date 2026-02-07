@@ -75,9 +75,6 @@ pub trait RRIVBoard: Send {
     // Board Services Used by Control Logic and Drivers
     control_services!();
 
-    fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices;
-    fn get_telemetry_driver_services(&mut self) -> &mut dyn TelemetryDriverServices;
-
     fn get_battery_level(&mut self) -> i16;
 
     fn sleep(&mut self);
@@ -91,22 +88,6 @@ pub trait RRIVBoard: Send {
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format
 
-}
-
-
-// move this out of the board level.  it's application defined bus.
-pub trait OneWireBusInterface {
-    // fn send_command(
-    //     &mut self,
-    //     command: u8,
-    //     address: Option<&Address>,
-    //     delay: &mut impl DelayUs<u16>,
-    // ) -> OneWireResult<(), E>
-}
-
-
-// TODO: this isn't a great construct or way of doing things
-pub trait SensorDriverServices {
     // future functions for ADC interface
     // fn get_adc_capabilities(&mut self); // minimum functionality return of adcs
     // fn get power on status of each adc
@@ -125,8 +106,6 @@ pub trait SensorDriverServices {
 
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
 
-    // fn borrow_one_wire_bus(&mut self) -> &mut dyn OneWireBusInterface;
-
     fn one_wire_send_command(&mut self, command: u8, address: u64);
     fn one_wire_reset(&mut self);
     fn one_wire_skip_address(&mut self);
@@ -136,16 +115,10 @@ pub trait SensorDriverServices {
     fn one_wire_bus_start_search(&mut self);
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 
-    control_services!();
-
     fn read_temp_adc(&mut self) -> i32;
     fn disable_interrupts(&self);
     fn enable_interrupts(&self);
     
-}
-
-pub trait TelemetryDriverServices {
-    control_services!();
 }
 
 

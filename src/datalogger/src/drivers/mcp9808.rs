@@ -88,7 +88,7 @@ impl SensorDriver for MCP9808TemperatureDriver {
     }
 
     #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         self.calibration_offset = (self.special_config.calibration_offset as f64) / 1000_f64;
     }
 
@@ -110,7 +110,7 @@ impl SensorDriver for MCP9808TemperatureDriver {
         return single_raw_or_cal_parameter_identifiers(index, Some(b'T'));
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         
         let message = [AMBIENT_TEMPERATURE_REGISTER_ADDRESS];
         let mut buffer: [u8; 2] = [0; 2];

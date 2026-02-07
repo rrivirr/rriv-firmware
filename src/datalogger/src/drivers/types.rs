@@ -65,7 +65,7 @@ impl CalibrationPair {
 pub trait SensorDriver {
     fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]); // derivable
     fn get_configuration_json(&mut self) -> serde_json::Value;
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard);
     fn get_id(&self) -> [u8; 6];
     fn get_type_id(&self) -> u16;
 
@@ -73,10 +73,10 @@ pub trait SensorDriver {
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()>;
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16];
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices);
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard);
     
     #[allow(unused)]
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {}
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {}
 
     // for fitting calibrations, for drivers that implement a calibration
     #[allow(unused)]
