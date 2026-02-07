@@ -93,18 +93,6 @@ pub trait RRIVBoard: Send {
 
 }
 
-
-// move this out of the board level.  it's application defined bus.
-pub trait OneWireBusInterface {
-    // fn send_command(
-    //     &mut self,
-    //     command: u8,
-    //     address: Option<&Address>,
-    //     delay: &mut impl DelayUs<u16>,
-    // ) -> OneWireResult<(), E>
-}
-
-
 // TODO: this isn't a great construct or way of doing things
 pub trait SensorDriverServices {
     // future functions for ADC interface
@@ -124,8 +112,6 @@ pub trait SensorDriverServices {
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()>;
 
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
-
-    // fn borrow_one_wire_bus(&mut self) -> &mut dyn OneWireBusInterface;
 
     fn one_wire_send_command(&mut self, command: u8, address: u64);
     fn one_wire_reset(&mut self);
