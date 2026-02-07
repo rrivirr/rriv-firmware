@@ -36,7 +36,7 @@ impl SensorDriver for K30CO2 {
     }
 
     #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         self.m = self.special_config.m as f64;
         self.b = self.special_config.b as f64;
     }
@@ -66,7 +66,7 @@ impl SensorDriver for K30CO2 {
         identifier
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
        // send the i2c command
        const I2C_ADDRESS: u8 = 0x68;
        const READ_RAM_COMMAND: u8 = 0x2;

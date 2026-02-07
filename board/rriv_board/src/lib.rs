@@ -75,9 +75,6 @@ pub trait RRIVBoard: Send {
     // Board Services Used by Control Logic and Drivers
     control_services!();
 
-    fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices;
-    fn get_telemetry_driver_services(&mut self) -> &mut dyn TelemetryDriverServices;
-
     fn get_battery_level(&mut self) -> i16;
 
     fn sleep(&mut self);
@@ -91,10 +88,6 @@ pub trait RRIVBoard: Send {
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format
 
-}
-
-// TODO: this isn't a great construct or way of doing things
-pub trait SensorDriverServices {
     // future functions for ADC interface
     // fn get_adc_capabilities(&mut self); // minimum functionality return of adcs
     // fn get power on status of each adc
@@ -122,16 +115,10 @@ pub trait SensorDriverServices {
     fn one_wire_bus_start_search(&mut self);
     fn one_wire_bus_search(&mut self) -> Option<u64>;
 
-    control_services!();
-
     fn read_temp_adc(&mut self) -> i32;
     fn disable_interrupts(&self);
     fn enable_interrupts(&self);
     
-}
-
-pub trait TelemetryDriverServices {
-    control_services!();
 }
 
 

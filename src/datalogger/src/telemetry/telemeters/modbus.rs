@@ -42,11 +42,11 @@ impl Telemeter for ModBusRTU {
 
 
 fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
-        board.get_sensor_driver_services().set_gpio_pin_mode(1, rriv_board::gpio::GpioMode::PushPullOutput);
+        board.set_gpio_pin_mode(1, rriv_board::gpio::GpioMode::PushPullOutput);
 
-        let _ = board.get_sensor_driver_services().write_gpio_pin(1, true);
+        let _ = board.write_gpio_pin(1, true);
         board.usart_send(payload);
-        let _ = board.get_sensor_driver_services().write_gpio_pin(1, false);
+        let _ = board.write_gpio_pin(1, false);
     }
     
 

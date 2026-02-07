@@ -77,7 +77,7 @@ impl SensorDriver for ModbusDriver {
         })
     }
 
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
     }
 
     fn get_measured_parameter_count(&mut self) -> usize {
@@ -106,7 +106,7 @@ impl SensorDriver for ModbusDriver {
 
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
        // send requests to modbus sensors
     }
 
