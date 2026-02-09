@@ -262,7 +262,11 @@ impl SensorDriver for RingMuxTemperatureDriver {
     getters!();
 
     fn get_measured_parameter_count(&mut self) -> usize {
-        self.special_config.sensors * 2 * self.special_config.channels
+        let mut channels_used = 1;
+        if self.special_config.channels > 0 {
+            channels_used = self.special_config.channels;
+        }
+        self.special_config.sensors * 2 * channels_used
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
