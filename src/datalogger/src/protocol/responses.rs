@@ -54,7 +54,7 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
     let serial_number = util::str_from_utf8(&mut serial_number).unwrap_or_default();
     defmt::println!("uid {}", uid);
 
-    let arg = format_args!("{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}",            
+    let arg = format_args!("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
             uid[0],
             uid[1],
             uid[2],
