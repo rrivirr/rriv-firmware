@@ -67,7 +67,7 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
             uid[9],
             uid[10],
             uid[11]);
-    let mut buf:[u8;12] = [0u8; 12];
+    let mut buf:[u8;24] = [0u8; 24];
     let error = "error";
     let mut uid: &str = error;
     match format_no_std::show(
