@@ -124,11 +124,13 @@ pub struct Board {
 
 impl Board {
     pub fn start(&mut self) {
-        defmt::println!("starting board");
+        defmt::println!("starting board"); rriv_board::RRIVBoard::delay_ms(self, 1000);
         // self.power_control.cycle_3v(&mut self.delay);
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
+        defmt::println!("creating log file"); rriv_board::RRIVBoard::delay_ms(self, 1000);
         self.storage.create_file(timestamp);
+        defmt::println!("created file"); rriv_board::RRIVBoard::delay_ms(self, 1000);
 
         // setting the pin for receiving telemetry on UART5
         // this crashes the mcu hard, maybe only if something isn't plugged in
@@ -469,6 +471,7 @@ impl RRIVBoard for Board {
     }
 
     fn get_uid(&mut self) -> [u8; 12] {
+        defmt::println!("uid: {}", self.uid);
         return self.uid;
     }
 
@@ -1040,8 +1043,11 @@ impl BoardBuilder {
     }
 
     pub fn build(self) -> Board {
+        let mut delay = self.delay.unwrap();
+        defmt::println!("building board"); delay.delay(1_u32.secs());
         let mut gpio_cr = self.gpio_cr.unwrap();
 
+        defmt::println!("set up one wire");  delay.delay(1_u32.secs());
         let mut one_wire = None;
         let mut internal_adc = self.internal_adc.unwrap();
         let pin = internal_adc.take_port_5();
@@ -1057,19 +1063,25 @@ impl BoardBuilder {
                 panic!("bad one wire bus");
             }
         };
+        defmt::println!("one wire is set up");  delay.delay(1_u32.secs());
 
         // TODO: just one GPIO pin for the moment
+        defmt::println!("set up gpio6 ??");  delay.delay(1_u32.secs());
         let mut gpio = self.gpio.unwrap();
         gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
+        defmt::println!("gpio6 set up (not sure why)");  delay.delay(1_u32.secs());
 
         let mut watchdog = self.watchdog.unwrap();
         watchdog.feed();
+
+
+        defmt::println!("uid: {}", self.uid.unwrap());  delay.delay(1_u32.secs());
 
         Board {
             uid: self.uid.unwrap(),
             i2c1: self.i2c1,
             i2c2: self.i2c2.unwrap(),
-            delay: self.delay.unwrap(),
+            delay: delay,
             precise_delay: self.precise_delay.unwrap(),
             gpio: gpio,
             gpio_cr: gpio_cr,
@@ -1292,6 +1304,7 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
+        // what is this about?
         dynamic_gpio_pins
             .gpio6
             .make_push_pull_output(&mut gpio_cr.gpioc_crh);
@@ -1304,7 +1317,7 @@ impl BoardBuilder {
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
+        // watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
 
         BoardBuilder::setup_serial(
@@ -1459,7 +1472,9 @@ impl BoardBuilder {
         watchdog.feed();
 
         // configure external ADC
+        defmt::println!("configure exADC");
         self.external_adc.as_mut().unwrap().configure(&mut i2c1);
+        defmt::println!("exADC configured");
 
         self.i2c1 = Some(i2c1);
         self.i2c2 = Some(i2c2);
@@ -1468,10 +1483,13 @@ impl BoardBuilder {
         // then Board would have ownership of the feature object, and make changes to the the registers (say through shutdown) through the interface of that struct
 
         // build the power control
+        defmt::println!("configure power");
         let mut power_control = Some(PowerControl::new(power_pins)).unwrap();
         power_control.cycle_5v(&mut delay);
+        defmt::println!("power configured");
 
         // build the internal adc
+        defmt::println!("configure intADC");
         let internal_adc_configuration =
             InternalAdcConfiguration::new(internal_adc_pins, device_peripherals.ADC1);
         let mut internal_adc = internal_adc_configuration.build(&clocks);
@@ -1479,6 +1497,7 @@ impl BoardBuilder {
         delay.delay_ms(1000_u32);
         internal_adc.enable(&mut delay);
         self.internal_adc = Some(internal_adc);
+        defmt::println!("intADC configured");
 
         self.rgb_led = Some(build_rgb_led(
             rgb_led_pins,
@@ -1496,16 +1515,15 @@ impl BoardBuilder {
 
         self.storage = Some(storage);
 
-        self.delay = Some(delay);
-        self.precise_delay = Some(precise_delay);
-
         // the millis counter
+        defmt::println!("configure millis counter");
         let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),
             Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
         self.counter = Some(counter);
+        defmt::println!("millis counter configured");
 
         watchdog.feed();
 
@@ -1513,6 +1531,12 @@ impl BoardBuilder {
 
         defmt::println!("setting up RS485 serial b");
         setup_serialb(device_peripherals.UART5, &clocks);
+        defmt::println!("serial b set up");
+
+        delay.delay(2_u32.secs());
+
+        self.delay = Some(delay);
+        self.precise_delay = Some(precise_delay);
 
         defmt::println!("done with setup");
 

@@ -1330,6 +1330,7 @@ impl DataLogger {
     fn device_get(&self, board: &mut impl RRIVBoard) {
         let serial_number = board.get_serial_number();
         let uid = board.get_uid();
+        defmt::println!("uid: {}", uid);
         // let gpio_assignments = &self.assigned_gpios;
         let mut assignments: [[u8; 6]; 9] = [[b'\0'; 6]; 9];
         for i in 0..self.sensor_drivers.len() {
