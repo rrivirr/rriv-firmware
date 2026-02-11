@@ -49,12 +49,12 @@ pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[Ca
     board.usb_serial_send(format_args!("]}}\n"));
 }
 
-pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]){
+pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]) -> Result<(),()>{
     defmt::println!("{:?}", serial_number);
     let serial_number = util::str_from_utf8(&mut serial_number).unwrap_or_default();
     defmt::println!("uid {}", uid);
 
-    let arg = format_args!("{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}{:X?}",            
+    let arg = format_args!("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
             uid[0],
             uid[1],
             uid[2],
@@ -67,7 +67,7 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
             uid[9],
             uid[10],
             uid[11]);
-    let mut buf:[u8;12] = [0u8; 12];
+    let mut buf:[u8;24] = [0u8; 24];
     let error = "error";
     let mut uid: &str = error;
     match format_no_std::show(
@@ -80,6 +80,7 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
             }
             Err(e) => {
                 defmt::println!("format error {}", defmt::Debug2Format(&e));
+                return Err(());
             },
         }
 
@@ -100,4 +101,5 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
         }
     });
     send_json(board, json);
+    Ok(())
 }

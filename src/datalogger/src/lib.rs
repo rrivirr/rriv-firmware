@@ -1370,6 +1370,11 @@ impl DataLogger {
             assignments[7].clone_from_slice(id);
             assignments[8].clone_from_slice(id);
         }
-        responses::device_get(board, serial_number, uid, assignments);
+        match responses::device_get(board, serial_number, uid, assignments){
+            Ok(_) => {},
+            Err(_) => {
+                responses::send_command_response_error(board, "could not build response", "");
+            },
+        }
     }
 }
