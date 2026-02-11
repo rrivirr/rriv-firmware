@@ -49,7 +49,7 @@ pub fn calibration_point_list(board: &mut impl RRIVBoard, pairs: &Option<Box<[Ca
     board.usb_serial_send(format_args!("]}}\n"));
 }
 
-pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]){
+pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [u8;12], mut gpio_assignments: [[u8;6];9]) -> Result<(),()>{
     defmt::println!("{:?}", serial_number);
     let serial_number = util::str_from_utf8(&mut serial_number).unwrap_or_default();
     defmt::println!("uid {}", uid);
@@ -80,6 +80,7 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
             }
             Err(e) => {
                 defmt::println!("format error {}", defmt::Debug2Format(&e));
+                return Err(());
             },
         }
 
@@ -100,4 +101,5 @@ pub fn device_get(board: &mut impl RRIVBoard, mut serial_number: [u8;5], uid : [
         }
     });
     send_json(board, json);
+    Ok(())
 }
