@@ -1,3 +1,12 @@
+## [1.5.3](https://github.com/rrivirr/rriv-firmware/compare/v1.5.2...v1.5.3) (2026-02-11)
+
+
+### Bug Fixes
+
+* correct the size of the format buffer ([24b0e3d](https://github.com/rrivirr/rriv-firmware/commit/24b0e3d89ce415d5d644975ce7173a90594e8ea2))
+* format hex with preceeding 0 ([ce63dc1](https://github.com/rrivirr/rriv-firmware/commit/ce63dc1f296375929d48c967ea17bddbb2854b95))
+* improve error handling for device_get response ([79bb39e](https://github.com/rrivirr/rriv-firmware/commit/79bb39e49951de93ab0d6d0dfd9e772feaf7aaee))
+
 ## [1.5.2](https://github.com/rrivirr/rriv-firmware/compare/v1.5.1...v1.5.2) (2026-02-06)
 
 
