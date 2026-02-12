@@ -113,7 +113,7 @@ pub struct Board {
     pub i2c1: Option<BoardI2c1>,
     pub i2c2: BoardI2c2,
     pub internal_rtc: Rtc,
-    pub storage: Storage,
+    pub storage: Option<Storage>,
     pub debug: bool,
     pub file_epoch: i64,
     pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
@@ -128,7 +128,9 @@ impl Board {
         // self.power_control.cycle_3v(&mut self.delay);
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
-        self.storage.create_file(timestamp);
+        if let Some(ref mut storage) = &mut self.storage {
+            storage.create_file(timestamp);
+        }
 
         // setting the pin for receiving telemetry on UART5
         // this crashes the mcu hard, maybe only if something isn't plugged in
@@ -439,7 +441,9 @@ impl RRIVBoard for Board {
             args
         ) {
             Ok(string) => {
-                self.storage.write(string.as_bytes(), self.file_epoch);
+                if let Some(ref mut storage) = &mut self.storage {
+                    storage.write(string.as_bytes(), self.file_epoch);
+                }
             }
             Err(_) => {
                 defmt::println!("format error writing log file")
@@ -448,7 +452,9 @@ impl RRIVBoard for Board {
     }
 
     fn flush_log_file(&mut self) {
-        self.storage.flush();
+        if let Some(ref mut storage) = &mut self.storage {
+            storage.flush();
+        }
     }
 
     fn dump_eeprom(&mut self) {
@@ -1080,7 +1086,7 @@ impl BoardBuilder {
             rgb_led: self.rgb_led.unwrap(),
             oscillator_control: self.oscillator_control.unwrap(),
             internal_rtc: self.internal_rtc.unwrap(),
-            storage: self.storage.unwrap(),
+            storage: self.storage,
             debug: false,
             file_epoch: 0,
             one_wire_bus: one_wire,
@@ -1321,7 +1327,9 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
+        watchdog.start(MilliSeconds::secs(20));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+        watchdog.start(MilliSeconds::secs(6));
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
@@ -1494,7 +1502,7 @@ impl BoardBuilder {
         self.gpio = Some(dynamic_gpio_pins);
         self.gpio_cr = Some(gpio_cr);
 
-        self.storage = Some(storage);
+        self.storage = storage;
 
         self.delay = Some(delay);
         self.precise_delay = Some(precise_delay);
@@ -1604,8 +1612,10 @@ pub fn write_panic_to_storage(message: &str) {
     ) = pin_groups::build(pins, &mut gpio_cr);
 
     let mut storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-
-    storage.create_file(0);
-    storage.write(message.as_bytes(), 0);
-    storage.flush();
+    if storage.is_some(){
+        let mut storage = storage.unwrap();
+        storage.create_file(0);
+        storage.write(message.as_bytes(), 0);
+        storage.flush();
+    }
 }

@@ -1,9 +1,8 @@
-
 use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 use pac::SPI2;
-use stm32f1xx_hal::{gpio::Alternate, spi::Spi2NoRemap};
+use stm32f1xx_hal::{gpio::Alternate, spi::{Spi2NoRemap, SpiReadWrite}};
 // use embedded_sdmmc::{File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 
 use crate::*;
@@ -18,7 +17,7 @@ pub fn build(
     spi_dev: SPI2,
     clocks: Clocks,
     delay: Delay<TIM2, 1000000>,
-) -> Storage {
+) -> Option<Storage> {
     let spi2 = Spi::spi2(
         spi_dev,
         (pins.sck, pins.miso, pins.mosi),
@@ -27,13 +26,25 @@ pub fn build(
         clocks,
     );
 
-    defmt::println!("set up sdcard");
+   
+    defmt::println!("set up sd card");
+
     // let sdmmc_spi = embedded_hal_bus::spi::RefCellDevice::new(&spi_bus, DummyCsPin, delay).unwrap();
     // only one SPI device on this bus, can we avoid using embedded_hal_bus?
 
     let sdcard = embedded_sdmmc::SdCard::new(spi2, pins.sd_card_chip_select, delay);
-
-    return Storage::new(sdcard);
+    match sdcard.get_card_type(){
+        Some(card_type) =>    defmt::println!("sd card type: {}", match card_type {
+            embedded_sdmmc::sdcard::CardType::SD1 => "SD1",
+            embedded_sdmmc::sdcard::CardType::SD2 => "SD2",
+            embedded_sdmmc::sdcard::CardType::SDHC => "SD3",
+        }),
+        None => {
+            defmt::println!("no sd card found");
+            return None;
+        }
+    }
+    return Some(Storage::new(sdcard));
 }
 
 // type RrivSdCard = SdCard<Spi<SPI1, Spi1NoRemap, (Pin<'A', 5, Alternate>, Pin<'A', 6>, Pin<'A', 7, Alternate>), u8>, Pin<'C', 8, Output>, SysDelay>;
