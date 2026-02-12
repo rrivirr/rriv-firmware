@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/rrivirr/rriv-firmware/compare/v1.6.0...v1.6.1) (2026-02-12)
+
+
+### Bug Fixes
+
+* measured parameter count for 0 channels ([08b68e2](https://github.com/rrivirr/rriv-firmware/commit/08b68e23d8951202cbf7f06c57e33d652688f391))
+
 # [1.6.0](https://github.com/rrivirr/rriv-firmware/compare/v1.5.3...v1.6.0) (2026-02-12)
 
 
