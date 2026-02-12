@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/rrivirr/rriv-firmware/compare/v1.5.3...v1.6.0) (2026-02-12)
+
+
+### Features
+
+* allow operation without sd card in place ([51b0aa9](https://github.com/rrivirr/rriv-firmware/commit/51b0aa90a4099dc45f81085efbad2f435ec739c4))
+
 ## [1.5.3](https://github.com/rrivirr/rriv-firmware/compare/v1.5.2...v1.5.3) (2026-02-11)
 
 
