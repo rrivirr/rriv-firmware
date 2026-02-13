@@ -133,6 +133,12 @@ impl Storage {
     pub fn new(
         sd_card: RrivSdCard, // , time_source: impl TimeSource //  a timesource passed in here could use unsafe access to internal RTC or i2c bus
     ) -> Option<Self> {
+
+        let size = match sd_card.num_bytes(){
+            Ok(size) => size,
+            Err(_) => return None,
+        };
+
         let time_source = RrivTimeSource::new(); // unsafe access to the board
                                                  // or global time var via interrupt
                                                  // or copy into a global variable at the top of the run loop
@@ -171,9 +177,12 @@ impl Storage {
         
 
         let mut count = 0;
+        let mut bytes = 0u64;
         match volume_manager.iterate_dir(root_dir, |dir| { 
             count = count + 1;
-            if count == 512 { 
+            bytes = bytes + dir.size as u64;
+            defmt::println!("size {} , bytes: {}", size, bytes);
+            if count == 512 || bytes > size - 100000000 { 
                 // unsafely notify the user 
                 // no way to get out of here, but we can flash the led, and we can panic
                 unsafe {
