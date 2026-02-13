@@ -1,3 +1,17 @@
+# [1.7.0](https://github.com/rrivirr/rriv-firmware/compare/v1.6.1...v1.7.0) (2026-02-13)
+
+
+### Bug Fixes
+
+* removed asm breakpoint ([709ec4f](https://github.com/rrivirr/rriv-firmware/commit/709ec4f9a680f9f7f08b02b41c57dd359436dba4))
+
+
+### Features
+
+* detect too many files on card ([79a9b59](https://github.com/rrivirr/rriv-firmware/commit/79a9b5933be4c350c789df4d012de4855dc773de))
+* detect too many files on sd card ([986add8](https://github.com/rrivirr/rriv-firmware/commit/986add860c667220e8abe4530f7825c91cb77f7d))
+* flash the sd card LED if theres no card inserted ([4ac2735](https://github.com/rrivirr/rriv-firmware/commit/4ac2735e677acbed63c991fd09fc444b6f68ca79))
+
 ## [1.6.1](https://github.com/rrivirr/rriv-firmware/compare/v1.6.0...v1.6.1) (2026-02-12)
 
 
