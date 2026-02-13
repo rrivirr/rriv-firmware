@@ -1,3 +1,6 @@
+use core::panic;
+
+use cortex_m::asm;
 use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
@@ -44,7 +47,12 @@ pub fn build(
             return None;
         }
     }
-    return Some(Storage::new(sdcard));
+
+    let storage =  Storage::new(sdcard);
+    if storage.is_none() {
+        return None;
+    }
+    storage
 }
 
 // type RrivSdCard = SdCard<Spi<SPI1, Spi1NoRemap, (Pin<'A', 5, Alternate>, Pin<'A', 6>, Pin<'A', 7, Alternate>), u8>, Pin<'C', 8, Output>, SysDelay>;
@@ -124,7 +132,13 @@ pub struct Storage {
 impl Storage {
     pub fn new(
         sd_card: RrivSdCard, // , time_source: impl TimeSource //  a timesource passed in here could use unsafe access to internal RTC or i2c bus
-    ) -> Self {
+    ) -> Option<Self> {
+
+        let size = match sd_card.num_bytes(){
+            Ok(size) => size,
+            Err(_) => return None,
+        };
+
         let time_source = RrivTimeSource::new(); // unsafe access to the board
                                                  // or global time var via interrupt
                                                  // or copy into a global variable at the top of the run loop
@@ -160,8 +174,45 @@ impl Storage {
         let root_dir = volume_manager.open_root_dir(volume).unwrap();
         // This mutably borrows the directory.
         defmt::println!("Root Dir: {:?}", defmt::Debug2Format(&root_dir));
+        
 
-        Storage {
+        let mut count = 0;
+        let mut bytes = 0u64;
+        match volume_manager.iterate_dir(root_dir, |dir| { 
+            count = count + 1;
+            bytes = bytes + dir.size as u64;
+            defmt::println!("size {} , bytes: {}", size, bytes);
+            if count == 512 || bytes > size - 100000000 { 
+                // unsafely notify the user 
+                // no way to get out of here, but we can flash the led, and we can panic
+                unsafe {
+                    let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+                    let mut gpioc = device_peripherals.GPIOC.split();
+                    let cs = gpioc.pc8;
+                    let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+                    for _i in 1..30 {
+                        cs.set_high();
+                        for _j in 0..150000 { asm::nop(); }
+                        cs.set_low();
+                        for _j in 0..150000 { asm::nop(); }
+                    }
+                    cs.set_high();
+                }
+                let message = if count == 512 {
+                    "sd card too many files"
+                } else {
+                    "out of space on card"
+                };
+                panic!("{}", message);
+            }
+        } ) {
+            Ok(_) => {
+                defmt::println!("iterated dir");
+            },
+            Err(_) => return None,
+        }
+
+        let storage = Storage {
             volume_manager,
             volume,
             filename: [b'\0'; 11],
@@ -169,7 +220,8 @@ impl Storage {
             root_dir: root_dir,
             cache: [b'\0'; CACHE_SIZE],
             next_position: 0,
-        }
+        };
+        Some(storage)
     }
 
     pub fn reopen_file(&mut self) {

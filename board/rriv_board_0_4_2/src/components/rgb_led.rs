@@ -49,7 +49,7 @@ impl RgbLed {
     self.pwm.set_duty(Channel::C1, self.convert(red) );
     self.pwm.set_duty(Channel::C2, self.convert(green) );
     self.pwm.set_duty(Channel::C3, self.convert(blue) );
-    asm::bkpt();
+    // asm::bkpt();
 
   }
 
