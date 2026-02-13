@@ -1330,6 +1330,23 @@ impl BoardBuilder {
         watchdog.start(MilliSeconds::secs(20));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
         watchdog.start(MilliSeconds::secs(6));
+        if storage.is_none() {
+            // sd card library has no way to release the spi and pins
+            // so unsafely get the cs pin and flash it
+            unsafe {
+                let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+                let mut gpioc = device_peripherals.GPIOC.split();
+                let cs = gpioc.pc8;
+                let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+                for i in 1..10 {
+                    cs.set_high();
+                    delay.delay_ms(100_u32);
+                    cs.set_low();
+                    delay.delay_ms(100_u32);
+                }
+                cs.set_high();
+            }
+        }
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
