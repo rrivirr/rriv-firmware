@@ -198,7 +198,12 @@ impl Storage {
                     }
                     cs.set_high();
                 }
-                panic!("sd card too many files")
+                let message = if count == 512 {
+                    "sd card too many files"
+                } else {
+                    "out of space on card"
+                };
+                panic!("{}", message);
             }
         } ) {
             Ok(_) => {
