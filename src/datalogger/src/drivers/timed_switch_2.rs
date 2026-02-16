@@ -15,9 +15,10 @@ pub struct TimedSwitch2SpecialConfiguration {
     gpio_pin: u8,
     initial_state: bool, // 'on' 'off'
     // polarity // 'low_is_on', 'high_is_on'
+    pwm_enable: bool,
     period: f32,
     ratio: f32,
-    _empty: [u8; 14],
+    _empty: [u8; 13],
 }
 
 impl TimedSwitch2SpecialConfiguration {
@@ -79,6 +80,16 @@ impl TimedSwitch2SpecialConfiguration {
             },
             _ => {}
         };
+
+        match &values["pwm_enable"] {
+            serde_json::Value::Bool(b) => {
+                self.pwm_enable = *b;
+                defmt::println!("pwm_enable set to {}", self.pwm_enable);
+            }
+            _ => {
+                defmt::println!("pwm_enable not provided, defaulting to false");
+            }
+        }
 
         match &values["period"] {
             serde_json::Value::Number(number) => {
@@ -165,7 +176,27 @@ impl TimedSwitch2SpecialConfiguration {
             }
         };
 
-       
+        // initial_state must be a string "on" or "off" (case-insensitive)
+        let s = match &value["initial_state"] {
+            serde_json::Value::String(s) => s.as_str(),
+            _ => return Err("initial_state must be the string \"on\" or \"off\""),
+        };
+        
+        let initial_state: bool = match s.to_ascii_lowercase().as_str() {
+            "on" => true,
+            "off" => false,
+            _ => return Err("invalid initial state"),
+        };
+
+        let mut pwm_enable: bool = false;
+        match &value["pwm_enable"] {
+            serde_json::Value::Bool(b) => {
+                pwm_enable = *b;
+            }
+            _ => {
+                defmt::println!("pwm_enable not provided, defaulting to false");
+            }
+        }
 
         let mut period: f32 = 10.0;
         match &value["period"] {
@@ -177,9 +208,7 @@ impl TimedSwitch2SpecialConfiguration {
                     }
                 }
             }
-            _ => {
-                return Err("period is required")
-            }
+            _ => {}
         }
 
         let mut ratio: f32 = 1.0;
@@ -192,24 +221,8 @@ impl TimedSwitch2SpecialConfiguration {
                     }
                 }
             }
-            _ => {
-                return Err("ratio is invalid")
-            }
+            _ => {}
         } 
-
-        
-
-        // initial_state must be a string "on" or "off" (case-insensitive)
-        let s = match &value["initial_state"] {
-            serde_json::Value::String(s) => s.as_str(),
-            _ => return Err("initial_state must be the string \"on\" or \"off\""),
-        };
-        
-        let initial_state: bool = match s.to_ascii_lowercase().as_str() {
-            "on" => true,
-            "off" => false,
-            _ => return Err("invalid initial state"),
-        };
       
         let gpio_pin = gpio_pin.unwrap_or_default();
         Ok ( Self {
@@ -217,9 +230,10 @@ impl TimedSwitch2SpecialConfiguration {
             off_time_s,
             gpio_pin,
             initial_state,
+            pwm_enable,
             period,
             ratio,
-            _empty: [b'\0'; 14],
+            _empty: [b'\0'; 13],
         } )
     }
 
@@ -329,26 +343,27 @@ impl SensorDriver for TimedSwitch2 {
         } else if self.state == 1 {
             // heater is on
 
+            if self.special_config.pwm_enable {
             // duty cycle implementation
-            let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
-            let mut new_elapsed: u32 = elapsed as u32;
-            if elapsed < 0 {
-                // millis overflowed
-                new_elapsed = MAX_MILLIS - self.last_duty_cycle_update + millis;
+                let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
+                let mut new_elapsed: u32 = elapsed as u32;
+                if elapsed < 0 {
+                    // millis overflowed
+                    new_elapsed = MAX_MILLIS - self.last_duty_cycle_update + millis;
+                }
+                
+                if self.duty_cycle_state == true && new_elapsed > self.duty_cycle_on_time {
+                    toggle_state = true;
+                    gpio_state = false;
+                    self.last_duty_cycle_update = millis;
+                    self.duty_cycle_state  = false;
+                } else if self.duty_cycle_state == false && new_elapsed > self.duty_cycle_off_time {
+                    toggle_state = true;
+                    gpio_state = true;
+                    self.last_duty_cycle_update = millis;
+                    self.duty_cycle_state  = true;
+                } 
             }
-            
-            if self.duty_cycle_state == true && new_elapsed > self.duty_cycle_on_time {
-                toggle_state = true;
-                gpio_state = false;
-                self.last_duty_cycle_update = millis;
-                self.duty_cycle_state  = false;
-            } else if self.duty_cycle_state == false && new_elapsed > self.duty_cycle_off_time {
-                toggle_state = true;
-                gpio_state = true;
-                self.last_duty_cycle_update = millis;
-                self.duty_cycle_state  = true;
-            } 
-
             // end of on_time (outer cycle)
             if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
                 defmt::println!("state is 1, toggle triggered");
@@ -357,6 +372,7 @@ impl SensorDriver for TimedSwitch2 {
                 self.state = 0;
                 self.last_state_updated_at = timestamp;
             }
+
         }
 
         if toggle_state { 
