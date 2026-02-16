@@ -1,3 +1,15 @@
+# [1.8.0](https://github.com/rrivirr/rriv-firmware/compare/v1.7.0...v1.8.0) (2026-02-16)
+
+
+### Bug Fixes
+
+* millis overflow resolved ([d434171](https://github.com/rrivirr/rriv-firmware/commit/d434171d502071fbc5b7abb945c8820562da8ea4))
+
+
+### Features
+
+* pwm_disable mode added ([0f7d529](https://github.com/rrivirr/rriv-firmware/commit/0f7d529c2d3d50aaac8845b1303f1bddfca35c1d))
+
 # [1.7.0](https://github.com/rrivirr/rriv-firmware/compare/v1.6.1...v1.7.0) (2026-02-13)
 
 
