@@ -97,6 +97,7 @@ pub trait RRIVBoard: Send {
 
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool);
+    fn write_pwm_pin_duty(&mut self, value: u8);
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()>;
 
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
