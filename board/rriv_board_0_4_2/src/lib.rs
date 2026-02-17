@@ -5,9 +5,10 @@ extern crate alloc;
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
-use rriv_board::hardware_error::{HardwareError};
+
+use rriv_board::hardware_error::HardwareError;
 use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+use stm32f1xx_hal::timer::{Ch, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self};
 use core::mem;
@@ -126,8 +127,9 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
-    pub hardware_errors: [HardwareError; 5]
+    pub hardware_errors: [HardwareError; 5],
     pub clocks: Clocks,
+    pub pwm: Option<Box<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>>,
 }
 
 impl Board {
@@ -761,6 +763,10 @@ impl RRIVBoard for Board {
         };
     }
     
+    fn write_pwm_pin_duty(&mut self, value: u8){
+    }
+
+
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             1 => {
@@ -989,7 +995,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
-    hardware_errors: [HardwareError; 5]
+    hardware_errors: [HardwareError; 5],
     pub clocks: Option<Clocks>
 }
 
@@ -1013,7 +1019,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
-            hardware_errors: [HardwareError::None; 5]
+            hardware_errors: [HardwareError::None; 5],
             clocks: None
         }
     }
@@ -1062,8 +1068,9 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
-            hardware_errors: self.hardware_errors
+            hardware_errors: self.hardware_errors,
             clocks: self.clocks.unwrap(),
+            pwm: None,
         }
     }
 
