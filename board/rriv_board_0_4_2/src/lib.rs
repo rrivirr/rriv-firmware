@@ -28,7 +28,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -122,7 +122,7 @@ pub struct Board {
     pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
-    pub counter: CounterUs<TIM4>,
+    pub counter: CounterUs<TIM5>,
     pub hardware_errors: [HardwareError; 5]
 }
 
@@ -982,7 +982,7 @@ pub struct BoardBuilder {
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
-    pub counter: Option<CounterUs<TIM4>>,
+    pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5]
 }
 
@@ -1494,7 +1494,7 @@ impl BoardBuilder {
         self.precise_delay = Some(precise_delay);
 
         // the millis counter
-        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        let mut counter: CounterUs<TIM5> = device_peripherals.TIM5.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),
             Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
