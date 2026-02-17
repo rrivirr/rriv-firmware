@@ -1,5 +1,6 @@
 target/
 board/target/
+*atlas_stuff*
 
 .DS_Store
 node_modules
