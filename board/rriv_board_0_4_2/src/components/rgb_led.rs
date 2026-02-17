@@ -1,4 +1,3 @@
-use cortex_m::asm;
 use stm32f1xx_hal::{gpio::Alternate, pac::TIM1, time::ms, timer::{Ch, Channel, PwmHz, Tim1NoRemap}};
 
 use crate::*;
