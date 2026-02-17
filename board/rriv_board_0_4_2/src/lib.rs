@@ -120,6 +120,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
+    pub clocks: Clocks,
 }
 
 impl Board {
@@ -1020,6 +1021,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
+    pub clocks: Option<Clocks>
 }
 
 impl BoardBuilder {
@@ -1042,6 +1044,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            clocks: None
         }
     }
 
@@ -1089,6 +1092,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            clocks: self.clocks.unwrap(),
         }
     }
 
@@ -1532,8 +1536,8 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        defmt::println!("setting up RS485 serial b");
-        setup_serialb(device_peripherals.UART5, &clocks);
+
+        self.clocks = Some(clocks);
 
         defmt::println!("done with setup");
 
