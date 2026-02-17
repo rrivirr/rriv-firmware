@@ -5,8 +5,9 @@ use core::fmt;
 
 
 pub mod gpio;
+pub mod hardware_error;
 
-use crate::gpio::GpioMode;
+use crate::{gpio::GpioMode, hardware_error::HardwareError};
 
 pub const EEPROM_DATALOGGER_SETTINGS_SIZE: usize = 64;
 pub const EEPROM_SENSOR_SETTINGS_SIZE: usize = 64;
@@ -112,6 +113,9 @@ pub trait RRIVBoard: Send {
     fn read_temp_adc(&mut self) -> i32;
     fn disable_interrupts(&self);
     fn enable_interrupts(&self);
+
+    fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
+    fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
     
 }
 

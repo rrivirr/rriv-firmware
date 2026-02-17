@@ -5,6 +5,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
+use rriv_board::hardware_error::{self, HardwareError};
 use stm32f1xx_hal::time::MilliSeconds;
 use stm32f1xx_hal::timer::CounterUs;
 
@@ -122,6 +123,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
+    pub hardware_errors: [HardwareError; 5]
 }
 
 impl Board {
@@ -223,9 +225,25 @@ impl Board {
     {
         cortex_m::interrupt::free(|_cs| f())
     }
+
+    fn add_hardware_error(&mut self, hardware_error: HardwareError){
+        add_hardware_error(&mut self.hardware_errors, hardware_error);
+    }
 }
 
+fn add_hardware_error(hardware_errors: &mut [HardwareError; 5], hardware_error: HardwareError){
+    for i in 0..hardware_errors.len() {
+        match hardware_errors[i] {
+            HardwareError::None => {
+                hardware_errors[i] = hardware_error;
+                break;
+            },
+            _ => { // do nothing 
+            }
 
+        }
+    }
+}
 
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
@@ -832,6 +850,40 @@ impl RRIVBoard for Board {
         self.enable_interrupts();
     }
 
+    fn get_errors(&self) -> [HardwareError; 5] {
+        return self.hardware_errors;
+    }
+
+    fn error_alarm(&mut self) {
+        // unsafely use the sd card pin to notify the user
+        let slow = 25_u16;
+        let fast = 10_u16;
+        unsafe {
+            let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals.GPIOC.split();
+            let cs = gpioc.pc8;
+            let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+            for _i in 0..10 {
+                cs.set_low();
+                self.delay.delay_ms(fast);
+                cs.set_high();
+                self.delay.delay_ms(fast);
+            }
+            for _i in 0..5 {
+                cs.set_low();
+                self.delay.delay_ms(slow);
+                cs.set_high();
+                self.delay.delay_ms(slow);
+            }
+            for _i in 0..10 {
+                cs.set_low();
+                self.delay.delay_ms(fast);
+                cs.set_high();
+                self.delay.delay_ms(fast);
+            }
+        }
+    }
+
 }
 
 
@@ -931,6 +983,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM4>>,
+    hardware_errors: [HardwareError; 5]
 }
 
 impl BoardBuilder {
@@ -953,6 +1006,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            hardware_errors: [HardwareError::None; 5]
         }
     }
 
@@ -1004,6 +1058,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            hardware_errors: self.hardware_errors
         }
     }
 
