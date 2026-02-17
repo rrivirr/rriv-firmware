@@ -1,3 +1,16 @@
+# [1.9.0](https://github.com/rrivirr/rriv-firmware/compare/v1.8.0...v1.9.0) (2026-02-17)
+
+
+### Bug Fixes
+
+* duplicated gpio macros ([7ccf3bf](https://github.com/rrivirr/rriv-firmware/commit/7ccf3bf9d3dc0c92fb4b7bcffb2bc671da99b862))
+* factor gpio macros into a module ([83a15ce](https://github.com/rrivirr/rriv-firmware/commit/83a15ceca806204915c13012ea5d84ab51ecb487))
+
+
+### Features
+
+* remove the concept of SensorDriverServices ([4b9ca64](https://github.com/rrivirr/rriv-firmware/commit/4b9ca645c679a066ad033215c54d5107a988f4a2))
+
 # [1.8.0](https://github.com/rrivirr/rriv-firmware/compare/v1.7.0...v1.8.0) (2026-02-16)
 
 
