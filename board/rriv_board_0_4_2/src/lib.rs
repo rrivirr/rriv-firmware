@@ -144,6 +144,28 @@ impl Board {
         // self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
         // self.get_sensor_driver_services().write_gpio_pin(2, false);
         // defmt::println!("pin 2 set up"); rriv_board::RRIVBoard::delay_ms(self, 1000);
+
+
+        // hard code a pwm pin
+        let clocks = self.clocks;
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        let tim4 = device_peripherals.TIM4;
+        let mut afio = device_peripherals.AFIO.constrain();
+        let pin = &mut self.gpio.gpio1;
+        pin.make_open_drain_output(&mut self.gpio_cr.gpiob_crh);  // Dynamic pin not recognized by the HAL pwm construct
+
+
+        // just steal the damn pins.
+        // this pin is not actually moved by the pwm construct, just used as a template generic
+        let gpiob = device_peripherals.GPIOB.split();
+        let pin = gpiob.pb8.into_alternate_open_drain(&mut self.gpio_cr.gpiob_crh);
+    
+        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>> = 
+            tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
+        pwm.enable(Channel::C3);
+        pwm.set_period(ms(500).into_rate());
+        self.pwm = Some(Box::new(pwm));
+
         defmt::println!("board started");
 
     }
@@ -758,6 +780,12 @@ impl RRIVBoard for Board {
     }
     
     fn write_pwm_pin_duty(&mut self, value: u8){
+        if let Some(pwm) = &mut self.pwm {
+            let max = pwm.get_max_duty();
+            let x1 = max as u32 * (value as u32);
+            let x2 = x1 / 255;
+            pwm.set_duty(Channel::C3, x2 as u16);
+        }
     }
 
 
