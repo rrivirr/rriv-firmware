@@ -124,6 +124,7 @@ pub struct Board {
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
     pub hardware_errors: [HardwareError; 5]
+    pub clocks: Clocks,
 }
 
 impl Board {
@@ -984,6 +985,7 @@ pub struct BoardBuilder {
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5]
+    pub clocks: Option<Clocks>
 }
 
 impl BoardBuilder {
@@ -1007,6 +1009,7 @@ impl BoardBuilder {
             watchdog: None,
             counter: None,
             hardware_errors: [HardwareError::None; 5]
+            clocks: None
         }
     }
 
@@ -1055,6 +1058,7 @@ impl BoardBuilder {
             watchdog: watchdog,
             counter: self.counter.unwrap(),
             hardware_errors: self.hardware_errors
+            clocks: self.clocks.unwrap(),
         }
     }
 
@@ -1505,8 +1509,8 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        defmt::println!("setting up RS485 serial b");
-        setup_serialb(device_peripherals.UART5, &clocks);
+
+        self.clocks = Some(clocks);
 
         defmt::println!("done with setup");
 
