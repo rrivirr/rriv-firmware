@@ -1064,10 +1064,6 @@ impl BoardBuilder {
             }
         };
 
-        // TODO: just one GPIO pin for the moment
-        let mut gpio = self.gpio.unwrap();
-        gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
-
         let mut watchdog = self.watchdog.unwrap();
         watchdog.feed();
 
