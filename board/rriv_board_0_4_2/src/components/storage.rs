@@ -139,16 +139,14 @@ impl Storage {
             Err(_) => return None,
         };
 
-        let time_source = RrivTimeSource::new(); // unsafe access to the board
-                                                 // or global time var via interrupt
-                                                 // or copy into a global variable at the top of the run loop
+        let time_source = RrivTimeSource::new();
         defmt::println!("set up sdcard");
 
         let mut volume_manager = embedded_sdmmc::VolumeManager::new(sd_card, time_source);
         // Try and access Volume 0 (i.e. the first partition).
         // The volume object holds information about the filesystem on that volume.
         defmt::println!("trying to set up sd card volume");
-        let result = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0)); // TODO: this just hangs.  need window watchdog to catch here.
+        let result = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0));
         let volume = match result {
             Ok(volume0) => {
                 defmt::println!("Volume Success: {:?}", defmt::Debug2Format(&volume0));
