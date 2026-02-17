@@ -43,7 +43,7 @@ impl SensorDriver for GenericAnalog {
     }
 
     #[allow(unused)]
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         self.m = self.special_config.m as f64;
         // defmt::println!("loading {:#b} {} {} {}", self.special_config.b, self.special_config.b, self.special_config.b as f64, (self.special_config.b as f64) / 1000_f64 );
         self.b = self.special_config.b as f64;
@@ -63,7 +63,7 @@ impl SensorDriver for GenericAnalog {
         return single_raw_or_cal_parameter_identifiers(index, None);
     }
 
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         let value = 
             match self.special_config.settings.adc_select() {
                 0 => {

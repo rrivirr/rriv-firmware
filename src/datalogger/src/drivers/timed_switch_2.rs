@@ -276,7 +276,7 @@ impl TimedSwitch2 {
 }
 
 impl SensorDriver for TimedSwitch2 {
-    fn setup(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
         self.state = match self.special_config.initial_state {
             true => 1,
@@ -319,11 +319,11 @@ impl SensorDriver for TimedSwitch2 {
     }
 
     #[allow(unused)]
-    fn take_measurement(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         // switch does not take measurement
     }
 
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::SensorDriverServices) {
+    fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         let timestamp = board.timestamp();
         let millis = board.millis();
 

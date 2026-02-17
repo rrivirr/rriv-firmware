@@ -53,7 +53,7 @@ use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rriv_board::{
-    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SensorDriverServices, SerialRxPeripheral, TelemetryDriverServices
+    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
@@ -63,6 +63,8 @@ use one_wire_bus::{crc::check_crc8, Address, OneWire, SearchState};
 
 mod components;
 use components::*;
+// use components::gpio::read_pin;
+
 mod pins;
 use pins::{GpioCr, Pins};
 
@@ -404,14 +406,6 @@ impl RRIVBoard for Board {
         return self.get_millis();
     }
 
-    fn get_sensor_driver_services(&mut self) -> &mut dyn SensorDriverServices {
-        return self;
-    }
-
-    fn get_telemetry_driver_services(&mut self) -> &mut dyn TelemetryDriverServices {
-        return self;
-    }
-
     fn get_battery_level(&mut self) -> i16 {
         match self
             .battery_level
@@ -502,87 +496,7 @@ impl RRIVBoard for Board {
             }
         });
     }
-}
 
-macro_rules! control_services_impl {
-    () => {
-        fn usb_serial_send(&mut self, args : fmt::Arguments ) {
-            rriv_board::RRIVBoard::usb_serial_send(self, args);
-        }
-
-        fn usart_send(&mut self, bytes: &[u8]) {
-            rriv_board::RRIVBoard::usart_send(self, bytes);
-        }
-
-        fn rs485_send(&mut self, message: &[u8]) {
-            rriv_board::RRIVBoard::rs485_send(self, message);
-        }
-
-        fn serial_debug(&mut self, args: fmt::Arguments) {
-            rriv_board::RRIVBoard::serial_debug(self, args);
-        }
-
-        fn delay_ms(&mut self, ms: u16) {
-            rriv_board::RRIVBoard::delay_ms(self, ms);
-        }
-
-        fn timestamp(&mut self) -> i64 {
-            rriv_board::RRIVBoard::timestamp(self)
-        }
-
-        fn millis(&mut self) -> u32 {
-            rriv_board::RRIVBoard::get_millis(self)
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! write_gpio {
-    ($gpio:ident, $value:expr) => {
-        if $value {
-            let _ = $gpio.set_high();
-        } else {
-            let _ = $gpio.set_low();
-        }
-    };
-}
-
-macro_rules! read_pin {
-    ($pin: ident) => {
-        match $pin.is_high() {
-            Ok(is_high) => Ok(is_high),
-            Err(err) => {
-                defmt::println!("{:?}", defmt::Debug2Format(&err));
-                Err(())
-            }
-        }
-    }
-}
-
-macro_rules! set_pin_mode {
-    ($pin: ident, $cr: ident, $mode: ident) => {
-        match $mode {
-            rriv_board::gpio::GpioMode::FloatingInput => {
-                $pin.make_floating_input($cr);
-            }
-            rriv_board::gpio::GpioMode::PullUpInput => {
-                $pin.make_pull_up_input($cr);
-            }
-            rriv_board::gpio::GpioMode::PullDownInput => {
-                $pin.make_pull_down_input($cr);
-            }
-            rriv_board::gpio::GpioMode::PushPullOutput => {
-                $pin.make_push_pull_output($cr);
-            }
-            rriv_board::gpio::GpioMode::OpenDrainOutput => {
-                $pin.make_open_drain_output($cr);
-            }
-            rriv_board::gpio::GpioMode::None => todo!(),
-        }
-    };
-}
-
-impl SensorDriverServices for Board {
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
         match self.internal_adc.read(channel) {
             Ok(value) => return value,
@@ -609,8 +523,6 @@ impl SensorDriverServices for Board {
     fn read_temp_adc(&mut self) -> i32 {
         return self.internal_adc.read_tempertature();
     }
-
-    control_services_impl!();
 
     fn ic2_read(&mut self, addr: u8, buffer: &mut [u8]) -> Result<(), ()> {
         match self.i2c2.read(addr, buffer) {
@@ -919,12 +831,11 @@ impl SensorDriverServices for Board {
     fn enable_interrupts(&self) {
         self.enable_interrupts();
     }
-    
+
 }
 
-impl TelemetryDriverServices for Board {
-    control_services_impl!();
-}
+
+
 
 #[interrupt]
 unsafe fn USART2() {

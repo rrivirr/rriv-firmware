@@ -1,9 +1,8 @@
 target/
 board/target/
-
-
-
+*atlas_stuff*
 
 .DS_Store
-
 node_modules
+
+src/datalogger/src/drivers/atlas_stuff/
