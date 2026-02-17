@@ -9,6 +9,7 @@ macro_rules! write_gpio {
     };
 }
 
+#[macro_export]
 macro_rules! read_pin {
     ($pin: ident) => {
         match $pin.is_high() {
@@ -21,6 +22,7 @@ macro_rules! read_pin {
     }
 }
 
+#[macro_export]
 macro_rules! set_pin_mode {
     ($pin: ident, $cr: ident, $mode: ident) => {
         match $mode {
