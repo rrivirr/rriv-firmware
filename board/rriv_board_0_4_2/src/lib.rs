@@ -5,8 +5,8 @@ extern crate alloc;
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+use stm32f1xx_hal::time::{MilliSeconds, ms};
+use stm32f1xx_hal::timer::{Ch, Channel, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self, Display};
 use core::mem;
@@ -121,6 +121,7 @@ pub struct Board {
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
     pub clocks: Clocks,
+    pub pwm: Option<Box<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>>,
 }
 
 impl Board {
@@ -826,6 +827,10 @@ impl SensorDriverServices for Board {
         };
     }
     
+    fn write_pwm_pin_duty(&mut self, value: u8){
+    }
+
+
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             1 => {
@@ -1093,6 +1098,7 @@ impl BoardBuilder {
             watchdog: watchdog,
             counter: self.counter.unwrap(),
             clocks: self.clocks.unwrap(),
+            pwm: None,
         }
     }
 
