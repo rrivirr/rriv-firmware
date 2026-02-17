@@ -1535,6 +1535,8 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
+        // defmt::println!("setting up RS485 serial b");
+        // setup_serialb(device_peripherals.UART5, &clocks);
 
         self.clocks = Some(clocks);
 
