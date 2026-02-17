@@ -679,12 +679,6 @@ impl DataLogger {
     }
 
     fn write_last_measurement_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
-        // first output the column headers
-        match self.serial_tx_mode {
-            DataLoggerSerialTxMode::Interactive => self.write_column_headers_to_serial(board),
-            _ => {}
-        }
-
         // then output the last measurement values
         match self.serial_tx_mode {
             DataLoggerSerialTxMode::Watch => self.write_measured_parameters_to_serial(board),
