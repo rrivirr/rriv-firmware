@@ -1046,7 +1046,7 @@ impl BoardBuilder {
             i2c2: self.i2c2.unwrap(),
             delay: self.delay.unwrap(),
             precise_delay: self.precise_delay.unwrap(),
-            gpio: gpio,
+            gpio: self.gpio.unwrap(),
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
             internal_adc: internal_adc,
