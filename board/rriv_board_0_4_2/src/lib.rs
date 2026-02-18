@@ -5,6 +5,7 @@ extern crate alloc;
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
+use rriv_board::hardware_error::{self, HardwareError};
 use stm32f1xx_hal::time::MilliSeconds;
 use stm32f1xx_hal::timer::CounterUs;
 
@@ -122,6 +123,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
+    pub hardware_errors: [HardwareError; 5]
 }
 
 impl Board {
@@ -223,9 +225,25 @@ impl Board {
     {
         cortex_m::interrupt::free(|_cs| f())
     }
+
+    fn add_hardware_error(&mut self, hardware_error: HardwareError){
+        add_hardware_error(&mut self.hardware_errors, hardware_error);
+    }
 }
 
+fn add_hardware_error(hardware_errors: &mut [HardwareError; 5], hardware_error: HardwareError){
+    for i in 0..hardware_errors.len() {
+        match hardware_errors[i] {
+            HardwareError::None => {
+                hardware_errors[i] = hardware_error;
+                break;
+            },
+            _ => { // do nothing 
+            }
 
+        }
+    }
+}
 
 impl RRIVBoard for Board {
     fn run_loop_iteration(&mut self) {
@@ -832,6 +850,40 @@ impl RRIVBoard for Board {
         self.enable_interrupts();
     }
 
+    fn get_errors(&self) -> [HardwareError; 5] {
+        return self.hardware_errors;
+    }
+
+    fn error_alarm(&mut self) {
+        // unsafely use the sd card pin to notify the user
+        let slow = 25_u16;
+        let fast = 10_u16;
+        unsafe {
+            let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals.GPIOC.split();
+            let cs = gpioc.pc8;
+            let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+            for _i in 0..10 {
+                cs.set_low();
+                self.delay.delay_ms(fast);
+                cs.set_high();
+                self.delay.delay_ms(fast);
+            }
+            for _i in 0..5 {
+                cs.set_low();
+                self.delay.delay_ms(slow);
+                cs.set_high();
+                self.delay.delay_ms(slow);
+            }
+            for _i in 0..10 {
+                cs.set_low();
+                self.delay.delay_ms(fast);
+                cs.set_high();
+                self.delay.delay_ms(fast);
+            }
+        }
+    }
+
 }
 
 
@@ -931,6 +983,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM4>>,
+    hardware_errors: [HardwareError; 5]
 }
 
 impl BoardBuilder {
@@ -953,6 +1006,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            hardware_errors: [HardwareError::None; 5]
         }
     }
 
@@ -1004,6 +1058,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            hardware_errors: self.hardware_errors
         }
     }
 
@@ -1165,7 +1220,7 @@ impl BoardBuilder {
     }
 
     fn setup(&mut self) {
-        defmt::println!("board new");
+        defmt::println!("board builder setup");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
@@ -1219,10 +1274,10 @@ impl BoardBuilder {
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        // watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
-        watchdog.feed();
+        // watchdog.start(MilliSeconds::secs(6));
+        // watchdog.feed();
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1238,9 +1293,31 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(20));
-        let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+        watchdog.start(MilliSeconds::secs(26));
+        let sd_card: Result<embedded_sdmmc::SdCard<Spi<pac::SPI2, stm32f1xx_hal::spi::Spi2NoRemap, (Pin<'B', 13, gpio::Alternate>, Pin<'B', 14>, Pin<'B', 15, gpio::Alternate>), u8>, Pin<'C', 8, Output>, Delay<TIM2, 1000000>>, HardwareError> = storage::build_sd_card(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+        watchdog.feed();
+        let sd_card = match sd_card {
+            Ok(sd_card) => Some(sd_card),
+            Err(hardware_error) => {
+                add_hardware_error(&mut self.hardware_errors, hardware_error);
+                None
+            }
+        };
+
+        let mut storage: Option<Storage> = None;
+        if let Some(sd_card) = sd_card {   
+            watchdog.feed();
+            storage = match storage::build_storage(sd_card, Some(&mut watchdog)) {
+                Ok(storage) => Some(storage),
+                Err(hardware_error) => {
+                    watchdog.feed();
+                    add_hardware_error(&mut self.hardware_errors, hardware_error);
+                    None
+                },
+            };
+        }
         watchdog.start(MilliSeconds::secs(6));
+
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
@@ -1539,11 +1616,28 @@ pub fn write_panic_to_storage(message: &str) {
         _usb_pins,
     ) = pin_groups::build(pins, &mut gpio_cr);
 
-    let mut storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-    if storage.is_some(){
-        let mut storage = storage.unwrap();
+    let sd_card = storage::build_sd_card(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+    let sd_card = match sd_card {
+        Ok(sd_card) => Some(sd_card),
+        Err(_) => {
+            None
+        }
+    };
+
+    let mut storage: Option<Storage> = None;
+    if let Some(sd_card) = sd_card {   
+        storage = match storage::build_storage(sd_card, None) {
+            Ok(storage) => Some(storage),
+            Err(_) => {
+                None
+            },
+        };
+    }
+    
+    if let Some(mut storage) = storage {
         storage.create_file(0);
         storage.write(message.as_bytes(), 0);
         storage.flush();
     }
+
 }
