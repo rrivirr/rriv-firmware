@@ -9,6 +9,7 @@ use datalogger::commands::*;
 use datalogger::payloads::*;
 use datalogger::settings::*;
 
+use rriv_board::hardware_error::HardwareError;
 use rriv_board::{
     RRIVBoard, EEPROM_DATALOGGER_SETTINGS_SIZE, EEPROM_SENSOR_SETTINGS_SIZE,
     EEPROM_TOTAL_SENSOR_SLOTS,
@@ -17,6 +18,7 @@ use serde::de::value;
 use util::any_as_u8_slice;
 extern crate alloc;
 use crate::datalogger::bytes;
+use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
@@ -344,6 +346,7 @@ impl DataLogger {
 
         match self.mode {
             DataLoggerMode::Interactive => {
+                // check for alarms
                 // process CLI
                 // process telemetry
                 // process actuators
@@ -354,6 +357,8 @@ impl DataLogger {
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
+
+                    self.process_errors(board);
 
                     self.measure_sensor_values(board); // measureSensorValues(false);
 
@@ -375,12 +380,18 @@ impl DataLogger {
 
             }
             DataLoggerMode::Field => {
+                // check for alarms
                 // run measurement cycle
                 // maybe we have sleep_interval (minutes) and interactive_logged_interval (seconds)
 
+
+                self.process_errors(board);
                 self.run_measurement_cycle(board);
                 if self.measurement_cycle_completed() {
                     defmt::println!("Measurement cycle completed");
+
+                    self.process_telemetry(board);
+
                     //     // go to sleep until the next in interval (in minutes)
                     let mut slept = 0u64;
                     while slept < (self.settings.sleep_interval as u64) * 1000u64 * 60u64 {
@@ -506,6 +517,22 @@ impl DataLogger {
 
     }
 
+    fn process_errors(&mut self, board: &mut impl rriv_board::RRIVBoard){
+        //
+        // Notify of errors
+        //
+        let mut error_raised = false;
+        for error in board.get_errors().iter() {
+            match error {
+                HardwareError::None => {},
+                _ => { error_raised = true}
+            }
+        }
+        if error_raised == true {
+            board.error_alarm();
+        }
+    }
+
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         for i in 0..self.sensor_drivers.len() {
             if let Some(ref mut driver) = self.sensor_drivers[i] {
@@ -541,13 +568,11 @@ impl DataLogger {
                     let identifier_str = util::str_from_utf8(&mut identifier).unwrap_or_default();
                     board.usb_serial_send(format_args!("{}",&prefix));
                     board.usb_serial_send(format_args!("{}",identifier_str));
-                    if j != driver.get_measured_parameter_count() - 1 {
-                        board.usb_serial_send(format_args!("{}",","));
-                    }
+                    board.usb_serial_send(format_args!("{}",","));
                 }
             }
         }
-        board.usb_serial_send(format_args!("{}","\n"));
+        board.usb_serial_send(format_args!("message\n"));
     }
 
     fn write_column_headers_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {
@@ -569,7 +594,7 @@ impl DataLogger {
                     let identifier_str = util::str_from_utf8(&mut identifier).unwrap_or_default();
                     board.write_log_file(format_args!("{}{}", &prefix, identifier_str));
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.write_log_file(format_args!(","));
+                        board.usb_serial_send(format_args!("{}",","));
                     }
                 }
             }
@@ -607,13 +632,19 @@ impl DataLogger {
                         }
                     }
 
-                    if j != driver.get_measured_parameter_count() - 1 {
-                        board.usb_serial_send(format_args!("{}",","));
-                    }
+                    board.usb_serial_send(format_args!("{}",","));
                 }
             }
         }
-        board.usb_serial_send(format_args!("{}","\n"));
+
+        let errors = board.get_errors();
+        let error_text = match errors[0] {
+            HardwareError::None => "",
+            _ => {
+                hardware_error_text(errors[0])
+            }
+        };
+        board.usb_serial_send(format_args!("{}\n", error_text));
     }
 
     fn write_raw_measurement_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {

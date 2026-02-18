@@ -20,7 +20,7 @@ pub fn build(
     spi_dev: SPI2,
     clocks: Clocks,
     delay: Delay<TIM2, 1000000>,
-) -> Option<Storage> {
+) -> Result<Storage, HardwareError> {
     let spi2 = Spi::spi2(
         spi_dev,
         (pins.sck, pins.miso, pins.mosi),
@@ -44,15 +44,20 @@ pub fn build(
         }),
         None => {
             defmt::println!("no sd card found");
-            return None;
+            return Err(HardwareError::StorageMissing);
         }
     }
 
-    let storage =  Storage::new(sdcard);
-    if storage.is_none() {
-        return None;
+    return match Storage::new(sdcard){
+        Ok(storage) => Ok(storage),
+        Err(card_error) => match card_error {
+            CardError::OutOfSpace => Err(HardwareError::StorageFull),
+            CardError::TooManyFiles => Err(HardwareError::StorageFull),
+            CardError::Missing => Err(HardwareError::StorageMissing),
+            CardError::Other => Err(HardwareError::StorageOther),
+        }
     }
-    storage
+   
 }
 
 // type RrivSdCard = SdCard<Spi<SPI1, Spi1NoRemap, (Pin<'A', 5, Alternate>, Pin<'A', 6>, Pin<'A', 7, Alternate>), u8>, Pin<'C', 8, Output>, SysDelay>;
@@ -129,26 +134,31 @@ pub struct Storage {
     next_position: usize,
 }
 
+pub enum CardError {
+    OutOfSpace,
+    TooManyFiles,
+    Missing,
+    Other,
+}
+
 impl Storage {
     pub fn new(
         sd_card: RrivSdCard, // , time_source: impl TimeSource //  a timesource passed in here could use unsafe access to internal RTC or i2c bus
-    ) -> Option<Self> {
+    ) -> Result<Self, CardError> {
 
         let size = match sd_card.num_bytes(){
             Ok(size) => size,
-            Err(_) => return None,
+            Err(_) => return Err(CardError::Other),
         };
 
-        let time_source = RrivTimeSource::new(); // unsafe access to the board
-                                                 // or global time var via interrupt
-                                                 // or copy into a global variable at the top of the run loop
+        let time_source = RrivTimeSource::new();
         defmt::println!("set up sdcard");
 
         let mut volume_manager = embedded_sdmmc::VolumeManager::new(sd_card, time_source);
         // Try and access Volume 0 (i.e. the first partition).
         // The volume object holds information about the filesystem on that volume.
         defmt::println!("trying to set up sd card volume");
-        let result = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0)); // TODO: this just hangs.  need window watchdog to catch here.
+        let result = volume_manager.open_volume(embedded_sdmmc::VolumeIdx(0));
         let volume = match result {
             Ok(volume0) => {
                 defmt::println!("Volume Success: {:?}", defmt::Debug2Format(&volume0));
@@ -156,7 +166,7 @@ impl Storage {
             }
             Err(error) => {
                 defmt::println!("Volume error: {:?}", defmt::Debug2Format(&error));
-                panic!("sd card error");
+                return Err(CardError::Other)
             }
         };
 
@@ -178,13 +188,18 @@ impl Storage {
 
         let mut count = 0;
         let mut bytes = 0u64;
+        let mut max_bytes =  size - 150000000;
+        let mut stop_scanning = false;
         match volume_manager.iterate_dir(root_dir, |dir| { 
+            if stop_scanning == true {
+                return;
+            }
             count = count + 1;
             bytes = bytes + dir.size as u64;
             defmt::println!("size {} , bytes: {}", size, bytes);
-            if count == 512 || bytes > size - 100000000 { 
+            if count == 512 || bytes > max_bytes { 
+                stop_scanning = true;
                 // unsafely notify the user 
-                // no way to get out of here, but we can flash the led, and we can panic
                 unsafe {
                     let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
                     let mut gpioc = device_peripherals.GPIOC.split();
@@ -198,19 +213,29 @@ impl Storage {
                     }
                     cs.set_high();
                 }
-                let message = if count == 512 {
-                    "sd card too many files"
+                if count == 512 {
+                    defmt::println!("sd card too many files");
+                    // return Err(CardError::TooManyFiles)
                 } else {
-                    "out of space on card"
+                    defmt::println!("out of space on card");
                 };
-                panic!("{}", message);
             }
         } ) {
             Ok(_) => {
                 defmt::println!("iterated dir");
             },
-            Err(_) => return None,
+            Err(_) => {
+                defmt::println!("problem iterating dir");
+                return Err(CardError::Other)
+            }
         }
+
+        if count == 512 {
+            return Err(CardError::TooManyFiles)
+        } else if bytes > max_bytes {
+            return Err(CardError::OutOfSpace)
+        }
+
 
         let storage = Storage {
             volume_manager,
@@ -221,7 +246,7 @@ impl Storage {
             cache: [b'\0'; CACHE_SIZE],
             next_position: 0,
         };
-        Some(storage)
+        Ok(storage)
     }
 
     pub fn reopen_file(&mut self) {

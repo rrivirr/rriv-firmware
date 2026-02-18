@@ -5,8 +5,9 @@ use core::fmt;
 
 
 pub mod gpio;
+pub mod hardware_error;
 
-use crate::gpio::GpioMode;
+use crate::{gpio::GpioMode, hardware_error::HardwareError};
 
 pub const EEPROM_DATALOGGER_SETTINGS_SIZE: usize = 64;
 pub const EEPROM_SENSOR_SETTINGS_SIZE: usize = 64;
@@ -29,21 +30,6 @@ pub enum SerialRxPeripheral{
     SerialPeripheral2
 }
 
-// Board Services Used by Control Logic and Drivers
-macro_rules! control_services {
-    () => {
-        fn usb_serial_send(&mut self, arg: fmt::Arguments);
-                // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
-                                                 // maybe rrivctl_send
-        fn usart_send(&mut self, bytes: &[u8]);
-        fn rs485_send(&mut self, message : &[u8]);
-        fn serial_debug(&mut self, args: fmt::Arguments);
-        fn delay_ms(&mut self, ms: u16);
-        fn timestamp(&mut self) -> i64;
-        fn millis(&mut self) -> u32;
-
-    };
-}
 
 pub trait RRIVBoard: Send {
 
@@ -73,7 +59,16 @@ pub trait RRIVBoard: Send {
     fn get_millis(&mut self) -> u32;
 
     // Board Services Used by Control Logic and Drivers
-    control_services!();
+    fn usb_serial_send(&mut self, arg: fmt::Arguments);
+                // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
+                // maybe rrivctl_send
+    fn usart_send(&mut self, bytes: &[u8]);
+    fn rs485_send(&mut self, message : &[u8]);
+    fn serial_debug(&mut self, args: fmt::Arguments);
+    fn delay_ms(&mut self, ms: u16);
+    fn timestamp(&mut self) -> i64;
+    fn millis(&mut self) -> u32;
+
 
     fn get_battery_level(&mut self) -> i16;
 
@@ -118,6 +113,9 @@ pub trait RRIVBoard: Send {
     fn read_temp_adc(&mut self) -> i32;
     fn disable_interrupts(&self);
     fn enable_interrupts(&self);
+
+    fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
+    fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
     
 }
 
