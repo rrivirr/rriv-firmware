@@ -188,13 +188,18 @@ impl Storage {
 
         let mut count = 0;
         let mut bytes = 0u64;
+        let mut max_bytes =  size - 150000000;
+        let mut stop_scanning = false;
         match volume_manager.iterate_dir(root_dir, |dir| { 
+            if stop_scanning == true {
+                return;
+            }
             count = count + 1;
             bytes = bytes + dir.size as u64;
             defmt::println!("size {} , bytes: {}", size, bytes);
-            if count == 512 || bytes > size - 100000000 { 
+            if count == 512 || bytes > max_bytes { 
+                stop_scanning = true;
                 // unsafely notify the user 
-                // no way to get out of here, but we can flash the led, and we can panic
                 unsafe {
                     let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
                     let mut gpioc = device_peripherals.GPIOC.split();
@@ -208,19 +213,29 @@ impl Storage {
                     }
                     cs.set_high();
                 }
-                let message = if count == 512 {
-                    "sd card too many files"
+                if count == 512 {
+                    defmt::println!("sd card too many files");
+                    // return Err(CardError::TooManyFiles)
                 } else {
-                    "out of space on card"
+                    defmt::println!("out of space on card");
                 };
-                panic!("{}", message);
             }
         } ) {
             Ok(_) => {
                 defmt::println!("iterated dir");
             },
-            Err(_) => return None,
+            Err(_) => {
+                defmt::println!("problem iterating dir");
+                return Err(CardError::Other)
+            }
         }
+
+        if count == 512 {
+            return Err(CardError::TooManyFiles)
+        } else if bytes > max_bytes {
+            return Err(CardError::OutOfSpace)
+        }
+
 
         let storage = Storage {
             volume_manager,
