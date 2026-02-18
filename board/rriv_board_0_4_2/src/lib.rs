@@ -1220,7 +1220,7 @@ impl BoardBuilder {
     }
 
     fn setup(&mut self) {
-        defmt::println!("board new");
+        defmt::println!("board builder setup");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
