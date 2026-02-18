@@ -389,6 +389,9 @@ impl DataLogger {
                 self.run_measurement_cycle(board);
                 if self.measurement_cycle_completed() {
                     defmt::println!("Measurement cycle completed");
+
+                    self.process_telemetry(board);
+
                     //     // go to sleep until the next in interval (in minutes)
                     let mut slept = 0u64;
                     while slept < (self.settings.sleep_interval as u64) * 1000u64 * 60u64 {
