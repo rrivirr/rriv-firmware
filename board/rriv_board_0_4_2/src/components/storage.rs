@@ -2,7 +2,7 @@ use core::panic;
 
 use cortex_m::asm;
 use ds323x::{Datelike, Timelike};
-use embedded_hal::spi::{Mode, Phase, Polarity};
+use embedded_hal::{spi::{Mode, Phase, Polarity}, watchdog};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 use pac::SPI2;
 use stm32f1xx_hal::{gpio::Alternate, spi::{Spi2NoRemap, SpiReadWrite}};
@@ -15,12 +15,27 @@ pub const MODE: Mode = Mode {
     polarity: Polarity::IdleHigh,
 };
 
-pub fn build(
+type RrivSdCard = SdCard<
+    Spi<
+        SPI2,
+        Spi2NoRemap,
+        (
+            Pin<'B', 13, Alternate>,
+            Pin<'B', 14>,
+            Pin<'B', 15, Alternate>,
+        ),
+        u8,
+    >,
+    Pin<'C', 8, Output>,
+    Delay<TIM2, 1000000>,
+>;
+
+pub fn build_sd_card(
     pins: Spi2Pins,
     spi_dev: SPI2,
     clocks: Clocks,
     delay: Delay<TIM2, 1000000>,
-) -> Result<Storage, HardwareError> {
+) -> Result<RrivSdCard, HardwareError> {
     let spi2 = Spi::spi2(
         spi_dev,
         (pins.sck, pins.miso, pins.mosi),
@@ -48,7 +63,14 @@ pub fn build(
         }
     }
 
-    return match Storage::new(sdcard){
+    Ok(sdcard)
+   
+}
+
+pub fn build_storage(sdcard: RrivSdCard, 
+                    watchdog: Option<&mut IndependentWatchdog>
+) -> Result<Storage, HardwareError>{
+    return match Storage::new(sdcard, watchdog){
         Ok(storage) => Ok(storage),
         Err(card_error) => match card_error {
             CardError::OutOfSpace => Err(HardwareError::StorageFull),
@@ -57,24 +79,9 @@ pub fn build(
             CardError::Other => Err(HardwareError::StorageOther),
         }
     }
-   
+
 }
 
-// type RrivSdCard = SdCard<Spi<SPI1, Spi1NoRemap, (Pin<'A', 5, Alternate>, Pin<'A', 6>, Pin<'A', 7, Alternate>), u8>, Pin<'C', 8, Output>, SysDelay>;
-type RrivSdCard = SdCard<
-    Spi<
-        SPI2,
-        Spi2NoRemap,
-        (
-            Pin<'B', 13, Alternate>,
-            Pin<'B', 14>,
-            Pin<'B', 15, Alternate>,
-        ),
-        u8,
-    >,
-    Pin<'C', 8, Output>,
-    Delay<TIM2, 1000000>,
->;
 // SdCard<Spi<SPI2, Spi2NoRemap, (Pin<'B', 13, Alternate>, Pin<'B', 14>, Pin<'B', 15, Alternate>), u8>, Pin<'C', 8, Output>>;
 pub struct RrivTimeSource {}
 
@@ -144,6 +151,7 @@ pub enum CardError {
 impl Storage {
     pub fn new(
         sd_card: RrivSdCard, // , time_source: impl TimeSource //  a timesource passed in here could use unsafe access to internal RTC or i2c bus
+        watchdog: Option<&mut IndependentWatchdog>
     ) -> Result<Self, CardError> {
 
         let size = match sd_card.num_bytes(){
@@ -188,37 +196,52 @@ impl Storage {
 
         let mut count = 0;
         let mut bytes = 0u64;
-        let mut max_bytes =  size - 150000000;
+        let max_bytes =  size - 1500000000;
         let mut stop_scanning = false;
+        if let Some(watchdog) = watchdog {
+            watchdog.feed();
+        }
         match volume_manager.iterate_dir(root_dir, |dir| { 
             if stop_scanning == true {
+                // if let Some(watchdog) = watchdog { // problem with copy
+                //     watchdog.feed();
+                // }
                 return;
             }
+            
             count = count + 1;
             bytes = bytes + dir.size as u64;
             defmt::println!("size {} , bytes: {}", size, bytes);
             if count == 512 || bytes > max_bytes { 
                 stop_scanning = true;
                 // unsafely notify the user 
-                unsafe {
-                    let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
-                    let mut gpioc = device_peripherals.GPIOC.split();
-                    let cs = gpioc.pc8;
-                    let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
-                    for _i in 1..30 {
-                        cs.set_high();
-                        for _j in 0..150000 { asm::nop(); }
-                        cs.set_low();
-                        for _j in 0..150000 { asm::nop(); }
-                    }
-                    cs.set_high();
-                }
+                // how can we get out of here???
+                // unsafe {
+                //     let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+                //     let mut gpioc = device_peripherals.GPIOC.split();
+                //     let cs = gpioc.pc8;
+                //     let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+                //     for _i in 1..30 {
+                //         cs.set_high();
+                //         for _j in 0..150000 { asm::nop(); }
+                //         cs.set_low();
+                //         for _j in 0..150000 { asm::nop(); }
+                //     }
+                //     cs.set_high();
+                // }
                 if count == 512 {
                     defmt::println!("sd card too many files");
                     // return Err(CardError::TooManyFiles)
                 } else {
                     defmt::println!("out of space on card");
                 };
+
+                // NOTE
+                // if we really can't catch the error here
+                // we can set a bit int he backup register and then catch it after set
+                // which is really annoying.
+
+                // ok so this particular card is just hosed then?
             }
         } ) {
             Ok(_) => {

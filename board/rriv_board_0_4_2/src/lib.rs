@@ -1274,10 +1274,10 @@ impl BoardBuilder {
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        // watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
-        watchdog.feed();
+        // watchdog.start(MilliSeconds::secs(6));
+        // watchdog.feed();
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1293,16 +1293,31 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(20));
-        let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        watchdog.start(MilliSeconds::secs(6));
-        let storage = match storage {
-            Ok(storage) => Some(storage),
+        watchdog.start(MilliSeconds::secs(26));
+        let sd_card: Result<embedded_sdmmc::SdCard<Spi<pac::SPI2, stm32f1xx_hal::spi::Spi2NoRemap, (Pin<'B', 13, gpio::Alternate>, Pin<'B', 14>, Pin<'B', 15, gpio::Alternate>), u8>, Pin<'C', 8, Output>, Delay<TIM2, 1000000>>, HardwareError> = storage::build_sd_card(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+        watchdog.feed();
+        let sd_card = match sd_card {
+            Ok(sd_card) => Some(sd_card),
             Err(hardware_error) => {
                 add_hardware_error(&mut self.hardware_errors, hardware_error);
                 None
-            },
+            }
         };
+
+        let mut storage: Option<Storage> = None;
+        if let Some(sd_card) = sd_card {   
+            watchdog.feed();
+            storage = match storage::build_storage(sd_card, Some(&mut watchdog)) {
+                Ok(storage) => Some(storage),
+                Err(hardware_error) => {
+                    watchdog.feed();
+                    add_hardware_error(&mut self.hardware_errors, hardware_error);
+                    None
+                },
+            };
+        }
+        watchdog.start(MilliSeconds::secs(6));
+
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
@@ -1601,13 +1616,28 @@ pub fn write_panic_to_storage(message: &str) {
         _usb_pins,
     ) = pin_groups::build(pins, &mut gpio_cr);
 
-    let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-    match storage {
-        Ok(mut storage) => {
-            storage.create_file(0);
-            storage.write(message.as_bytes(), 0);
-            storage.flush();
+    let sd_card = storage::build_sd_card(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+    let sd_card = match sd_card {
+        Ok(sd_card) => Some(sd_card),
+        Err(_) => {
+            None
         }
-        Err(_) => {},
+    };
+
+    let mut storage: Option<Storage> = None;
+    if let Some(sd_card) = sd_card {   
+        storage = match storage::build_storage(sd_card, None) {
+            Ok(storage) => Some(storage),
+            Err(_) => {
+                None
+            },
+        };
     }
+    
+    if let Some(mut storage) = storage {
+        storage.create_file(0);
+        storage.write(message.as_bytes(), 0);
+        storage.flush();
+    }
+
 }
