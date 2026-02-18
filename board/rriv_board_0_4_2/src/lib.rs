@@ -1296,6 +1296,13 @@ impl BoardBuilder {
         watchdog.start(MilliSeconds::secs(20));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
         watchdog.start(MilliSeconds::secs(6));
+        let storage = match storage {
+            Ok(storage) => Some(storage),
+            Err(hardware_error) => {
+                add_hardware_error(&mut self.hardware_errors, hardware_error);
+                None
+            },
+        };
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
@@ -1594,11 +1601,13 @@ pub fn write_panic_to_storage(message: &str) {
         _usb_pins,
     ) = pin_groups::build(pins, &mut gpio_cr);
 
-    let mut storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-    if storage.is_some(){
-        let mut storage = storage.unwrap();
-        storage.create_file(0);
-        storage.write(message.as_bytes(), 0);
-        storage.flush();
+    let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+    match storage {
+        Ok(mut storage) => {
+            storage.create_file(0);
+            storage.write(message.as_bytes(), 0);
+            storage.flush();
+        }
+        Err(_) => {},
     }
 }
