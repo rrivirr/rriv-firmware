@@ -1,3 +1,21 @@
+# [1.10.0](https://github.com/rrivirr/rriv-firmware/compare/v1.9.0...v1.10.0) (2026-02-18)
+
+
+### Bug Fixes
+
+* remove unnecessary macro ([9c06cc7](https://github.com/rrivirr/rriv-firmware/commit/9c06cc73abf86334ac37f6ea687bc29b7d4ee036))
+
+
+### Features
+
+* add hardware error enum ([04f6424](https://github.com/rrivirr/rriv-firmware/commit/04f64243fa7c54a8b73817811c272c5a86d02773))
+* add hardware error text ([093e26b](https://github.com/rrivirr/rriv-firmware/commit/093e26bad738491a109d12a6d6942064f97e7c36))
+* add support for tracking hardware errors and triggering hardware alarm ([028aa9c](https://github.com/rrivirr/rriv-firmware/commit/028aa9c9866e2dcefc33f732897f465760c82de1))
+* add telemetry in field mode ([8ac5940](https://github.com/rrivirr/rriv-firmware/commit/8ac5940522636b9168c71517db671a185db9c0c8))
+* capture and output hardware errors to watch ([1a4c74b](https://github.com/rrivirr/rriv-firmware/commit/1a4c74b5467b4a168dda42dcb2d4c206e971fb13))
+* catch out of space errors into hard errors pattern ([defc229](https://github.com/rrivirr/rriv-firmware/commit/defc2299b6db345b050836274f28dd080e2f3cbe))
+* storage::build support returning sd card errors ([666c0dc](https://github.com/rrivirr/rriv-firmware/commit/666c0dcfee8d9548f967c8397fb9b9f529cb47ed))
+
 # [1.9.0](https://github.com/rrivirr/rriv-firmware/compare/v1.8.0...v1.9.0) (2026-02-17)
 
 
