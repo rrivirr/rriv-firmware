@@ -123,7 +123,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
-    pub hardware_errors: [HardwareError; 5]
+    pub hardware_errors: [HardwareError; 5],
     pub clocks: Clocks,
     pub pwm: Option<Box<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>>,
 }
@@ -1017,7 +1017,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
-    hardware_errors: [HardwareError; 5]
+    hardware_errors: [HardwareError; 5],
     pub clocks: Option<Clocks>
 }
 
@@ -1041,7 +1041,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
-            hardware_errors: [HardwareError::None; 5]
+            hardware_errors: [HardwareError::None; 5],
             clocks: None
         }
     }
@@ -1090,7 +1090,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
-            hardware_errors: self.hardware_errors
+            hardware_errors: self.hardware_errors,
             clocks: self.clocks.unwrap(),
             pwm: None,
         }
