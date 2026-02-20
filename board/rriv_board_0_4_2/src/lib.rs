@@ -6,8 +6,8 @@ use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use rriv_board::hardware_error::{self, HardwareError};
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+use stm32f1xx_hal::time::{MilliSeconds, ms};
+use stm32f1xx_hal::timer::{Ch, Channel, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self, Display};
 use core::mem;
@@ -28,7 +28,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -122,8 +122,10 @@ pub struct Board {
     pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
-    pub counter: CounterUs<TIM4>,
-    pub hardware_errors: [HardwareError; 5]
+    pub counter: CounterUs<TIM5>,
+    pub hardware_errors: [HardwareError; 5],
+    pub clocks: Clocks,
+    pub pwm: Option<Box<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>>,
 }
 
 impl Board {
@@ -142,6 +144,28 @@ impl Board {
         // self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
         // self.get_sensor_driver_services().write_gpio_pin(2, false);
         // defmt::println!("pin 2 set up"); rriv_board::RRIVBoard::delay_ms(self, 1000);
+
+
+        // hard code a pwm pin
+        let clocks = self.clocks;
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        let tim4 = device_peripherals.TIM4;
+        let mut afio = device_peripherals.AFIO.constrain();
+        let pin = &mut self.gpio.gpio1;
+        pin.make_open_drain_output(&mut self.gpio_cr.gpiob_crh);  // Dynamic pin not recognized by the HAL pwm construct
+
+
+        // just steal the damn pins.
+        // this pin is not actually moved by the pwm construct, just used as a template generic
+        let gpiob = device_peripherals.GPIOB.split();
+        let pin = gpiob.pb8.into_alternate_open_drain(&mut self.gpio_cr.gpiob_crh);
+    
+        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>> = 
+            tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
+        pwm.enable(Channel::C3);
+        pwm.set_period(ms(500).into_rate());
+        self.pwm = Some(Box::new(pwm));
+
         defmt::println!("board started");
 
     }
@@ -755,6 +779,16 @@ impl RRIVBoard for Board {
         };
     }
     
+    fn write_pwm_pin_duty(&mut self, value: u8){
+        if let Some(pwm) = &mut self.pwm {
+            let max = pwm.get_max_duty();
+            let x1 = max as u32 * (value as u32);
+            let x2 = x1 / 255;
+            pwm.set_duty(Channel::C3, x2 as u16);
+        }
+    }
+
+
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             1 => {
@@ -982,8 +1016,9 @@ pub struct BoardBuilder {
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
-    pub counter: Option<CounterUs<TIM4>>,
-    hardware_errors: [HardwareError; 5]
+    pub counter: Option<CounterUs<TIM5>>,
+    hardware_errors: [HardwareError; 5],
+    pub clocks: Option<Clocks>
 }
 
 impl BoardBuilder {
@@ -1006,7 +1041,8 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
-            hardware_errors: [HardwareError::None; 5]
+            hardware_errors: [HardwareError::None; 5],
+            clocks: None
         }
     }
 
@@ -1029,10 +1065,6 @@ impl BoardBuilder {
             }
         };
 
-        // TODO: just one GPIO pin for the moment
-        let mut gpio = self.gpio.unwrap();
-        gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
-
         let mut watchdog = self.watchdog.unwrap();
         watchdog.feed();
 
@@ -1042,7 +1074,7 @@ impl BoardBuilder {
             i2c2: self.i2c2.unwrap(),
             delay: self.delay.unwrap(),
             precise_delay: self.precise_delay.unwrap(),
-            gpio: gpio,
+            gpio: self.gpio.unwrap(),
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
             internal_adc: internal_adc,
@@ -1058,7 +1090,9 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
-            hardware_errors: self.hardware_errors
+            hardware_errors: self.hardware_errors,
+            clocks: self.clocks.unwrap(),
+            pwm: None,
         }
     }
 
@@ -1498,7 +1532,7 @@ impl BoardBuilder {
         self.precise_delay = Some(precise_delay);
 
         // the millis counter
-        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        let mut counter: CounterUs<TIM5> = device_peripherals.TIM5.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),
             Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
@@ -1509,8 +1543,10 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        defmt::println!("setting up RS485 serial b");
-        setup_serialb(device_peripherals.UART5, &clocks);
+        // defmt::println!("setting up RS485 serial b");
+        // setup_serialb(device_peripherals.UART5, &clocks);
+
+        self.clocks = Some(clocks);
 
         defmt::println!("done with setup");
 
