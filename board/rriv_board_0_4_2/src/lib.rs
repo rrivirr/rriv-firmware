@@ -27,7 +27,7 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::Pin;
+use stm32f1xx_hal::gpio::{Alternate, Pin};
 use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
@@ -125,7 +125,7 @@ pub struct Board {
     pub counter: CounterUs<TIM5>,
     pub hardware_errors: [HardwareError; 5],
     pub clocks: Clocks,
-    pub pwm: Option<Box<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>>,
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>,
 }
 
 impl Board {
@@ -145,27 +145,7 @@ impl Board {
         // self.get_sensor_driver_services().write_gpio_pin(2, false);
         // defmt::println!("pin 2 set up"); rriv_board::RRIVBoard::delay_ms(self, 1000);
 
-
-        // hard code a pwm pin
-        let clocks = self.clocks;
-        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        let tim4 = device_peripherals.TIM4;
-        let mut afio = device_peripherals.AFIO.constrain();
-        let pin = &mut self.gpio.gpio1;
-        pin.make_open_drain_output(&mut self.gpio_cr.gpiob_crh);  // Dynamic pin not recognized by the HAL pwm construct
-
-
-        // just steal the damn pins.
-        // this pin is not actually moved by the pwm construct, just used as a template generic
-        let gpiob = device_peripherals.GPIOB.split();
-        let pin = gpiob.pb8.into_alternate_open_drain(&mut self.gpio_cr.gpiob_crh);
-    
-        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>> = 
-            tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
-        pwm.enable(Channel::C3);
-        pwm.set_period(ms(500).into_rate());
-        self.pwm = Some(Box::new(pwm));
-
+        self.delay_ms(2000);
         defmt::println!("board started");
 
     }
@@ -1019,6 +999,7 @@ pub struct BoardBuilder {
     pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5],
     pub clocks: Option<Clocks>
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>
 }
 
 impl BoardBuilder {
@@ -1043,6 +1024,7 @@ impl BoardBuilder {
             counter: None,
             hardware_errors: [HardwareError::None; 5],
             clocks: None
+            pwm: None
         }
     }
 
@@ -1092,7 +1074,7 @@ impl BoardBuilder {
             counter: self.counter.unwrap(),
             hardware_errors: self.hardware_errors,
             clocks: self.clocks.unwrap(),
-            pwm: None,
+            pwm: Some(self.pwm.unwrap()),
         }
     }
 
@@ -1301,6 +1283,18 @@ impl BoardBuilder {
         dynamic_gpio_pins
             .gpio6
             .make_push_pull_output(&mut gpio_cr.gpioc_crh);
+
+        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        let gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+        let pin = gpiob.pb8.into_alternate_open_drain(&mut gpio_cr.gpiob_crh);
+ 
+
+        let tim4 = device_peripherals.TIM4;
+        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>> = 
+            tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
+        pwm.enable(Channel::C3);
+        pwm.set_period(ms(500).into_rate());
+        self.pwm = Some(pwm);
 
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
