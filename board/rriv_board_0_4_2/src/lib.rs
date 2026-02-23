@@ -1003,7 +1003,7 @@ pub struct BoardBuilder {
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5],
-    pub clocks: Option<Clocks>
+    pub clocks: Option<Clocks>,
     pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>
 }
 
@@ -1028,7 +1028,7 @@ impl BoardBuilder {
             watchdog: None,
             counter: None,
             hardware_errors: [HardwareError::None; 5],
-            clocks: None
+            clocks: None,
             pwm: None
         }
     }
