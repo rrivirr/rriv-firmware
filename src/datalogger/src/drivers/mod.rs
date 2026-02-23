@@ -16,4 +16,5 @@ pub mod aht20;
 pub mod adc_temperature;
 pub mod resources;
 pub mod modbus;
+pub mod groundwater_flow_sdi12;
 
