@@ -9,6 +9,7 @@ edition = "2021"
 rriv_board = { path = "../../board/rriv_board" } 
 control_interface = { path = "../../src/control_interface" }
 util = { path = "../../src/util"}
+sdi12 = { path = "../../src/sdi12"}
 hashbrown = { version="0.14", default-features=false }
 serde_json = { version = "1.0.104", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
