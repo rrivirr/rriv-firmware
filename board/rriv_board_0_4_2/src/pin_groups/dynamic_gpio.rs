@@ -2,7 +2,7 @@ use stm32f1xx_hal::gpio::*;
 use crate::pins::*;
 
 pub struct DynamicGpioPins {
-    pub gpio1: Pin<'B', 8, Dynamic>,
+    pub gpio1: Pin<'B', 8, Alternate<OpenDrain>>,
     pub gpio2: Pin<'B', 5, Dynamic>,
     pub gpio3: Pin<'B', 4, Dynamic>,
     pub gpio4: Pin<'B', 3, Dynamic>,
@@ -25,7 +25,7 @@ impl DynamicGpioPins {
         cr: &mut GpioCr,
     ) -> Self {
         return DynamicGpioPins {
-            gpio1: gpio1.into_dynamic(&mut cr.gpiob_crh),
+            gpio1: gpio1.into_alternate_open_drain(&mut cr.gpiob_crh),
             gpio2: gpio2.into_dynamic(&mut cr.gpiob_crl),
             gpio3: gpio3.into_dynamic(&mut cr.gpiob_crl),
             gpio4: gpio4.into_dynamic(&mut cr.gpiob_crl),
