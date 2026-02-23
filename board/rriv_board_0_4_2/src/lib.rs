@@ -1264,9 +1264,6 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
-        dynamic_gpio_pins
-            .gpio6
-            .make_push_pull_output(&mut gpio_cr.gpioc_crh);
 
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
