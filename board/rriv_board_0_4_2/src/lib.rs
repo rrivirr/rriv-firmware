@@ -726,10 +726,10 @@ impl RRIVBoard for Board {
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool) {
         match pin {
-            1 => {
-                let gpio = &mut self.gpio.gpio1;
-                write_gpio!(gpio, value);
-            }
+            // 1 => {
+            //     let gpio = &mut self.gpio.gpio1;
+            //     write_gpio!(gpio, value);
+            // }
             2 => {
                 let gpio = &mut self.gpio.gpio2;
                 write_gpio!(gpio, value);
@@ -777,10 +777,10 @@ impl RRIVBoard for Board {
 
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
-            1 => {
-                let pin =  &mut self.gpio.gpio1;
-                return read_pin!(pin);
-            },
+            // 1 => {
+            //     let pin =  &mut self.gpio.gpio1;
+            //     return read_pin!(pin);
+            // },
             2 => {
                 let pin =  &mut self.gpio.gpio2;
                 return read_pin!(pin);
@@ -818,11 +818,11 @@ impl RRIVBoard for Board {
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: rriv_board::gpio::GpioMode) {
 
         match pin {
-            1 => {
-                let cr = &mut self.gpio_cr.gpiob_crh;
-                let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
-                set_pin_mode!(pin, cr, mode);
-            }
+            // 1 => {
+            //     // let cr = &mut self.gpio_cr.gpiob_crh;
+            //     // let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
+            //     // set_pin_mode!(pin, cr, mode);
+            // }
             2 => {
                 let cr = &mut self.gpio_cr.gpiob_crl;
                 let pin = &mut self.gpio.gpio2;
