@@ -2,8 +2,6 @@
 
 use crate::sensor_name_from_type_id;
 
-use super::mcp9808::*;
-
 use super::types::*;
 use alloc::boxed::Box;
 use rtt_target::rprint;
@@ -128,7 +126,8 @@ impl SensorDriver for RingTemperatureDriver {
     }
 
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        for i in 0..TEMPERATURE_SENSORS_ON_RING {
+        let _ = board;
+        for _i in 0..TEMPERATURE_SENSORS_ON_RING {
             // self.sensor_drivers[i].setup(board);
         }
     }
@@ -149,7 +148,7 @@ impl SensorDriver for RingTemperatureDriver {
 
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
         let sensor_index = index / 2;
-        let parameter_index = index % 2;
+        let _parameter_index = index % 2;
         // let buf =
         //     self.sensor_drivers[sensor_index].get_measured_parameter_identifier(parameter_index);
 
@@ -166,6 +165,7 @@ impl SensorDriver for RingTemperatureDriver {
     }
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+        let _ = board;
         for i in 0..TEMPERATURE_SENSORS_ON_RING {
 
             self.measured_parameter_values[i * 2] = 22.2;
@@ -210,7 +210,7 @@ impl SensorDriver for RingTemperatureDriver {
         let point = single.point;
         let values = &single.values;
         for i in 0..TEMPERATURE_SENSORS_ON_RING as usize {
-            let pairs = CalibrationPair {
+            let _pairs = CalibrationPair {
                 point: point,
                 values: Box::new([values[i]]),
             };

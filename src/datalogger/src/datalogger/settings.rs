@@ -27,9 +27,14 @@ pub struct DataloggerSettingsBitField {
     #[bits(1)]
     pub log_raw_data: bool,
 
-    #[bits(2)]
+    #[bits(1)]
+    pub enable_interactive_logging: bool,
+
+    #[bits(1)]
     unused: usize,
 }
+
+
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct DataloggerSettings {
@@ -136,8 +141,11 @@ impl DataloggerSettings {
         settings.mode = values.mode.unwrap_or(self.mode);
         settings.toggles.set_enable_lorawan_telemetry(values.enable_lorawan_telemetry.unwrap_or(self.toggles.enable_lorawan_telemetry()));
         settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
+        settings.toggles.set_enable_interactive_logging(values.interactive_logging.unwrap_or(self.toggles.enable_interactive_logging()));
         settings
     }
 
    
 }
+
+

@@ -1,6 +1,4 @@
-use rtt_target::rprint;
 use serde_json::json;
-use util::any_as_u8_slice;
 
 use crate::sensor_name_from_type_id;
 
@@ -8,15 +6,16 @@ use super::types::*;
 
 #[derive(Copy, Clone)]
 pub struct ADCTemperatureDriverSpecialConfiguration {
-    empty: [u8; 32], // must add to 32
+    _empty: [u8; 32], // must add to 32
 }
 
 impl ADCTemperatureDriverSpecialConfiguration {
     pub fn parse_from_values(
         value: serde_json::Value,
     ) -> Result<ADCTemperatureDriverSpecialConfiguration, &'static str>  {
+        let _ = value;
         Ok(Self {
-            empty: [b'\0'; 32] 
+            _empty: [b'\0'; 32] 
         })
     }
 

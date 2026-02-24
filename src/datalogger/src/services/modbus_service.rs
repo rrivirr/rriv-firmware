@@ -63,7 +63,7 @@ impl<'a> ModbusByteProcessor {
                     }
                     
                 },
-                Err(err) => Err(())
+                Err(err) => {Err(())}
             }
         } else {
             Err(())

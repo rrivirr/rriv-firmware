@@ -1,6 +1,5 @@
 // use alloc::fmt::format;
 
-use crate::any_as_u8_slice;
 use crate::sensor_name_from_type_id;
 
 use super::mcp9808::*;

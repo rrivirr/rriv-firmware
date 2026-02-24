@@ -5,6 +5,7 @@ use super::resources::gpio::*;
 
 pub const SENSOR_SETTINGS_PARTITION_SIZE: usize = 32; // partitioning is part of the driver implemention, and not meaningful at the EEPROM level
 pub type SensorGeneralSettingsSlice = [u8; SENSOR_SETTINGS_PARTITION_SIZE];
+#[allow(dead_code)]
 pub type SensorSpecialSettingsSlice = [u8; SENSOR_SETTINGS_PARTITION_SIZE];
 
 #[derive(Copy, Clone)]
@@ -16,6 +17,7 @@ pub struct SensorDriverGeneralConfiguration {
 }
 
 #[derive(Copy, Clone)]
+#[allow(dead_code)]
 pub struct EmptySpecialConfiguration {}
 
 impl SensorDriverGeneralConfiguration {

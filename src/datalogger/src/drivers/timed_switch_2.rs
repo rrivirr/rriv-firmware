@@ -1,5 +1,3 @@
-use core::time;
-
 use rriv_board::gpio::{GpioMode};
 use serde_json::json;
 
@@ -69,7 +67,6 @@ impl TimedSwitch2SpecialConfiguration {
 
         match &values["initial_state"] {
             serde_json::Value::String(s) => {
-                let val = s.as_str();
                 let initial_state: bool = match s.to_ascii_lowercase().as_str() {
                     "on" => true,
                     "off" => false,

@@ -35,4 +35,3 @@ pub mod uart5;
 pub use uart5::*;
 
 pub mod gpio;
-pub use gpio::*;

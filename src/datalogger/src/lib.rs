@@ -14,17 +14,14 @@ use rriv_board::{
     RRIVBoard, EEPROM_DATALOGGER_SETTINGS_SIZE, EEPROM_SENSOR_SETTINGS_SIZE,
     EEPROM_TOTAL_SENSOR_SLOTS,
 };
-use serde::de::value;
-use util::any_as_u8_slice;
 extern crate alloc;
 use crate::datalogger::bytes;
 use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
-use crate::{protocol::responses, services::*, telemetry::telemeters::{*, Telemeter}};
+use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
-use core::fmt::Display;
 
 mod drivers;
 use drivers::{resources::gpio::*, types::*, *};
@@ -36,8 +33,6 @@ use registry::*;
 
 use serde_json::{json, Value};
 
-use core::num;
-
 pub struct DataLogger {
     settings: DataloggerSettings,
     sensor_drivers: [Option<Box<dyn SensorDriver>>; rriv_board::EEPROM_TOTAL_SENSOR_SLOTS], // TODO: this could be called 'sensor_configs'. modules, (composable modules)
@@ -48,7 +43,6 @@ pub struct DataLogger {
 
     mode: DataLoggerMode,
     serial_tx_mode: DataLoggerSerialTxMode,
-    interactive_logging: bool,
 
     // naive calibration value book keeping
     // not memory efficient
@@ -80,7 +74,6 @@ impl DataLogger {
             modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            interactive_logging: false,
             modbus_service: None
         }
     }
@@ -191,8 +184,15 @@ impl DataLogger {
         }
         defmt::println!("done loading sensors");
 
-        self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry());
-        self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu());
+        match self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry()){
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
+   
+        match self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu()) {
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
 
 
         match self.mode {
@@ -369,7 +369,7 @@ impl DataLogger {
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
                                                                   // fileSystemWriteCache->flushCache();
-                    if self.interactive_logging {
+                    if self.settings.toggles.enable_interactive_logging() {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
@@ -466,8 +466,8 @@ impl DataLogger {
         }
 
 
-        let lorawan_ready =  (self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board));
-        let modbus_rtu_ready = (self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board));
+        let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
+        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
         let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
         if !ready_to_transmit {
             return;
@@ -1276,10 +1276,6 @@ impl DataLogger {
         let mode = set_command_payload.mode.clone(); // TODO: clean this up
         let values = set_command_payload.values();
         
-        let int_logging: Option<bool> = values.interactive_logging;
-        if let Some(interactive_logging) = int_logging {
-            self.interactive_logging = interactive_logging; // To Do: this isn't quite right, it should be self.settings and be a bit
-        }
 
         if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
             if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
@@ -1352,7 +1348,7 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
-           "interactive_logging": self.interactive_logging,
+           "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
            "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
         })

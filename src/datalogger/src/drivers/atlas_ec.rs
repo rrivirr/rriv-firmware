@@ -1,4 +1,3 @@
-use crate::sensor_name_from_type_id;
 
 // use crate::drivers::atlas::*;
 
@@ -6,18 +5,18 @@ use super::types::*;
 use serde_json::json;
 
 // Constants for EC_OEM register data
-pub const DEVICE_TYPE: u8 = 0x00;
-pub const FIRMWARE_VERSION: u8 = 0x01;
-pub const ADDR_LOCK: u8 = 0x02;
-pub const NEW_ADDR_REGISTER: u8 = 0x03;
-pub const INT_CTRL: u8 = 0x04;
+// pub const DEVICE_TYPE: u8 = 0x00;
+// pub const FIRMWARE_VERSION: u8 = 0x01;
+// pub const ADDR_LOCK: u8 = 0x02;
+// pub const NEW_ADDR_REGISTER: u8 = 0x03;
+// pub const INT_CTRL: u8 = 0x04;
 pub const LED_CTRL: u8 = 0x05;
 pub const SLEEP_CTRL: u8 = 0x06;
 pub const DATA_AVAILABLE: u8 = 0x07;
 
 // Constants for LED mode
-pub const LED_BLINK_ON_MEASUREMENT: u8 = 1;
-pub const LED_OFF: u8 = 0;
+// pub const LED_BLINK_ON_MEASUREMENT: u8 = 1;
+// pub const LED_OFF: u8 = 0;
 
 const ATLAS_EC_DEFAULT_ADDRESS: u8 = 0x64;
 
@@ -59,13 +58,19 @@ impl SensorDriver for AtlasEC {
 
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
-        // Wake device just in cast
+        // Wake device just in case
         let message: [u8; 2] = [SLEEP_CTRL, 1];
-        board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message);
+        match board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message) {
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
 
         // set LED mode
         let message: [u8; 2] = [LED_CTRL, 1];
-        board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message);
+        match board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message) {
+            Ok(_) => todo!(),
+            Err(err) => defmt::println!("{}", err),
+        }
     }
 
    
@@ -74,10 +79,12 @@ impl SensorDriver for AtlasEC {
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
+        let _ = index;
         Ok(self.measured_parameter_values[0])
     }
 
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
+        let _ = index;
         let mut identifier : [u8;16] = [0; 16];
         identifier[0] = b'e';
         identifier[1] = b'C';
@@ -89,15 +96,21 @@ impl SensorDriver for AtlasEC {
         let message = [DATA_AVAILABLE];
         let mut available = [0u8];
 
-        board.ic2_write_read(ATLAS_EC_DEFAULT_ADDRESS, &message, &mut available);
+        match board.ic2_write_read(ATLAS_EC_DEFAULT_ADDRESS, &message, &mut available) {
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
         if available[0] == 1 {
             let mut bytes = [u8::MAX, u8::MAX, u8::MAX, u8::MAX];
-            let mut address = [0x18];
+            let address =0x18;
             for i in 0..4 {
                 let mut buffer: [u8; 1] = [u8::MAX];
-                let message: [u8; 1] = [0x18 + i];
-                board.ic2_write_read(ATLAS_EC_DEFAULT_ADDRESS, &message, &mut buffer);
-                bytes[i as usize] = buffer[0];
+                let message: [u8; 1] = [address + i];
+                match board.ic2_write_read(ATLAS_EC_DEFAULT_ADDRESS, &message, &mut buffer) {
+                    Ok(_) => bytes[i as usize] = buffer[0],
+                    Err(err) => defmt::println!("{}", err),
+                }
+                
             }
 
             let value: u32 = bytes[3] as u32 + (bytes[2] as u32) << 8 + (bytes[1] as u32) << 16 + (bytes[0] as u32) << 24;
@@ -106,7 +119,10 @@ impl SensorDriver for AtlasEC {
             self.measured_parameter_values[0] = value;
 
             let message = [DATA_AVAILABLE, 0];
-            board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message);
+            match board.ic2_write(ATLAS_EC_DEFAULT_ADDRESS, &message) {
+                Ok(_) => {},
+                Err(err) => defmt::println!("{}", err),
+            }
         } else {
             self.measured_parameter_values[0] = f64::MAX;
         }

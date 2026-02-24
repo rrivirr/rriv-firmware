@@ -5,7 +5,7 @@ use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
 use embedded_sdmmc::{Directory, File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 use pac::SPI2;
-use stm32f1xx_hal::{gpio::Alternate, spi::{Spi2NoRemap, SpiReadWrite}};
+use stm32f1xx_hal::{gpio::Alternate, spi::{Spi2NoRemap}};
 // use embedded_sdmmc::{File, SdCard, TimeSource, Timestamp, Volume, VolumeManager};
 
 use crate::*;
@@ -126,7 +126,7 @@ const CACHE_SIZE: usize = 100;
 
 pub struct Storage {
     volume_manager: VolumeManager<RrivSdCard, RrivTimeSource>,
-    volume: Volume,
+    _volume: Volume,
     filename: [u8; 11],
     file: Option<File>,
     root_dir: Directory,
@@ -188,7 +188,7 @@ impl Storage {
 
         let mut count = 0;
         let mut bytes = 0u64;
-        let mut max_bytes =  size - 150000000;
+        let max_bytes =  size - 150000000;
         let mut stop_scanning = false;
         match volume_manager.iterate_dir(root_dir, |dir| { 
             if stop_scanning == true {
@@ -239,7 +239,7 @@ impl Storage {
 
         let storage = Storage {
             volume_manager,
-            volume,
+            _volume: volume,
             filename: [b'\0'; 11],
             file: None,
             root_dir: root_dir,
@@ -295,9 +295,9 @@ impl Storage {
                 } else {
                     11
                 };
-                filename_bytes[0..bytes.len()].clone_from_slice(bytes);
+                filename_bytes[0..len].clone_from_slice(bytes);
             } 
-            Err(err) => {
+            Err(_err) => {
                let bytes = [u8::MAX; 11];
                 filename_bytes[0..bytes.len()].clone_from_slice(&bytes); 
             }

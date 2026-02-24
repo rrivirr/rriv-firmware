@@ -5,11 +5,11 @@ extern crate alloc;
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
-use rriv_board::hardware_error::{self, HardwareError};
+use rriv_board::hardware_error::{HardwareError};
 use stm32f1xx_hal::time::MilliSeconds;
 use stm32f1xx_hal::timer::CounterUs;
 
-use core::fmt::{self, Display};
+use core::fmt::{self};
 use core::mem;
 use core::{
     cell::RefCell,
@@ -60,7 +60,7 @@ use rriv_board::{
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
 use stm32f1xx_hal::rtc::Rtc;
 
-use one_wire_bus::{crc::check_crc8, Address, OneWire, SearchState};
+use one_wire_bus::{Address, OneWire, SearchState};
 
 mod components;
 use components::*;
@@ -72,13 +72,16 @@ use pins::{GpioCr, Pins};
 mod pin_groups;
 use pin_groups::*;
 
+#[allow(dead_code)]
 type RedLed = gpio::Pin<'A', 9, Output<OpenDrain>>;
 
 pub const HSE_MHZ: u32 = 8;
 pub const SYSCLK_MHZ: u32 = 48;
 pub const PCLK_MHZ: u32 = 24;
 
+#[allow(dead_code)]
 static WAKE_LED: Mutex<RefCell<Option<RedLed>>> = Mutex::new(RefCell::new(None));
+
 static mut USB_BUS: Option<UsbBusAllocator<UsbBusType>> = None;
 static mut USB_SERIAL: Option<usbd_serial::SerialPort<UsbBusType>> = None;
 static mut USB_DEVICE: Option<UsbDevice<UsbBusType>> = None;
@@ -219,6 +222,7 @@ impl Board {
         }
     }
 
+    #[allow(dead_code)]
     fn do_critical_section<T, F>(&self, f: F) -> T
     where
         F: Fn() -> T,
@@ -226,6 +230,7 @@ impl Board {
         cortex_m::interrupt::free(|_cs| f())
     }
 
+    #[allow(dead_code)]
     fn add_hardware_error(&mut self, hardware_error: HardwareError){
         add_hardware_error(&mut self.hardware_errors, hardware_error);
     }
@@ -1290,7 +1295,7 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(20));
+        watchdog.start(MilliSeconds::secs(24));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
         watchdog.start(MilliSeconds::secs(6));
         let storage = match storage {
@@ -1308,7 +1313,7 @@ impl BoardBuilder {
                 let mut gpioc = device_peripherals.GPIOC.split();
                 let cs = gpioc.pc8;
                 let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
-                for i in 1..10 {
+                for _i in 1..10 {
                     cs.set_high();
                     delay.delay_ms(100_u32);
                     cs.set_low();

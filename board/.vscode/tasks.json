@@ -3,9 +3,10 @@
     "tasks": [
         {
             "label": "RRIV: Build App Binary Crate",
-            "type": "cargo",
-            "command": "build",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "build",
                 "-p=app"
             ],
             "problemMatcher": [
@@ -18,9 +19,10 @@
         },
         {
             "label": "RRIV: Build Release App Binary Crate",
-            "type": "cargo",
-            "command": "build",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "build",
                 "--release",
                 "-p=app"
             ],
@@ -34,9 +36,10 @@
         },
          {
             "label": "RRIV: Clean",
-            "type": "cargo",
-            "command": "clean",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "clean",
                 "--release",
             ],
             "problemMatcher": [
@@ -56,9 +59,10 @@
         },
         {
             "label": "RRIV: Build Board Crate",
-            "type": "cargo",
-            "command": "build",
+            "type": "shell",
+            "command": "cargo",
             "args": [
+                "build",
                 "-p=rriv_board_0_4_2"
             ],
             "problemMatcher": [
