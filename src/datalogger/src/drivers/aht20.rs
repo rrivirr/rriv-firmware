@@ -1,7 +1,6 @@
 use core::{f64::MAX, num::Wrapping};
 
 use serde_json::json;
-use util::any_as_u8_slice;
 
 
 use crate::sensor_name_from_type_id;

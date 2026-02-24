@@ -53,7 +53,7 @@ fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
   fn send_input_registers_response(board: &mut dyn RRIVBoard, values: &[i16]){
 
     let mut registers = [u16::MAX; MAX_DATA_VALUES];
-    let mut len = if values.len() < MAX_DATA_VALUES {
+    let len = if values.len() < MAX_DATA_VALUES {
         values.len()
     } else {
         MAX_DATA_VALUES

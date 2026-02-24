@@ -328,13 +328,13 @@ pub fn list_sensors(
     board.usb_serial_send(format_args!("]}}\n"));
 }
 
-fn value_length(target: &[u8], value: &[u8]) -> usize {
-    if value.len() > target.len() {
-        target.len()
-    } else {
-        value.len()
-    }
-}
+// fn value_length(target: &[u8], value: &[u8]) -> usize {
+//     if value.len() > target.len() {
+//         target.len()
+//     } else {
+//         value.len()
+//     }
+// }
 
 // fn match_and_set(source: Option<Value>, target: &mut [u8]) -> Option<[u8]> {
 //     if let Some(value) = source {

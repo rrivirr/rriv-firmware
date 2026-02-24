@@ -8,7 +8,6 @@ use crate::telemetry::codecs::naive_codec;
 use crate::{drivers::resources::gpio::GpioRequest, telemetry::telemeters::Telemeter};
 use crate::services::usart_service;
 use alloc::string::{String,ToString};
-use alloc::boxed::Box;
 
 #[derive(Clone, Copy)]
 enum RakWireless3172Step {

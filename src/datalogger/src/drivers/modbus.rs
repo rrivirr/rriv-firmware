@@ -1,6 +1,5 @@
 use modbus_core::{Data, RequestPdu, ResponsePdu, rtu::{Header, RequestAdu, ResponseAdu}};
 use serde_json::json;
-use alloc::boxed::Box;
 
 use super::types::*;
 

@@ -14,17 +14,14 @@ use rriv_board::{
     RRIVBoard, EEPROM_DATALOGGER_SETTINGS_SIZE, EEPROM_SENSOR_SETTINGS_SIZE,
     EEPROM_TOTAL_SENSOR_SLOTS,
 };
-use serde::de::value;
-use util::any_as_u8_slice;
 extern crate alloc;
 use crate::datalogger::bytes;
 use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
-use crate::{protocol::responses, services::*, telemetry::telemeters::{*, Telemeter}};
+use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
-use core::fmt::Display;
 
 mod drivers;
 use drivers::{resources::gpio::*, types::*, *};
@@ -35,8 +32,6 @@ mod telemetry;
 use registry::*;
 
 use serde_json::{json, Value};
-
-use core::num;
 
 pub struct DataLogger {
     settings: DataloggerSettings,
@@ -189,8 +184,15 @@ impl DataLogger {
         }
         defmt::println!("done loading sensors");
 
-        self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry());
-        self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu());
+        match self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry()){
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
+   
+        match self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu()) {
+            Ok(_) => {},
+            Err(err) => defmt::println!("{}", err),
+        }
 
 
         match self.mode {
@@ -464,8 +466,8 @@ impl DataLogger {
         }
 
 
-        let lorawan_ready =  (self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board));
-        let modbus_rtu_ready = (self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board));
+        let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
+        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
         let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
         if !ready_to_transmit {
             return;

@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::{fmt::Display, str::Utf8Error};
+use core::{str::Utf8Error};
 use core::fmt::Debug;
 
 pub fn remove_invalid_utf8(buffer: &mut [u8]) {

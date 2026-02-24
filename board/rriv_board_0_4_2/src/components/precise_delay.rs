@@ -1,7 +1,6 @@
 use core::arch::asm;
 
 use embedded_hal::blocking::delay::DelayUs;
-use stm32f1xx_hal::pac::DWT;
 
 use crate::SYSCLK_MHZ;
 

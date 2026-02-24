@@ -47,10 +47,8 @@ impl Resolution {
     }
 }
 
-use core::f64::MAX;
 
 use serde_json::json;
-use util::any_as_u8_slice;
 
 use crate::registry::sensor_name_from_type_id;
 
@@ -71,6 +69,7 @@ impl Ds18b20SpecialConfiguration {
     pub fn parse_from_values(
         value: serde_json::Value,
     ) -> Result<Ds18b20SpecialConfiguration, &'static str> {
+        let _ = value;
         Ok(Self {
             m: 0_f32,
             b: 0_f32,

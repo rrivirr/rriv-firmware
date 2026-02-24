@@ -219,6 +219,4 @@ impl SensorDriver for RingTemperatureDriver {
         Ok(())
     }
 
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-    }
 }

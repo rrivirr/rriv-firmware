@@ -45,7 +45,3 @@ macro_rules! set_pin_mode {
         }
     };
 }
-
-pub(crate) use write_gpio;
-pub(crate) use read_pin;
-pub(crate) use set_pin_mode;
