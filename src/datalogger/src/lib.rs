@@ -48,7 +48,6 @@ pub struct DataLogger {
 
     mode: DataLoggerMode,
     serial_tx_mode: DataLoggerSerialTxMode,
-    interactive_logging: bool,
 
     // naive calibration value book keeping
     // not memory efficient
@@ -80,7 +79,6 @@ impl DataLogger {
             modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            interactive_logging: false,
             modbus_service: None
         }
     }
@@ -369,7 +367,7 @@ impl DataLogger {
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
                                                                   // fileSystemWriteCache->flushCache();
-                    if self.interactive_logging {
+                    if self.settings.toggles.enable_interactive_logging() {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
@@ -1276,10 +1274,6 @@ impl DataLogger {
         let mode = set_command_payload.mode.clone(); // TODO: clean this up
         let values = set_command_payload.values();
         
-        let int_logging: Option<bool> = values.interactive_logging;
-        if let Some(interactive_logging) = int_logging {
-            self.interactive_logging = interactive_logging; // To Do: this isn't quite right, it should be self.settings and be a bit
-        }
 
         if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
             if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
@@ -1352,7 +1346,7 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
-           "interactive_logging": self.interactive_logging,
+           "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
            "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
         })
