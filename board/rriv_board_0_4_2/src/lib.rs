@@ -1290,7 +1290,7 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(20));
+        watchdog.start(MilliSeconds::secs(24));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
         watchdog.start(MilliSeconds::secs(6));
         let storage = match storage {
