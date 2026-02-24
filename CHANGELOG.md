@@ -1,3 +1,17 @@
+# [1.11.0](https://github.com/rrivirr/rriv-firmware/compare/v1.10.0...v1.11.0) (2026-02-24)
+
+
+### Bug Fixes
+
+* remove many warnings ([8233c30](https://github.com/rrivirr/rriv-firmware/commit/8233c304e5f3d7954266d48c89cc4129c4c62fdd))
+* update build tasks for current spec ([43fdc26](https://github.com/rrivirr/rriv-firmware/commit/43fdc263e22ba2fa3e18ff3f8a72a0c7673d299c))
+* wait longer to detect no sd card ([899e417](https://github.com/rrivirr/rriv-firmware/commit/899e41705b0093cfe86b64fb8d2dbf409b48dd72))
+
+
+### Features
+
+* make interactive logging persistent ([ba1108c](https://github.com/rrivirr/rriv-firmware/commit/ba1108caba49d1d0ae22d17924f2747b0b8171c5))
+
 # [1.10.0](https://github.com/rrivirr/rriv-firmware/compare/v1.9.0...v1.10.0) (2026-02-18)
 
 
