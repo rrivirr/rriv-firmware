@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/rrivirr/rriv-firmware/compare/v1.11.1...v1.11.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* 1 is the minimum interactive logging interval ([5626e9b](https://github.com/rrivirr/rriv-firmware/commit/5626e9b6696674e7684b652f8d8cc7cd9ecc2123))
+
 ## [1.11.1](https://github.com/rrivirr/rriv-firmware/compare/v1.11.0...v1.11.1) (2026-02-26)
 
 
