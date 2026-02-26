@@ -529,7 +529,7 @@ impl RRIVBoard for Board {
                     AdcError::NotConfigured => "Internal ADC Not Configured",
                     AdcError::ReadError => "Internal ADC Read Error",
                 };
-                rriv_board::RRIVBoard::usb_serial_send(self, format_args!("{}", &error_string));
+                rriv_board::RRIVBoard::serial_debug(self, format_args!("{}", &error_string));
                 return 0;
             }
         }
