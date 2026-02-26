@@ -95,7 +95,7 @@ impl DataloggerSettings {
             settings.delay_between_bursts = 0_u16
         }
 
-        if self.interactive_logging_interval > 60_u16 {
+        if self.interactive_logging_interval > 60_u16 || self.interactive_logging_interval < 1_u16 {
             settings.interactive_logging_interval = 1_u16;
         }
 
