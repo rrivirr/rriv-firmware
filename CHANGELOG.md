@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/rrivirr/rriv-firmware/compare/v1.11.0...v1.11.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* move debug off main usb comms ([1f8a072](https://github.com/rrivirr/rriv-firmware/commit/1f8a0727e6bfabc002b56e0cc8751924a185cdeb))
+
 # [1.11.0](https://github.com/rrivirr/rriv-firmware/compare/v1.10.0...v1.11.0) (2026-02-24)
 
 
