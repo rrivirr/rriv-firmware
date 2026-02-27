@@ -7,8 +7,8 @@ use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 
 use rriv_board::hardware_error::HardwareError;
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::{Ch, CounterUs, PwmHz, Tim4NoRemap};
+use stm32f1xx_hal::time::{MilliSeconds, ms};
+use stm32f1xx_hal::timer::{Ch, Channel, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self};
 use core::mem;
