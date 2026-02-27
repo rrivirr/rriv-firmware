@@ -48,3 +48,39 @@ pub fn format_error<'a>(error: &'a dyn Debug, buffer: &'a mut [u8]) -> &'a str {
         },
     }
 }
+
+pub fn format_decimal(value: u32) -> Result<([u8;20], usize), ()> {
+    let format_int = format_args!("{}", value );
+
+    let mut buf: [u8; _] = [0u8; 20];
+    let mut buf1: [u8; _] = [0u8; 20];
+    match format_no_std::show(
+        &mut buf1,
+        format_int
+    ) {
+        Ok(message) => {
+            let mut chars : [char; 20] = ['\0'; 20];
+            let mut i = 0;
+            for c in message.chars().rev() {
+                chars[19 - i] = c;
+                i = i + 1;
+                if i == 3 {
+                    chars[19 - i] = '.';
+                    i = i + 1;
+                }
+            }
+
+            let mut p = 0;
+            for c in chars {
+                if c == '\0' { continue; }
+                p += c.encode_utf8(&mut buf[p..]).len();
+            }
+            Ok((buf,p))
+
+        }
+        Err(e) => {
+            defmt::println!("format error {}", defmt::Debug2Format(&e));
+            Err(())
+        },
+    }
+}

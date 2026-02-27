@@ -622,10 +622,18 @@ impl DataLogger {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
                             let value = (value * 1000f64) as u32;
-                            let output = format_args!("{}", value);
-                             defmt::println!("{}", value);
-                            board.usb_serial_send(format_args!("{}",&output));
-                        }
+                            match util::format_decimal(value) {
+                                Ok((buf,size)) => {
+                                    let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
+                                    board.delay_ms(1000);
+                                    let output = format_args!("{}", decimal );
+                                    board.usb_serial_send(output);
+                                },
+                                Err(_) => {
+                                    defmt::println!("{}", "Error formatting value");
+                                }
+                            }
+                        },
                         Err(_) => {
                             defmt::println!("{}", "Error getting measurement");
                             board.usb_serial_send(format_args!("{}","Error"));
@@ -690,13 +698,23 @@ impl DataLogger {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
                             let value = (value * 1000f64) as u32;
-                            let output = format_args!("{}", value );
-                            defmt::println!("{}", value);
-                            board.write_log_file(output);
+                            match util::format_decimal(value) {
+                                Ok((buf,size)) => {
+                                    let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
+
+                                    let output = format_args!("{}", decimal );
+                                    board.write_log_file(output);
+                                },
+                                Err(_) => {
+                                    defmt::println!("{}", "Error formatting value");
+                                    board.write_log_file(format_args!("Error"));
+                                },
+                            }
+
                         }
                         Err(_) => {
-                            defmt::println!("{}", "Error writing log file");
-                            board.write_log_file(format_args!("Error writing log file"));
+                            defmt::println!("{}", "Error getting measurement value");
+                            board.write_log_file(format_args!("Error"));
                         }
                     }
 
