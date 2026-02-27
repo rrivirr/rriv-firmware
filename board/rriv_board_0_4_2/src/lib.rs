@@ -28,7 +28,7 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Pin};
+use stm32f1xx_hal::gpio::{Alternate, Pin, PushPull};
 use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
@@ -129,7 +129,7 @@ pub struct Board {
     pub counter: CounterUs<TIM5>,
     pub hardware_errors: [HardwareError; 5],
     pub clocks: Clocks,
-    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>,
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>,
 }
 
 impl Board {
@@ -1005,7 +1005,7 @@ pub struct BoardBuilder {
     pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5],
     pub clocks: Option<Clocks>,
-    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>>>
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>
 }
 
 impl BoardBuilder {
@@ -1289,11 +1289,11 @@ impl BoardBuilder {
 
         let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
         let gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
-        let pin = gpiob.pb8.into_alternate_open_drain(&mut gpio_cr.gpiob_crh);
+        let pin = gpiob.pb8.into_alternate_push_pull(&mut gpio_cr.gpiob_crh);
  
 
         let tim4 = device_peripherals.TIM4;
-        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<OpenDrain>>> = 
+        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
             tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
         pwm.enable(Channel::C3);
         pwm.set_period(ms(500).into_rate());
