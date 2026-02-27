@@ -1296,7 +1296,8 @@ impl BoardBuilder {
         let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
             tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
         pwm.enable(Channel::C3);
-        pwm.set_period(ms(500).into_rate());
+        pwm.set_period(ms(10).into_rate());
+        pwm.set_duty(Channel::C3, 0u16);
         self.pwm = Some(pwm);
 
         // let mut high = true;
