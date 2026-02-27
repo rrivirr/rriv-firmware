@@ -1339,17 +1339,6 @@ impl BoardBuilder {
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
 
-        // unsafe { NVIC::unmask(pac::interrupt::WWDG) }; // is this the EWI ?
-        // NVIC::mask(pac::interrupt::WWDG);
-        // device_peripherals.WWDG.cr.write( |w| unsafe { w
-        //     .bits(0xFF) }
-        // );
-        // It is enabled by setting the WDGA bit in the
-        // WWDG_CR register, then it cannot be disabled again except by a reset.
-        // this might mean it's good to use the WWDG for general watchdog purposes, since it also has EWI
-        // but actually... it also can't be disabled.
-        //
-        // the IndependentWatchdog won't trigger an interrupt.  it also can't be disabled.
 
         defmt::println!("unhang I2C1 if hung");
 
