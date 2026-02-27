@@ -274,12 +274,14 @@ impl TimedSwitch2 {
 
 impl SensorDriver for TimedSwitch2 {
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
-        self.state = match self.special_config.initial_state {
-            true => 1,
-            false => 0,
-        };
-        board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+        if ! self.special_config.pwm_enable {
+            board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
+            self.state = match self.special_config.initial_state {
+                true => 1,
+                false => 0,
+            };
+            board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+        }
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
         self.duty_cycle_state = self.state == 1;
@@ -328,6 +330,11 @@ impl SensorDriver for TimedSwitch2 {
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
+            if self.special_config.pwm_enable {
+                // chip produced pwm on pin 1 only
+                board.write_pwm_pin_duty(0);
+            }
+
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
                 defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
@@ -339,8 +346,10 @@ impl SensorDriver for TimedSwitch2 {
             }
         } else if self.state == 1 {
             // heater is on
-
             if self.special_config.pwm_enable {
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
+            } else if self.special_config.pwm_enable {
             // duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
