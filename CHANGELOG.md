@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/rrivirr/rriv-firmware/compare/v1.11.2...v1.12.0) (2026-02-27)
+
+
+### Features
+
+* output watch and sd card in decimal format ([a156acc](https://github.com/rrivirr/rriv-firmware/commit/a156acca5f19fd4efa33568523f1297e176c4733))
+
 ## [1.11.2](https://github.com/rrivirr/rriv-firmware/compare/v1.11.1...v1.11.2) (2026-02-26)
 
 
