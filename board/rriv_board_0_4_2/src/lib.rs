@@ -774,6 +774,11 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn write_pwm_pin_period(&mut self, period_ms: u32){
+        if let Some(pwm) = &mut self.pwm {
+            pwm.set_period(ms(period_ms).into_rate());
+        }
+    }
 
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
