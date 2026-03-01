@@ -24,13 +24,14 @@ impl MHZ9041ADriverSpecialConfiguration {
                                 return Err("invalid address: must be 0x03..0x7F");
                             }
                             address = addr;
+                            defmt::println!("MHZ9041A: configured with address=0x{:02X} from JSON", address);
                         }
                         Err(_) => return Err("invalid address value")
                     }
                 }
             }
             _ => {
-                // address not provided, use default 0x75
+                defmt::println!("MHZ9041A: no address in config, using default 0x{:02X}", address);
             }
         }
 
@@ -87,15 +88,18 @@ impl SensorDriver for MHZ9041ADriver {
 
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+        defmt::println!("MHZ9041A: setup starting, address=0x{:02X}", self.address);
         self.calibration_offset = (self.special_config.calibration_offset as f64) / 1000_f64;
 
         // Set sensor to passive (polling) mode
         // Register 0x11 = REG_MODE, value 0x00 = passive mode
         let set_mode_cmd = [REG_MODE, MODE_PASSIVE];
         match board.ic2_write(self.address, &set_mode_cmd) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: passive mode set successfully");
+            }
             Err(_) => {
-                defmt::println!("MHZ9041A: failed to set passive mode");
+                defmt::println!("MHZ9041A: FAILED to set passive mode");
             }
         }
     }
@@ -154,13 +158,18 @@ impl SensorDriver for MHZ9041ADriver {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
+        defmt::println!("MHZ9041A: take_measurement starting, address=0x{:02X}", self.address);
+
         // --- Read CH4 concentration ---
         // Write the register address for LEL high byte
         let reg_lel = [REG_LEL_H];
         let mut lel_buffer: [u8; 2] = [0; 2];
         match board.ic2_write(self.address, &reg_lel) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: LEL register write OK");
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: LEL register write FAILED");
                 self.measured_parameter_values[0] = f64::MAX;
                 self.measured_parameter_values[1] = f64::MAX;
                 self.measured_parameter_values[2] = f64::MAX;
@@ -169,8 +178,11 @@ impl SensorDriver for MHZ9041ADriver {
             }
         }
         match board.ic2_read(self.address, &mut lel_buffer) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: LEL read OK, raw bytes: [0x{:02X}, 0x{:02X}]", lel_buffer[0], lel_buffer[1]);
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: LEL read FAILED");
                 self.measured_parameter_values[0] = f64::MAX;
                 self.measured_parameter_values[1] = f64::MAX;
                 self.measured_parameter_values[2] = f64::MAX;
@@ -185,6 +197,8 @@ impl SensorDriver for MHZ9041ADriver {
         let raw_lel_rounded: u16 = (raw_lel + 5) / 10 * 10;
         let ch4_concentration: f64 = (raw_lel_rounded as f64) / 100.0;
 
+        defmt::println!("MHZ9041A: CH4 raw={}, rounded={}, concentration={}", raw_lel, raw_lel_rounded, ch4_concentration);
+
         self.measured_parameter_values[0] = ch4_concentration;
         self.measured_parameter_values[1] = ch4_concentration + self.calibration_offset;
 
@@ -192,16 +206,22 @@ impl SensorDriver for MHZ9041ADriver {
         let reg_temp = [REG_TEMP_H];
         let mut temp_buffer: [u8; 2] = [0; 2];
         match board.ic2_write(self.address, &reg_temp) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: TEMP register write OK");
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: TEMP register write FAILED");
                 self.measured_parameter_values[2] = f64::MAX;
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         match board.ic2_read(self.address, &mut temp_buffer) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: TEMP read OK, raw bytes: [0x{:02X}, 0x{:02X}]", temp_buffer[0], temp_buffer[1]);
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: TEMP read FAILED");
                 self.measured_parameter_values[2] = f64::MAX;
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
@@ -211,26 +231,40 @@ impl SensorDriver for MHZ9041ADriver {
         // Temperature: 2 bytes big-endian, raw value / 100.0 = °C
         let raw_temp: u16 = ((temp_buffer[0] as u16) << 8) | (temp_buffer[1] as u16);
         let temperature: f64 = (raw_temp as f64) / 100.0;
+        defmt::println!("MHZ9041A: temperature raw={}, celsius={}", raw_temp, temperature);
         self.measured_parameter_values[2] = temperature;
 
         // --- Read fault/error code ---
         let reg_err = [REG_ERROR_CODE];
         let mut err_buffer: [u8; 1] = [0; 1];
         match board.ic2_write(self.address, &reg_err) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: ERROR register write OK");
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: ERROR register write FAILED");
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         match board.ic2_read(self.address, &mut err_buffer) {
-            Ok(_) => {}
+            Ok(_) => {
+                defmt::println!("MHZ9041A: ERROR read OK, fault_code=0x{:02X}", err_buffer[0]);
+            }
             Err(_) => {
+                defmt::println!("MHZ9041A: ERROR read FAILED");
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         self.measured_parameter_values[3] = err_buffer[0] as f64;
+
+        defmt::println!("MHZ9041A: measurement complete, CH4={}, CH4_cal={}, temp={}, fault={}",
+            self.measured_parameter_values[0],
+            self.measured_parameter_values[1],
+            self.measured_parameter_values[2],
+            self.measured_parameter_values[3]
+        );
     }
 
     fn clear_calibration(&mut self) {
