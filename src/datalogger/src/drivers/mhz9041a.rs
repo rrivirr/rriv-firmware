@@ -4,16 +4,22 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
+/// Sentinel value meaning "no address specified, auto-detect in setup"
+const ADDRESS_AUTO_DETECT: u8 = 0x00;
+
+/// Candidate addresses to try during auto-detection
+const AUTO_DETECT_ADDRESSES: [u8; 2] = [0x75, 0x34];
+
 #[derive(Copy, Clone)]
 pub struct MHZ9041ADriverSpecialConfiguration {
     calibration_offset: i16, // stored as value * 1000 for fixed-point precision
-    address: u8,
+    address: u8,             // 0x00 means auto-detect
 }
 
 impl MHZ9041ADriverSpecialConfiguration {
     pub fn parse_from_values(value: serde_json::Value) -> Result<MHZ9041ADriverSpecialConfiguration, &'static str>  
     {
-        let mut address: u8 = MHZ9041A_DEFAULT_I2C_ADDRESS;
+        let mut address: u8 = ADDRESS_AUTO_DETECT;
         match &value["address"] {
             serde_json::Value::Number(number) => {
                 if let Some(number) = number.as_u64() {
@@ -24,14 +30,13 @@ impl MHZ9041ADriverSpecialConfiguration {
                                 return Err("invalid address: must be 0x03..0x7F");
                             }
                             address = addr;
-                            defmt::println!("MHZ9041A: configured with address=0x{:02X} from JSON", address);
                         }
                         Err(_) => return Err("invalid address value")
                     }
                 }
             }
             _ => {
-                defmt::println!("MHZ9041A: no address in config, using default 0x{:02X}", address);
+                // address not provided, will auto-detect in setup
             }
         }
 
@@ -51,7 +56,7 @@ impl MHZ9041ADriverSpecialConfiguration {
     pub fn new(calibration_offset: i16) -> MHZ9041ADriverSpecialConfiguration {
         Self {
             calibration_offset,
-            address: MHZ9041A_DEFAULT_I2C_ADDRESS,
+            address: ADDRESS_AUTO_DETECT,
         }
     }
 }
@@ -82,26 +87,32 @@ impl SensorDriver for MHZ9041ADriver {
             "id" : self.get_id(),
             "type" : sensor_name_str,
             "calibration_offset": self.special_config.calibration_offset,
-            "address": self.special_config.address
+            "address": self.address
         })
     }
 
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        defmt::println!("MHZ9041A: setup starting, address=0x{:02X}", self.address);
         self.calibration_offset = (self.special_config.calibration_offset as f64) / 1000_f64;
 
-        // Set sensor to passive (polling) mode
-        // Register 0x11 = REG_MODE, value 0x00 = passive mode
-        let set_mode_cmd = [REG_MODE, MODE_PASSIVE];
-        match board.ic2_write(self.address, &set_mode_cmd) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: passive mode set successfully");
-            }
-            Err(_) => {
-                defmt::println!("MHZ9041A: FAILED to set passive mode");
+        // If no address was specified, try known addresses to find the sensor
+        if self.address == ADDRESS_AUTO_DETECT {
+            for &candidate in &AUTO_DETECT_ADDRESSES {
+                // Attempt to read the vendor ID register as a presence check
+                let reg = [REG_VID_H];
+                if board.ic2_write(candidate, &reg).is_ok() {
+                    let mut buf: [u8; 1] = [0];
+                    if board.ic2_read(candidate, &mut buf).is_ok() {
+                        self.address = candidate;
+                        break;
+                    }
+                }
             }
         }
+
+        // Set sensor to passive (polling) mode
+        let set_mode_cmd = [REG_MODE, MODE_PASSIVE];
+        let _ = board.ic2_write(self.address, &set_mode_cmd);
     }
 
     getters!();
@@ -121,28 +132,24 @@ impl SensorDriver for MHZ9041ADriver {
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
         match index {
             0 => {
-                // Raw CH4 concentration
                 let mut id = [0u8; 16];
                 let tag = b"CH4r";
                 id[..tag.len()].copy_from_slice(tag);
                 id
             }
             1 => {
-                // Calibrated CH4 concentration
                 let mut id = [0u8; 16];
                 let tag = b"CH4c";
                 id[..tag.len()].copy_from_slice(tag);
                 id
             }
             2 => {
-                // Ambient temperature from the MHZ9041A module
                 let mut id = [0u8; 16];
                 let tag = b"CH4T";
                 id[..tag.len()].copy_from_slice(tag);
                 id
             }
             3 => {
-                // Fault code
                 let mut id = [0u8; 16];
                 let tag = b"CH4e";
                 id[..tag.len()].copy_from_slice(tag);
@@ -158,18 +165,12 @@ impl SensorDriver for MHZ9041ADriver {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
-        defmt::println!("MHZ9041A: take_measurement starting, address=0x{:02X}", self.address);
-
         // --- Read CH4 concentration ---
-        // Write the register address for LEL high byte
         let reg_lel = [REG_LEL_H];
         let mut lel_buffer: [u8; 2] = [0; 2];
         match board.ic2_write(self.address, &reg_lel) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: LEL register write OK");
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: LEL register write FAILED");
                 self.measured_parameter_values[0] = f64::MAX;
                 self.measured_parameter_values[1] = f64::MAX;
                 self.measured_parameter_values[2] = f64::MAX;
@@ -178,11 +179,8 @@ impl SensorDriver for MHZ9041ADriver {
             }
         }
         match board.ic2_read(self.address, &mut lel_buffer) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: LEL read OK, raw bytes: [0x{:02X}, 0x{:02X}]", lel_buffer[0], lel_buffer[1]);
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: LEL read FAILED");
                 self.measured_parameter_values[0] = f64::MAX;
                 self.measured_parameter_values[1] = f64::MAX;
                 self.measured_parameter_values[2] = f64::MAX;
@@ -191,13 +189,9 @@ impl SensorDriver for MHZ9041ADriver {
             }
         }
 
-        // CH4 concentration: 2 bytes big-endian, raw value / 100.0 = %LEL
-        // Round to nearest 0.1 %LEL as per the reference driver
         let raw_lel: u16 = ((lel_buffer[0] as u16) << 8) | (lel_buffer[1] as u16);
         let raw_lel_rounded: u16 = (raw_lel + 5) / 10 * 10;
         let ch4_concentration: f64 = (raw_lel_rounded as f64) / 100.0;
-
-        defmt::println!("MHZ9041A: CH4 raw={}, rounded={}, concentration={}", raw_lel, raw_lel_rounded, ch4_concentration);
 
         self.measured_parameter_values[0] = ch4_concentration;
         self.measured_parameter_values[1] = ch4_concentration + self.calibration_offset;
@@ -206,65 +200,44 @@ impl SensorDriver for MHZ9041ADriver {
         let reg_temp = [REG_TEMP_H];
         let mut temp_buffer: [u8; 2] = [0; 2];
         match board.ic2_write(self.address, &reg_temp) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: TEMP register write OK");
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: TEMP register write FAILED");
                 self.measured_parameter_values[2] = f64::MAX;
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         match board.ic2_read(self.address, &mut temp_buffer) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: TEMP read OK, raw bytes: [0x{:02X}, 0x{:02X}]", temp_buffer[0], temp_buffer[1]);
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: TEMP read FAILED");
                 self.measured_parameter_values[2] = f64::MAX;
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
 
-        // Temperature: 2 bytes big-endian, raw value / 100.0 = °C
         let raw_temp: u16 = ((temp_buffer[0] as u16) << 8) | (temp_buffer[1] as u16);
         let temperature: f64 = (raw_temp as f64) / 100.0;
-        defmt::println!("MHZ9041A: temperature raw={}, celsius={}", raw_temp, temperature);
         self.measured_parameter_values[2] = temperature;
 
         // --- Read fault/error code ---
         let reg_err = [REG_ERROR_CODE];
         let mut err_buffer: [u8; 1] = [0; 1];
         match board.ic2_write(self.address, &reg_err) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: ERROR register write OK");
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: ERROR register write FAILED");
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         match board.ic2_read(self.address, &mut err_buffer) {
-            Ok(_) => {
-                defmt::println!("MHZ9041A: ERROR read OK, fault_code=0x{:02X}", err_buffer[0]);
-            }
+            Ok(_) => {}
             Err(_) => {
-                defmt::println!("MHZ9041A: ERROR read FAILED");
                 self.measured_parameter_values[3] = f64::MAX;
                 return;
             }
         }
         self.measured_parameter_values[3] = err_buffer[0] as f64;
-
-        defmt::println!("MHZ9041A: measurement complete, CH4={}, CH4_cal={}, temp={}, fault={}",
-            self.measured_parameter_values[0],
-            self.measured_parameter_values[1],
-            self.measured_parameter_values[2],
-            self.measured_parameter_values[3]
-        );
     }
 
     fn clear_calibration(&mut self) {
@@ -273,29 +246,22 @@ impl SensorDriver for MHZ9041ADriver {
     }
 
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> {
-        defmt::println!("pairs len {:?}", pairs.len());
         if pairs.len() != 1 {
             return Err(());
         }
 
         let single = &pairs[0];
-        let point = single.point;         // known reference value
-        let value = single.values[0];     // measured raw CH4 concentration
+        let point = single.point;
+        let value = single.values[0];
         self.calibration_offset = point - value;
         self.special_config.calibration_offset = (self.calibration_offset * 1000_f64) as i16;
-        defmt::println!("fit {}", self.special_config.calibration_offset);
         Ok(())
     }
 }
 
 // ─── I2C register addresses ────────────────────────────────────────────────────
-// From the DFRobot MHZ9041A datasheet / reference Arduino driver
 
-/// Default I2C address for the DFRobot MHZ9041A breakout board
-const MHZ9041A_DEFAULT_I2C_ADDRESS: u8 = 0x75;
-
-/// Vendor ID high byte register (used to verify communication)
-#[allow(dead_code)]
+/// Vendor ID high byte register (used to verify communication / auto-detect)
 const REG_VID_H: u8 = 0x02;
 
 /// Expected value of VID_H register
@@ -321,11 +287,9 @@ const REG_LEL_H: u8 = 0x0C;
 const REG_TEMP_H: u8 = 0x0E;
 
 /// Error/fault code register (1 byte)
-/// 0x00 = normal, see FaultCode enum for other values
 const REG_ERROR_CODE: u8 = 0x10;
 
 /// Working mode register (1 byte)
-/// 0x00 = passive (polling), 0x01 = active (auto-reporting)
 const REG_MODE: u8 = 0x11;
 
 /// Reset register — write 0x01 to trigger sensor reset (takes ~2s)
@@ -348,10 +312,7 @@ const MODE_PASSIVE: u8 = 0x00;
 const MODE_ACTIVE: u8 = 0x01;
 
 
-// ─── Fault code constants (for reference / future use) ─────────────────────────
-// These correspond to the eFaultCode_t enum in the reference driver.
-// They are exposed here for downstream code that may want to interpret
-// measured_parameter_values[3].
+// ─── Fault code constants ───────────────────────────────────────────────────────
 
 #[allow(dead_code)]
 pub const FAULT_NORMAL: u8 = 0x00;
