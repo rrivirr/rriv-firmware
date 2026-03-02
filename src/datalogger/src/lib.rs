@@ -628,7 +628,6 @@ impl DataLogger {
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
-                                    board.delay_ms(1000);
                                     let output = format_args!("{}", decimal );
                                     board.usb_serial_send(output);
                                 },
