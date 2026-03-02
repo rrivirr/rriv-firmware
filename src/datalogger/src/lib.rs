@@ -597,7 +597,7 @@ impl DataLogger {
                     let identifier_str = util::str_from_utf8(&mut identifier).unwrap_or_default();
                     board.write_log_file(format_args!("{}{}", &prefix, identifier_str));
                     if j != driver.get_measured_parameter_count() - 1 {
-                        board.usb_serial_send(format_args!("{}",","));
+                        board.write_log_file(format_args!("{}",","));
                     }
                 }
             }
