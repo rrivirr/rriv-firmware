@@ -1,3 +1,10 @@
+## [1.12.2](https://github.com/rrivirr/rriv-firmware/compare/v1.12.1...v1.12.2) (2026-03-02)
+
+
+### Bug Fixes
+
+* wrong output call ([afe5470](https://github.com/rrivirr/rriv-firmware/commit/afe54709b5fdf63936ad8584e09d48cbf9a5dce1))
+
 ## [1.12.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.0...v1.12.1) (2026-03-02)
 
 
