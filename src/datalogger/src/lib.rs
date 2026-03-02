@@ -201,6 +201,9 @@ impl DataLogger {
                 self.write_column_headers_to_storage(board);
             },
             _ => {
+                if self.settings.toggles.enable_interactive_logging() {
+                    self.write_column_headers_to_storage(board);
+                }
                 // otherwise we are not logging to storage by default, so don't write any file yet
             }
         }
@@ -1310,6 +1313,12 @@ impl DataLogger {
                     Ok(_) => {},
                     Err(error) => {return Err(error);}, 
                 }
+            }
+        }
+
+        if let Some(enable_interactive_logging) = &values.interactive_logging {
+            if *enable_interactive_logging {
+                self.write_column_headers_to_storage(board);
             }
         }
 
