@@ -1,3 +1,11 @@
+## [1.12.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.0...v1.12.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* remove debugging delay ([df6aeb9](https://github.com/rrivirr/rriv-firmware/commit/df6aeb9b77320011fef6591e0cf465f5562e9832))
+* write headers to sd card when interactive logging starts ([1eb7182](https://github.com/rrivirr/rriv-firmware/commit/1eb7182b566e4ea54dca3c4742b98d83e08b8f30))
+
 # [1.12.0](https://github.com/rrivirr/rriv-firmware/compare/v1.11.2...v1.12.0) (2026-02-27)
 
 
