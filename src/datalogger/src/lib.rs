@@ -201,6 +201,9 @@ impl DataLogger {
                 self.write_column_headers_to_storage(board);
             },
             _ => {
+                if self.settings.toggles.enable_interactive_logging() {
+                    self.write_column_headers_to_storage(board);
+                }
                 // otherwise we are not logging to storage by default, so don't write any file yet
             }
         }
@@ -625,7 +628,6 @@ impl DataLogger {
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
-                                    board.delay_ms(1000);
                                     let output = format_args!("{}", decimal );
                                     board.usb_serial_send(output);
                                 },
@@ -1310,6 +1312,12 @@ impl DataLogger {
                     Ok(_) => {},
                     Err(error) => {return Err(error);}, 
                 }
+            }
+        }
+
+        if let Some(enable_interactive_logging) = &values.interactive_logging {
+            if *enable_interactive_logging {
+                self.write_column_headers_to_storage(board);
             }
         }
 
