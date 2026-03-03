@@ -1,3 +1,10 @@
+## [1.12.3](https://github.com/rrivirr/rriv-firmware/compare/v1.12.2...v1.12.3) (2026-03-03)
+
+
+### Bug Fixes
+
+* trigger release ([4519ccb](https://github.com/rrivirr/rriv-firmware/commit/4519ccb3795ca80027f4f8fc5cff9b05f7119390))
+
 ## [1.12.2](https://github.com/rrivirr/rriv-firmware/compare/v1.12.1...v1.12.2) (2026-03-02)
 
 
