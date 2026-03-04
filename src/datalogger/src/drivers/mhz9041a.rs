@@ -4,11 +4,93 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
 /// Sentinel value meaning "no address specified, auto-detect in setup"
 const ADDRESS_AUTO_DETECT: u8 = 0x00;
 
 /// Candidate addresses to try during auto-detection
 const AUTO_DETECT_ADDRESSES: [u8; 2] = [0x75, 0x34];
+
+/// Number of measured output parameters:
+///   [0] = raw CH4 concentration (%LEL)
+///   [1] = calibrated CH4 concentration (%LEL)
+///   [2] = ambient temperature (°C)
+///   [3] = fault code (0 = normal)
+const NUMBER_OF_MEASURED_PARAMETERS: usize = 4;
+
+// ─── I2C register addresses ─────────────────────────────────────────────────────
+
+/// Vendor ID high byte register (used to verify communication / auto-detect)
+const REG_VID_H: u8 = 0x02;
+
+/// Expected value of VID_H register
+#[allow(dead_code)]
+const VID_H_EXPECTED: u8 = 0x33;
+
+/// Device address register (read/write, 1 byte)
+#[allow(dead_code)]
+const REG_DEVICE_L: u8 = 0x05;
+
+/// Baud rate register (for UART mode, 1 byte)
+#[allow(dead_code)]
+const REG_BAUD_L: u8 = 0x07;
+
+/// Firmware version high byte register
+#[allow(dead_code)]
+const REG_VERSION_H: u8 = 0x0A;
+
+/// CH4 concentration register, high byte (2 bytes big-endian, raw / 100.0 = %LEL)
+const REG_LEL_H: u8 = 0x0C;
+
+/// Ambient temperature register, high byte (2 bytes big-endian, raw / 100.0 = °C)
+const REG_TEMP_H: u8 = 0x0E;
+
+/// Error/fault code register (1 byte)
+const REG_ERROR_CODE: u8 = 0x10;
+
+/// Working mode register (1 byte)
+const REG_MODE: u8 = 0x11;
+
+/// Reset register — write 0x01 to trigger sensor reset (takes ~2s)
+#[allow(dead_code)]
+const REG_RESET: u8 = 0x12;
+
+/// Length of raw source data string
+#[allow(dead_code)]
+const REG_SOURCE_LEN: u8 = 0x20;
+
+/// Raw source data string (variable length, up to 43 bytes)
+#[allow(dead_code)]
+const REG_SOURCE_DATA: u8 = 0x21;
+
+/// Passive mode value for REG_MODE
+const MODE_PASSIVE: u8 = 0x00;
+
+/// Active mode value for REG_MODE
+#[allow(dead_code)]
+const MODE_ACTIVE: u8 = 0x01;
+
+// ─── Fault code constants ───────────────────────────────────────────────────────
+
+#[allow(dead_code)]
+pub const FAULT_NORMAL: u8 = 0x00;
+#[allow(dead_code)]
+pub const FAULT_TEMP_CONTROL_ERROR: u8 = 0x01;
+#[allow(dead_code)]
+pub const FAULT_AMBIENT_TEMP_ERROR: u8 = 0x02;
+#[allow(dead_code)]
+pub const FAULT_AMBIENT_AND_TEMP_CONTROL: u8 = 0x03;
+#[allow(dead_code)]
+pub const FAULT_LASER_SIGNAL_WEAK: u8 = 0x04;
+#[allow(dead_code)]
+pub const FAULT_AMBIENT_AND_SIGNAL_WEAK: u8 = 0x06;
+#[allow(dead_code)]
+pub const FAULT_LASER_SIGNAL_ERROR: u8 = 0x10;
+#[allow(dead_code)]
+pub const FAULT_AMBIENT_AND_SIGNAL_ERROR: u8 = 0x12;
+
+// ─── Types ──────────────────────────────────────────────────────────────────────
 
 #[derive(Copy, Clone)]
 pub struct MHZ9041ADriverSpecialConfiguration {
@@ -61,13 +143,6 @@ impl MHZ9041ADriverSpecialConfiguration {
     }
 }
 
-/// Number of measured output parameters:
-///   [0] = raw CH4 concentration (%LEL)
-///   [1] = calibrated CH4 concentration (%LEL)
-///   [2] = ambient temperature (°C)
-///   [3] = fault code (0 = normal)
-const NUMBER_OF_MEASURED_PARAMETERS: usize = 4;
-
 pub struct MHZ9041ADriver {
     general_config: SensorDriverGeneralConfiguration,
     special_config: MHZ9041ADriverSpecialConfiguration,
@@ -75,6 +150,8 @@ pub struct MHZ9041ADriver {
     address: u8,
     calibration_offset: f64,
 }
+
+// ─── SensorDriver implementation ────────────────────────────────────────────────
 
 impl SensorDriver for MHZ9041ADriver {
 
@@ -165,28 +242,17 @@ impl SensorDriver for MHZ9041ADriver {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
+        // Initialize all values to error state; overwrite on success
+        self.measured_parameter_values = [f64::MAX; NUMBER_OF_MEASURED_PARAMETERS];
+
         // --- Read CH4 concentration ---
         let reg_lel = [REG_LEL_H];
         let mut lel_buffer: [u8; 2] = [0; 2];
-        match board.ic2_write(self.address, &reg_lel) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[0] = f64::MAX;
-                self.measured_parameter_values[1] = f64::MAX;
-                self.measured_parameter_values[2] = f64::MAX;
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_write(self.address, &reg_lel).is_err() {
+            return;
         }
-        match board.ic2_read(self.address, &mut lel_buffer) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[0] = f64::MAX;
-                self.measured_parameter_values[1] = f64::MAX;
-                self.measured_parameter_values[2] = f64::MAX;
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_read(self.address, &mut lel_buffer).is_err() {
+            return;
         }
 
         let raw_lel: u16 = ((lel_buffer[0] as u16) << 8) | (lel_buffer[1] as u16);
@@ -199,21 +265,11 @@ impl SensorDriver for MHZ9041ADriver {
         // --- Read ambient temperature ---
         let reg_temp = [REG_TEMP_H];
         let mut temp_buffer: [u8; 2] = [0; 2];
-        match board.ic2_write(self.address, &reg_temp) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[2] = f64::MAX;
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_write(self.address, &reg_temp).is_err() {
+            return;
         }
-        match board.ic2_read(self.address, &mut temp_buffer) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[2] = f64::MAX;
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_read(self.address, &mut temp_buffer).is_err() {
+            return;
         }
 
         let raw_temp: u16 = ((temp_buffer[0] as u16) << 8) | (temp_buffer[1] as u16);
@@ -223,19 +279,11 @@ impl SensorDriver for MHZ9041ADriver {
         // --- Read fault/error code ---
         let reg_err = [REG_ERROR_CODE];
         let mut err_buffer: [u8; 1] = [0; 1];
-        match board.ic2_write(self.address, &reg_err) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_write(self.address, &reg_err).is_err() {
+            return;
         }
-        match board.ic2_read(self.address, &mut err_buffer) {
-            Ok(_) => {}
-            Err(_) => {
-                self.measured_parameter_values[3] = f64::MAX;
-                return;
-            }
+        if board.ic2_read(self.address, &mut err_buffer).is_err() {
+            return;
         }
         self.measured_parameter_values[3] = err_buffer[0] as f64;
     }
@@ -258,79 +306,6 @@ impl SensorDriver for MHZ9041ADriver {
         Ok(())
     }
 }
-
-// ─── I2C register addresses ────────────────────────────────────────────────────
-
-/// Vendor ID high byte register (used to verify communication / auto-detect)
-const REG_VID_H: u8 = 0x02;
-
-/// Expected value of VID_H register
-#[allow(dead_code)]
-const VID_H_EXPECTED: u8 = 0x33;
-
-/// Device address register (read/write, 1 byte)
-#[allow(dead_code)]
-const REG_DEVICE_L: u8 = 0x05;
-
-/// Baud rate register (for UART mode, 1 byte)
-#[allow(dead_code)]
-const REG_BAUD_L: u8 = 0x07;
-
-/// Firmware version high byte register
-#[allow(dead_code)]
-const REG_VERSION_H: u8 = 0x0A;
-
-/// CH4 concentration register, high byte (2 bytes big-endian, raw / 100.0 = %LEL)
-const REG_LEL_H: u8 = 0x0C;
-
-/// Ambient temperature register, high byte (2 bytes big-endian, raw / 100.0 = °C)
-const REG_TEMP_H: u8 = 0x0E;
-
-/// Error/fault code register (1 byte)
-const REG_ERROR_CODE: u8 = 0x10;
-
-/// Working mode register (1 byte)
-const REG_MODE: u8 = 0x11;
-
-/// Reset register — write 0x01 to trigger sensor reset (takes ~2s)
-#[allow(dead_code)]
-const REG_RESET: u8 = 0x12;
-
-/// Length of raw source data string
-#[allow(dead_code)]
-const REG_SOURCE_LEN: u8 = 0x20;
-
-/// Raw source data string (variable length, up to 43 bytes)
-#[allow(dead_code)]
-const REG_SOURCE_DATA: u8 = 0x21;
-
-/// Passive mode value for REG_MODE
-const MODE_PASSIVE: u8 = 0x00;
-
-/// Active mode value for REG_MODE
-#[allow(dead_code)]
-const MODE_ACTIVE: u8 = 0x01;
-
-
-// ─── Fault code constants ───────────────────────────────────────────────────────
-
-#[allow(dead_code)]
-pub const FAULT_NORMAL: u8 = 0x00;
-#[allow(dead_code)]
-pub const FAULT_TEMP_CONTROL_ERROR: u8 = 0x01;
-#[allow(dead_code)]
-pub const FAULT_AMBIENT_TEMP_ERROR: u8 = 0x02;
-#[allow(dead_code)]
-pub const FAULT_AMBIENT_AND_TEMP_CONTROL: u8 = 0x03;
-#[allow(dead_code)]
-pub const FAULT_LASER_SIGNAL_WEAK: u8 = 0x04;
-#[allow(dead_code)]
-pub const FAULT_AMBIENT_AND_SIGNAL_WEAK: u8 = 0x06;
-#[allow(dead_code)]
-pub const FAULT_LASER_SIGNAL_ERROR: u8 = 0x10;
-#[allow(dead_code)]
-pub const FAULT_AMBIENT_AND_SIGNAL_ERROR: u8 = 0x12;
-
 
 // ─── Constructor ────────────────────────────────────────────────────────────────
 
