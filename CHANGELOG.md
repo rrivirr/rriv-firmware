@@ -1,3 +1,11 @@
+## [1.12.4-preview-test.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.3...v1.12.4-preview-test.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* first mhz9041a driver ([ca45b8e](https://github.com/rrivirr/rriv-firmware/commit/ca45b8e036f18515846e43d7e86839e803049830))
+* trigger ([1df715c](https://github.com/rrivirr/rriv-firmware/commit/1df715ce18d9790a8287acade2ab09ade236ceb6))
+
 ## [1.12.3](https://github.com/rrivirr/rriv-firmware/compare/v1.12.2...v1.12.3) (2026-03-03)
 
 
