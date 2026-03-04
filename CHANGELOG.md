@@ -1,3 +1,10 @@
+## [1.12.5](https://github.com/rrivirr/rriv-firmware/compare/v1.12.4...v1.12.5) (2026-03-04)
+
+
+### Bug Fixes
+
+* bump the version to make sure the built firmware has all the commits after automation dev ([f6076ac](https://github.com/rrivirr/rriv-firmware/commit/f6076aca0cb3a4b181d3cf684f354eddb4957499))
+
 ## [1.12.4](https://github.com/rrivirr/rriv-firmware/compare/v1.12.3...v1.12.4) (2026-03-04)
 
 
