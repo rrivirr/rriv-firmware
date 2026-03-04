@@ -1,3 +1,10 @@
+## [1.12.4-preview-methane-laser.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.3...v1.12.4-preview-methane-laser.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* first mhz9041a driver ([aed2f72](https://github.com/rrivirr/rriv-firmware/commit/aed2f726c75071e25e93d9340eb846544be014ab))
+
 ## [1.12.3](https://github.com/rrivirr/rriv-firmware/compare/v1.12.2...v1.12.3) (2026-03-03)
 
 
