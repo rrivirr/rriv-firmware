@@ -1,3 +1,13 @@
+## [1.12.4](https://github.com/rrivirr/rriv-firmware/compare/v1.12.3...v1.12.4) (2026-03-04)
+
+
+### Bug Fixes
+
+* adding mhz9041a debug logging ([6307e9e](https://github.com/rrivirr/rriv-firmware/commit/6307e9ec7994d6bf0451cc1345c701c1e3d92320))
+* revising mhz9041 driver ([f03e896](https://github.com/rrivirr/rriv-firmware/commit/f03e8969b977ee70021ae199629b4ffa2e043f9e))
+* two default addresses ([4fe3208](https://github.com/rrivirr/rriv-firmware/commit/4fe320811a3b41ac28491598079bd3fcbe1fbe1b))
+* updating mhz9041a driver registry ([2d1c618](https://github.com/rrivirr/rriv-firmware/commit/2d1c6181b3055cb79e5d1069ccd8a1eeef34fc2c))
+
 ## [1.12.3](https://github.com/rrivirr/rriv-firmware/compare/v1.12.2...v1.12.3) (2026-03-03)
 
 
