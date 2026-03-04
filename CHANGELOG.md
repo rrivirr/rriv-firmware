@@ -1,3 +1,10 @@
+## [1.12.4-preview-nothing.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.3...v1.12.4-preview-nothing.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* trigger ([cbfc482](https://github.com/rrivirr/rriv-firmware/commit/cbfc48267d0f1fa8733abcab7010a7f6bdba3a93))
+
 ## [1.12.3](https://github.com/rrivirr/rriv-firmware/compare/v1.12.2...v1.12.3) (2026-03-03)
 
 
