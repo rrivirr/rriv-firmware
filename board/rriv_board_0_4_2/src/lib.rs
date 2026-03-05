@@ -1242,6 +1242,8 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
+        // rcc::Rcc::BKP::constrain()
+
         // get an unsafe handle on our the CS pin so we can flash it
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
         let mut cs = unsafe {
@@ -1284,6 +1286,14 @@ impl BoardBuilder {
         let precise_delay = PreciseDelayUs::new();
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
+
+        let read  =backup_domain.read_data_register_low(0);
+
+         defmt::println!("trying to dfu {}", read);
+        delay.delay_ms(2000_u32);
+        // backup_domain.write_data_register_high(register, data);
+        backup_domain.write_data_register_low(0, 0x4F42);
+        cortex_m::peripheral::SCB::sys_reset();
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
