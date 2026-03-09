@@ -1,3 +1,32 @@
+# [1.13.0-preview-pwn-release.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.5...v1.13.0-preview-pwn-release.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* comment old pwm code ([f506b64](https://github.com/rrivirr/rriv-firmware/commit/f506b64f7d642db7979b13d0fb9507cf9560f293))
+* Comment out the incomplete uart5 serial for now ([ddd8c28](https://github.com/rrivirr/rriv-firmware/commit/ddd8c2882b54fa3898ee1ed397f316e3237e859e))
+* disable pin 1 normal operation ([d4b08be](https://github.com/rrivirr/rriv-firmware/commit/d4b08be6209c671cd3bab2000156d2884ad3d161))
+* imports ([d0e3035](https://github.com/rrivirr/rriv-firmware/commit/d0e303593482e2c62f9c297a522aed4d49db6eaa))
+* initialize pwm ([130a2b8](https://github.com/rrivirr/rriv-firmware/commit/130a2b89f80f542b35afdfb7baced7eda8aa9dea))
+* keep clocks object around for later use ([a02a2c0](https://github.com/rrivirr/rriv-firmware/commit/a02a2c03c550fbe2cfdbbe74225e0a2eb7bf5df4))
+* missing comma ([bac46f8](https://github.com/rrivirr/rriv-firmware/commit/bac46f81c27905e3641f1a4a99a847036052e897))
+* move pwm setup earlier to address hard fault ([3499c18](https://github.com/rrivirr/rriv-firmware/commit/3499c1852d944f94ac283ff0401a1eb87523d33c))
+* properly unwrap the gpio object ([63fc2aa](https://github.com/rrivirr/rriv-firmware/commit/63fc2aad951e8d7637f869ece8cfd892b7e9aa4f))
+* remove unnecessary gpio6 hard coded setup ([9171a2f](https://github.com/rrivirr/rriv-firmware/commit/9171a2f64a61c1cefd3631fdeb59747f04ff3bff))
+* remove unused column headers code ([4bac885](https://github.com/rrivirr/rriv-firmware/commit/4bac88518fa134a68c6b176d822db53a0ca5b9a4))
+* use PushPull mode ([baa7f86](https://github.com/rrivirr/rriv-firmware/commit/baa7f868f29754762b9dda49be23d029881e5daa))
+* used TIM5 for millis counter ([1503828](https://github.com/rrivirr/rriv-firmware/commit/150382879732b62ffa173a18af8bb0a782bccc6f))
+
+
+### Features
+
+* added pwm_set_period fn ([72c4fa6](https://github.com/rrivirr/rriv-firmware/commit/72c4fa6394db009efe7257775ef1151d1c5c83a5))
+* applied period fn in timed switch ([c39c185](https://github.com/rrivirr/rriv-firmware/commit/c39c185b977f794b67478a4e270f25b4c8b26be1))
+* apply pwm in timed_switch ([928d205](https://github.com/rrivirr/rriv-firmware/commit/928d2054238e177389fe744eeb6c853e54087a48))
+* define properties and functions for pwm ([adb1cd3](https://github.com/rrivirr/rriv-firmware/commit/adb1cd3cc52d8a2a54c20f0900ef87991a374d60))
+* implement the pwm pin ([30cb24f](https://github.com/rrivirr/rriv-firmware/commit/30cb24f1ca9f8b1296ef89a607c383017fa7a55d))
+* made sw pwm as additonal configuration ([de1e9f5](https://github.com/rrivirr/rriv-firmware/commit/de1e9f53e64e4bdd6f2e1f8de2770117d30746cb))
+
 ## [1.12.5](https://github.com/rrivirr/rriv-firmware/compare/v1.12.4...v1.12.5) (2026-03-04)
 
 
