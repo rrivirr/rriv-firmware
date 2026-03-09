@@ -287,12 +287,12 @@ impl TimedSwitch2 {
 
 impl SensorDriver for TimedSwitch2 {
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+        self.state = match self.special_config.initial_state {
+            true => 1,
+            false => 0,
+        };
         if !self.special_config.pwm_type {
             board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
-            self.state = match self.special_config.initial_state {
-                true => 1,
-                false => 0,
-            };
             board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         }
         else if self.special_config.pwm_enable && self.special_config.pwm_type {
