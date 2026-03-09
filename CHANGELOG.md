@@ -1,3 +1,10 @@
+# [1.13.0-preview-pwn-release.2](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.1...v1.13.0-preview-pwn-release.2) (2026-03-09)
+
+
+### Bug Fixes
+
+* initial_state code is enabled ([9ee3b22](https://github.com/rrivirr/rriv-firmware/commit/9ee3b229428c05f8cdc5bb0d33ea1d78d902ad8c))
+
 # [1.13.0-preview-pwn-release.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.5...v1.13.0-preview-pwn-release.1) (2026-03-09)
 
 
