@@ -89,6 +89,19 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
+        match &values["pwm_type"] {
+            serde_json::Value::String(s) => {
+                let pwm_type: bool = match s.to_ascii_lowercase().as_str() {
+                    "hw" => true,
+                    "sw" => false,
+                    _ => true,
+                };
+                self.pwm_type = pwm_type;
+                return Ok(());
+            },
+            _ => {}
+        }
+
         match &values["period"] {
             serde_json::Value::Number(number) => {
                 if let Some(number) = number.as_f64() {
