@@ -1264,7 +1264,7 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // get an unsafe handle on our the CS pin so we can flash it
+        // get an unsafe handle on our CS pin so we can flash it
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
         let mut cs = unsafe {
             let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
@@ -1272,6 +1272,12 @@ impl BoardBuilder {
             let cs = gpioc.pc8;
             cs.into_push_pull_output(&mut gpioc.crh)
         };
+
+        // get an unsafe handle on our pwm pin
+        // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
+        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+        let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
 
 
         // Prepare the GPIO
@@ -1301,15 +1307,11 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
-
-        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        let gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
-        let pin = gpiob.pb8.into_alternate_push_pull(&mut gpio_cr.gpiob_crh);
  
 
         let tim4 = device_peripherals.TIM4;
         let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
-            tim4.pwm_hz::<Tim4NoRemap, _, _>(pin, &mut afio.mapr, 1.kHz(), &clocks);
+            tim4.pwm_hz::<Tim4NoRemap, _, _>(pwm_pin, &mut afio.mapr, 1.kHz(), &clocks);
         pwm.enable(Channel::C3);
         pwm.set_period(ms(10).into_rate());
         pwm.set_duty(Channel::C3, 0u16);
