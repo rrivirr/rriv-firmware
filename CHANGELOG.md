@@ -1,3 +1,10 @@
+# [1.13.0-preview-pwn-release.3](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.2...v1.13.0-preview-pwn-release.3) (2026-03-10)
+
+
+### Bug Fixes
+
+* added pwm_type in update_from_values fn ([3d25ea6](https://github.com/rrivirr/rriv-firmware/commit/3d25ea618e5f49d815df8fdea656efea3f46e677))
+
 # [1.13.0-preview-pwn-release.2](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.1...v1.13.0-preview-pwn-release.2) (2026-03-09)
 
 
