@@ -309,9 +309,12 @@ impl SensorDriver for TimedSwitch2 {
             board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         }
         else if self.special_config.pwm_enable && self.special_config.pwm_type {
-            let period_ms = (self.special_config.period * 1000.0) as u32;
+            let mut period_ms = (self.special_config.period * 1000.0) as u32;
+            if period_ms > 1000 {
+                period_ms = 1000;
+            }
             defmt::println!("Setting PWM period to {} ms", period_ms);
-            board.write_pwm_pin_period(period_ms);
+            // board.write_pwm_pin_period(period_ms);
         }
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
@@ -448,7 +451,8 @@ impl SensorDriver for TimedSwitch2 {
             "gpio_pin": self.special_config.gpio_pin,
             "period" : self.special_config.period,
             "ratio" : self.special_config.ratio,
-            "initial_state" : initial_state_str,        
+            "initial_state" : initial_state_str,  
+            "pwm_enable" : self.special_config.pwm_enable      
         })
     }
     
