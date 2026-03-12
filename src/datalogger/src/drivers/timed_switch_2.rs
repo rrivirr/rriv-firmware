@@ -365,7 +365,8 @@ impl SensorDriver for TimedSwitch2 {
         if self.state == 0 {
             // heater is off
             let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
-            if hardware_pwm {
+            defmt::println!("{}", hardware_pwm);
+            if hardware_pwm == true {
                 // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty(0);
             }
