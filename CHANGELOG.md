@@ -1,3 +1,11 @@
+# [1.13.0-preview-pwn-release.5](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.4...v1.13.0-preview-pwn-release.5) (2026-03-12)
+
+
+### Bug Fixes
+
+* for some reason need to reference boolean to get it to evaluate in if statement ([b603311](https://github.com/rrivirr/rriv-firmware/commit/b60331104ba1be4c67b4a313d444e18401a3337e))
+* remove extra output ([caa7b3b](https://github.com/rrivirr/rriv-firmware/commit/caa7b3b51c5b923cf30296e0f0e92ea33985d643))
+
 # [1.13.0-preview-pwn-release.4](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.3...v1.13.0-preview-pwn-release.4) (2026-03-12)
 
 
