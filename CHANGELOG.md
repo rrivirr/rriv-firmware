@@ -1,3 +1,11 @@
+# [1.13.0-preview-pwn-release.4](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.3...v1.13.0-preview-pwn-release.4) (2026-03-12)
+
+
+### Bug Fixes
+
+* calcuate hardware pwm bool as separate variable ([e0deac0](https://github.com/rrivirr/rriv-firmware/commit/e0deac0aebd86c938a206cc4fdc9f3ade2653bfb))
+* correct order of pin stealing ([0ae3aef](https://github.com/rrivirr/rriv-firmware/commit/0ae3aef01ef9d77a708b12c637749a27ff3b65a7))
+
 # [1.13.0-preview-pwn-release.3](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.2...v1.13.0-preview-pwn-release.3) (2026-03-10)
 
 
