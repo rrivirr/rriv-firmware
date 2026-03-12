@@ -1303,7 +1303,7 @@ impl BoardBuilder {
         // get an unsafe handle on our CS pin so we can flash it
         // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let (mut cs, mut pwm_pin) = unsafe {
+        let (mut cs, pwm_pin) = unsafe {
             let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
             let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
@@ -1318,6 +1318,8 @@ impl BoardBuilder {
         // let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
         // let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
         // let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+
+        
 
 
         // Prepare the GPIO
@@ -1347,25 +1349,13 @@ impl BoardBuilder {
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
- 
-        let (mut cs, mut pwm_pin) = unsafe {
-            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
-            let mut gpioc = device_peripherals_steal.GPIOC.split();
-            let cs = gpioc.pc8;
-            let cs = cs.into_push_pull_output(&mut gpioc.crh);
-            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
-            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
-            (cs, pwm_pin)
-        };
-
-
 
         let tim4 = device_peripherals.TIM4;
         let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
             tim4.pwm_hz::<Tim4NoRemap, _, _>(pwm_pin, &mut afio.mapr, 1.kHz(), &clocks);
         pwm.enable(Channel::C3);
         pwm.set_period(ms(10).into_rate());
-        pwm.set_duty(Channel::C3, 0u16);
+        pwm.set_duty(Channel::C3, 0);
         self.pwm = Some(pwm);
 
         // let mut high = true;
