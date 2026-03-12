@@ -87,7 +87,7 @@ fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
         Ok(length) => {
             let message: &[u8] = &adu_buffer[0..length];
             for byte in message {
-                defmt::println!("tx byte: {:X}", byte);
+                // defmt::println!("tx byte: {:X}", byte);
             }
             transmit(board, message);
         },
