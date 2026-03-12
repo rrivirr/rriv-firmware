@@ -314,7 +314,7 @@ impl SensorDriver for TimedSwitch2 {
                 period_ms = 1000;
             }
             defmt::println!("Setting PWM period to {} ms", period_ms);
-            // board.write_pwm_pin_period(period_ms);
+            board.write_pwm_pin_period(period_ms);
         }
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
@@ -364,8 +364,9 @@ impl SensorDriver for TimedSwitch2 {
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
-            if self.special_config.pwm_enable && self.special_config.pwm_type {
-                // chip produced pwm on pin 1 only
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            if hardware_pwm {
+                // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty(0);
             }
 
@@ -380,7 +381,8 @@ impl SensorDriver for TimedSwitch2 {
             }
         } else if self.state == 1 {
             // heater is on
-            if self.special_config.pwm_enable && self.special_config.pwm_type {
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            if hardware_pwm {
                 // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
             } 
