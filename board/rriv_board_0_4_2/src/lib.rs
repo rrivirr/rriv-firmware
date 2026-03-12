@@ -1265,19 +1265,23 @@ impl BoardBuilder {
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
         // get an unsafe handle on our CS pin so we can flash it
+        // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let mut cs = unsafe {
-            let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
-            let mut gpioc = device_peripherals.GPIOC.split();
+        let (mut cs, mut pwm_pin) = unsafe {
+            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
-            cs.into_push_pull_output(&mut gpioc.crh)
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+            (cs, pwm_pin)
         };
 
         // get an unsafe handle on our pwm pin
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
-        let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+        // let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        // let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+        // let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
 
 
         // Prepare the GPIO
@@ -1308,6 +1312,17 @@ impl BoardBuilder {
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
  
+        let (mut cs, mut pwm_pin) = unsafe {
+            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals_steal.GPIOC.split();
+            let cs = gpioc.pc8;
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+            (cs, pwm_pin)
+        };
+
+
 
         let tim4 = device_peripherals.TIM4;
         let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
