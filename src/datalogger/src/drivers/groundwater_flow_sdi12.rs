@@ -133,6 +133,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
         let m_response = sdi12.send_m_command(self.special_config.sensor_address, '0');
         if m_response.address == '\0' {
             // invalid response
+            defmt::println!("TIMEOUT error");
             return;
         }
         if m_response.ttt == 0 {
