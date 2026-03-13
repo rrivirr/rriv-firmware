@@ -20,6 +20,7 @@ use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
+use crate::services::sdi12_service::Sdi12Command;
 use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
 
@@ -51,6 +52,7 @@ pub struct DataLogger {
     lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
     modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
     modbus_service: Option<modbus_service::ModbusByteProcessor>,
+    sdi12_service: Option<sdi12_service::Sdi12ByteProcessor>,
 
     // measurement cycle
     completed_bursts: u8,
@@ -74,7 +76,8 @@ impl DataLogger {
             modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            modbus_service: None
+            modbus_service: None,
+            sdi12_service: None,
         }
     }
 
@@ -135,6 +138,9 @@ impl DataLogger {
         usart_service::setup(board);
         self.modbus_service = Some(modbus_service::ModbusByteProcessor::new());
         modbus_service::setup(board);
+
+        let sdi12_gpio = 5;
+        self.sdi12_service = Some(sdi12_service::Sdi12ByteProcessor::new(sdi12_gpio));
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -412,6 +418,41 @@ impl DataLogger {
                 // this block is processed when we start up, don't get an interactive mode interrupt, and are in HibernateUntil mode
                 // or when we have just entered this mode
                 // TODO: hibernate until the requested wake time
+            }
+            DataLoggerMode::SDI12 => {
+                if let Some(sdi12_service) = &mut self.sdi12_service {
+                    if sdi12_service.is_awake() == false {
+                        sdi12_service.wake_up(board);
+                    }
+
+                    if sdi12_service.is_awake() {
+                        match sdi12_service.take_message('0', board) {
+                            Ok(mode) => {
+                                match mode {
+                                    Sdi12Command::M => {
+                                    }
+
+                                    Sdi12Command::Mc(digit) => {
+                                        if digit == '0' {
+                                            sdi12_service.send_MAck(board, '0', 0, 2);
+                                        }
+                                    }
+
+                                    Sdi12Command::D(digit) => {
+                                        let mut data: [f64; 9] = [0_f64; 9];
+                                        if digit == '0' {
+                                            data[0] = 1_f64;
+                                            data[1] = 3.14;
+                                            sdi12_service.send_data(board, '0', data, 2);
+                                            sdi12_service.sleep();
+                                        }
+                                    }
+                                }
+                            }
+                            Err(message) => responses::send_command_response_error(board, message, ""),
+                        }
+                    }
+                }
             }
         }
     }
@@ -772,6 +813,10 @@ impl DataLogger {
                         self.mode = DataLoggerMode::Field;
                         // switching into field mode should create a new file
                         self.write_column_headers_to_storage(board);
+                        persist = true;
+                    }
+                    "sdi12" => {
+                        self.mode = DataLoggerMode::SDI12;
                         persist = true;
                     }
                     _ => {
@@ -1321,6 +1366,15 @@ impl DataLogger {
             }
         }
 
+        // if let Some(enable_sdi12) = &values.enable_sdi12 {
+        //     if self.settings.toggles.enable_sdi12() != *enable_sdi12 {
+        //        match self.set_up_modbus_rtu(*enable_sdi12) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
+
         let new_settings: DataloggerSettings = self.settings.with_values(values);
         let mut old_settings: DataloggerSettings = self.settings.clone();
         self.settings = new_settings;
@@ -1376,7 +1430,8 @@ impl DataLogger {
            "mode" : datalogger::modes::mode_text(&self.mode),
            "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
-           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
+           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu(),
+           "enable_sdi12" : self.settings.toggles.enable_sdi12(),
         })
     }
 

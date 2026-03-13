@@ -31,7 +31,7 @@ pub struct DataloggerSettingsBitField {
     pub enable_interactive_logging: bool,
 
     #[bits(1)]
-    unused: usize,
+    pub enable_sdi12: bool,
 }
 
 
@@ -142,6 +142,7 @@ impl DataloggerSettings {
         settings.toggles.set_enable_lorawan_telemetry(values.enable_lorawan_telemetry.unwrap_or(self.toggles.enable_lorawan_telemetry()));
         settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
         settings.toggles.set_enable_interactive_logging(values.interactive_logging.unwrap_or(self.toggles.enable_interactive_logging()));
+        settings.toggles.set_enable_sdi12(values.enable_sdi12.unwrap_or(self.toggles.enable_sdi12()));
         settings
     }
 

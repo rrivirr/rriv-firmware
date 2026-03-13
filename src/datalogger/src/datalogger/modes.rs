@@ -4,7 +4,8 @@
 pub enum DataLoggerMode {
     Interactive = 1,
     Field = 2,
-    HibernateUntil = 3
+    HibernateUntil = 3,
+    SDI12 = 4,
 }
 
 impl DataLoggerMode {
@@ -26,6 +27,7 @@ pub fn mode_text(mode: &DataLoggerMode) -> &'static str {
         DataLoggerMode::Interactive => "interactive",
         DataLoggerMode::Field => "field",
         DataLoggerMode::HibernateUntil => "hibernate",
+        DataLoggerMode::SDI12 => "sdi12",
     }
 }
 
