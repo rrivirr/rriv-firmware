@@ -260,6 +260,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             command[3] = '!';
         }
         self.send_command(command);
+        defmt::println!("Sent 0M0!");
         let response = self.read_response();
         // parse the response
         // format: <address>tttn<CR><LF>
