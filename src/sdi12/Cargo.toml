@@ -1,5 +1,5 @@
 [package]
-name = "sdi-12"
+name = "sdi12"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,5 @@ edition = "2021"
 format_no_std = "1.2.0"
 rtt-target = { version = "0.6.1", features =  ["defmt"] }
 defmt = "1.0.1"
+rriv_board = { path = "../../board/rriv_board" } 
 
