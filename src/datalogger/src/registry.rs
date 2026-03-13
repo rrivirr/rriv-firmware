@@ -16,7 +16,8 @@ const SENSOR_NAMES: [&str; 14] = [
     "ring_w_mux",
     "ring_temp_sim",
     "groundwater_rtu",
-    "mhz9041a"
+    "mhz9041a",
+    "groundwater_flow_sdi12"
 ];
 
 pub fn sensor_type_id_from_name(name: &str) -> Result<u16, ()> {
@@ -134,6 +135,10 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
     driver_create_functions[13] = Some(driver_create_functions!(
         crate::drivers::mhz9041a::MHZ9041ADriver,
         crate::drivers::mhz9041a::MHZ9041ADriverSpecialConfiguration
+    ));
+    driver_create_functions[13] = Some(driver_create_functions!(
+        crate::drivers::groundwater_flow_sdi12::GroundwaterFlowSDI12,
+        crate::drivers::groundwater_flow_sdi12::GroundwaterFlowSDI12SpecialConfiguration
     ));
 
     driver_create_functions
