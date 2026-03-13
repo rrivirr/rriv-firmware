@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use crate::drivers::{ types::{SensorDriver, SensorDriverGeneralConfiguration, SENSOR_SETTINGS_PARTITION_SIZE}};
 
 
-const SENSOR_NAMES: [&str; 14] = [
+const SENSOR_NAMES: [&str; 15] = [
     "no_match",
     "generic_analog",
     "atlas_ec",
@@ -136,7 +136,7 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::mhz9041a::MHZ9041ADriver,
         crate::drivers::mhz9041a::MHZ9041ADriverSpecialConfiguration
     ));
-    driver_create_functions[13] = Some(driver_create_functions!(
+    driver_create_functions[14] = Some(driver_create_functions!(
         crate::drivers::groundwater_flow_sdi12::GroundwaterFlowSDI12,
         crate::drivers::groundwater_flow_sdi12::GroundwaterFlowSDI12SpecialConfiguration
     ));
