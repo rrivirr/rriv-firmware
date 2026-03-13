@@ -17,7 +17,7 @@ const SENSOR_NAMES: [&str; 15] = [
     "ring_temp_sim",
     "groundwater_rtu",
     "mhz9041a",
-    "groundwater_flow_sdi12"
+    "gndwater_sdi12",
 ];
 
 pub fn sensor_type_id_from_name(name: &str) -> Result<u16, ()> {
