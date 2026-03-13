@@ -136,7 +136,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn read_char(&mut self) -> Option<char> {
 
         while self.sdi12_board.read() == false {
-            if self.sdi12_board.millis() - self.timeout_counter > SDI12_TIMEOUT {
+            let elapsed_time = self.sdi12_board.millis().wrapping_sub(self.timeout_counter);
+            if elapsed_time > SDI12_TIMEOUT {
                 return None; // SDI12_timeout
             }
         }
