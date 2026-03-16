@@ -426,6 +426,7 @@ impl DataLogger {
                     }
 
                     if sdi12_service.is_awake() {
+                        defmt::println!("board awake!");
                         match sdi12_service.take_message('0', board) {
                             Ok(mode) => {
                                 match mode {
@@ -436,6 +437,7 @@ impl DataLogger {
                                         if digit == '0' {
                                             sdi12_service.send_MAck(board, '0', 0, 2);
                                         }
+                                        defmt::println!("Sent Ack to M");
                                     }
 
                                     Sdi12Command::D(digit) => {
@@ -446,12 +448,19 @@ impl DataLogger {
                                             sdi12_service.send_data(board, '0', data, 2);
                                             sdi12_service.sleep();
                                         }
+                                        defmt::println!("Sent data");
                                     }
                                 }
                             }
                             Err(message) => responses::send_command_response_error(board, message, ""),
                         }
                     }
+                    else {
+                        defmt::println!("board sleeping");
+                    }
+                }
+                else {
+                    defmt::println!("sdi12 service not setup");
                 }
             }
         }
@@ -817,7 +826,10 @@ impl DataLogger {
                     }
                     "sdi12" => {
                         self.mode = DataLoggerMode::SDI12;
+                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                        board.set_debug(false);
                         persist = true;
+                        defmt::println!("In SDI12 mode!");
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;

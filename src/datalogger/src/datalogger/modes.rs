@@ -17,6 +17,7 @@ impl DataLoggerMode {
     match index {
         2 => DataLoggerMode::Field,
         3 => DataLoggerMode::HibernateUntil,
+        4 => DataLoggerMode::SDI12,
         _ => DataLoggerMode::Interactive
     }
   }
