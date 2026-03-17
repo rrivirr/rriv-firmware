@@ -1,3 +1,10 @@
+# [1.13.0-preview-pwn-release.6](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.5...v1.13.0-preview-pwn-release.6) (2026-03-17)
+
+
+### Bug Fixes
+
+* Update ring_w_mux.rs six ring addresses ([bf4015c](https://github.com/rrivirr/rriv-firmware/commit/bf4015c7c9de34796dbea143ff7ed33af3897a9f))
+
 # [1.13.0-preview-pwn-release.5](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0-preview-pwn-release.4...v1.13.0-preview-pwn-release.5) (2026-03-12)
 
 
