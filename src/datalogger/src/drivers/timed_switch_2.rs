@@ -14,6 +14,7 @@ pub struct TimedSwitch2SpecialConfiguration {
     initial_state: bool, // 'on' 'off'
     // polarity // 'low_is_on', 'high_is_on'
     pwm_enable: bool,
+    pwm_type: bool,
     period: f32,
     ratio: f32,
     _empty: [u8; 13],
@@ -86,6 +87,19 @@ impl TimedSwitch2SpecialConfiguration {
             _ => {
                 defmt::println!("pwm_enable not provided, defaulting to false");
             }
+        }
+
+        match &values["pwm_type"] {
+            serde_json::Value::String(s) => {
+                let pwm_type: bool = match s.to_ascii_lowercase().as_str() {
+                    "hw" => true,
+                    "sw" => false,
+                    _ => true,
+                };
+                self.pwm_type = pwm_type;
+                return Ok(());
+            },
+            _ => {}
         }
 
         match &values["period"] {
@@ -195,6 +209,17 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
+        let s = match &value["pwm_type"] {
+            serde_json::Value::String(s) => s.as_str(),
+            _ => "hw"
+        };
+        
+        let pwm_type: bool = match s.to_ascii_lowercase().as_str() {
+            "hw" => true,
+            "sw" => false,
+            _ => true,
+        };
+
         let mut period: f32 = 10.0;
         match &value["period"] {
             serde_json::Value::Number(number) => {
@@ -228,6 +253,7 @@ impl TimedSwitch2SpecialConfiguration {
             gpio_pin,
             initial_state,
             pwm_enable,
+            pwm_type,
             period,
             ratio,
             _empty: [b'\0'; 13],
@@ -274,12 +300,22 @@ impl TimedSwitch2 {
 
 impl SensorDriver for TimedSwitch2 {
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
         self.state = match self.special_config.initial_state {
             true => 1,
             false => 0,
         };
-        board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+        if !self.special_config.pwm_type {
+            board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
+            board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+        }
+        else if self.special_config.pwm_enable && self.special_config.pwm_type {
+            let mut period_ms = (self.special_config.period * 1000.0) as u32;
+            if period_ms > 1000 {
+                period_ms = 1000;
+            }
+            defmt::println!("Setting PWM period to {} ms", period_ms);
+            board.write_pwm_pin_period(period_ms);
+        }
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
         self.duty_cycle_state = self.state == 1;
@@ -328,6 +364,13 @@ impl SensorDriver for TimedSwitch2 {
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            defmt::println!("{}", hardware_pwm);
+            if hardware_pwm == true {
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty(0);
+            }
+
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
                 defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
@@ -339,8 +382,12 @@ impl SensorDriver for TimedSwitch2 {
             }
         } else if self.state == 1 {
             // heater is on
-
-            if self.special_config.pwm_enable {
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            if hardware_pwm {
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
+            } 
+            else if self.special_config.pwm_enable && !self.special_config.pwm_type {
             // duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
@@ -407,7 +454,8 @@ impl SensorDriver for TimedSwitch2 {
             "gpio_pin": self.special_config.gpio_pin,
             "period" : self.special_config.period,
             "ratio" : self.special_config.ratio,
-            "initial_state" : initial_state_str,        
+            "initial_state" : initial_state_str,  
+            "pwm_enable" : self.special_config.pwm_enable      
         })
     }
     
