@@ -1,3 +1,11 @@
+## [1.12.6](https://github.com/rrivirr/rriv-firmware/compare/v1.12.5...v1.12.6) (2026-03-17)
+
+
+### Bug Fixes
+
+* changing six ring sensor addresses ([32d3610](https://github.com/rrivirr/rriv-firmware/commit/32d3610556ff5687b74e6defdf60dacb509c049c))
+* Merge pull request [#232](https://github.com/rrivirr/rriv-firmware/issues/232) from rrivirr/jakehosen-patch-1 ([f608bca](https://github.com/rrivirr/rriv-firmware/commit/f608bca4091cffec3e94eb9bc2a2aae5b467eb0e))
+
 ## [1.12.5](https://github.com/rrivirr/rriv-firmware/compare/v1.12.4...v1.12.5) (2026-03-04)
 
 
