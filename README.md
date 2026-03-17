@@ -36,7 +36,7 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/relea
 ```
 
 Users of VSCode will also want to install the following extensions:
-* rust-analyzer
+* [rust-analyzer](https://code.visualstudio.com/docs/languages/rust)
 
 
 
