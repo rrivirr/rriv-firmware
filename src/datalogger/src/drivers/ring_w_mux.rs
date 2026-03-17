@@ -100,7 +100,7 @@ impl RingMuxTemperatureDriver {
         let mut addresses = [0u8; TEMPERATURE_SENSORS_ON_RING];
         if special_config.sensors == 6 {
             addresses = [
-                0b0011000, 0b0011001, 0b0011110, 0b0011101, 0b0011010, 0b0011100, 0, 0
+                0b0011110, 0b0011010, 0b0011000, 0b0011100, 0b0011110, 0b0011101, 0, 0
             ];
         }
         else if special_config.sensors == 8 {
