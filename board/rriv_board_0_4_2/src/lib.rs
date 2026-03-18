@@ -889,6 +889,10 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn enter_dfu_mode(&self){
+        enter_dfu_mode();
+    }
+
 }
 
 
@@ -1347,7 +1351,7 @@ impl BoardBuilder {
         };
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
-            // so unsafely get the cs pin and flash it
+            // so use the unsafe cs pin and toggle to flash the led
             for _i in 1..10 {
                 cs_stolen.set_high();
                 delay.delay_ms(100_u32);
@@ -1539,21 +1543,24 @@ impl BoardBuilder {
         setup_serialb(device_peripherals.UART5, &clocks);
 
         defmt::println!("done with setup");
-
-
-               // enter DFU
-        defmt::println!("enter dfu");
-        backup_domain.write_data_register_low(0, 0x4F42);
-        cortex_m::peripheral::SCB::sys_reset();
-        loop{};
-
-    
-
     }
 }
 
 unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
+}
+
+pub fn enter_dfu_mode(){
+    defmt::println!("entering dfu");
+
+    unsafe {
+        let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+        let rcc = device_peripherals.RCC.constrain();
+        let mut pwr = device_peripherals.PWR;
+        let backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
+        backup_domain.write_data_register_low(0, 0x4F42);
+        cortex_m::peripheral::SCB::sys_reset();
+    }
 }
 
 pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
