@@ -1244,13 +1244,18 @@ impl BoardBuilder {
 
         // get an unsafe handle on our the CS pin so we can flash it
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        // let mut cs = unsafe {
-        //     let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
-        //     let mut gpioc = device_peripherals.GPIOC.split();
-        //     let cs = gpioc.pc8;
-        //     cs.into_push_pull_output(&mut gpioc.crh)
-        // };
-        // cs.set_high();
+        let ( mut cs_stolen, mut sclk_stolen) = unsafe {
+            let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc: gpio::gpioc::Parts = device_peripherals.GPIOC.split();
+            let cs = gpioc.pc8;
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob: gpio::gpiob::Parts = device_peripherals.GPIOB.split();
+            let sclk = gpiob.pb13;
+            let sclk = sclk.into_push_pull_output(&mut gpiob.crh);
+            (cs, sclk)
+        };
+        cs_stolen.set_high();
+        sclk_stolen.set_low();
 
 
         // Prepare the GPIO
@@ -1286,56 +1291,53 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
         defmt::println!("OK");
-        delay.delay_ms(1200u16);
+        // delay.delay_ms(1200u16);
 
 
-        let mut cs = spi2_pins.sd_card_chip_select;
-        spi2_pins.sck.into_open_drain_output(&mut ) // this is the part that was missing
-        let mut cs = cs.into_push_pull_output(&mut gpio_cr.gpioc_crh);
+        cs_stolen.set_high();
+        sclk_stolen.set_low();
         defmt::println!("OK");
+        for i in 0..10 { 
+            let mult = i % 3 + 1;
+            delay.delay_ms(100u16 * mult);
+            cs_stolen.set_low();
+            delay.delay_ms(100u16 * mult);
+            cs_stolen.set_high();
+        };
 
-        for _i in 0..10 {
-                    defmt::println!("OKiter");
-
-            cs.set_low();
-            delay.delay_ms(500_u32);
-            cs.set_high();
-            delay.delay_ms(500_u32);
-            
-        }
-        backup_domain.write_data_register_low(0, 0x4F42);
-        // backup_domain.write_data_register_low(0, 0x24F4);
-
-                defmt::println!("OKr");
-
-        cortex_m::peripheral::SCB::sys_reset();
-        return;
+        while false  { 
+            delay.delay_ms(200u16);
+            cs_stolen.set_low();
+            delay.delay_ms(200u16);
+            cs_stolen.set_high();
+        };
+        cs_stolen.set_low();
 
 
 
-        // let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        // watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        // watchdog.start(MilliSeconds::secs(6));
-        // watchdog.feed();
+        watchdog.start(MilliSeconds::secs(6));
+        watchdog.feed();
 
-        // BoardBuilder::setup_serial(
-        //     serial_pins,
-        //     &mut afio.mapr,
-        //     device_peripherals.USART2,
-        //     &clocks,
-        // );
+        BoardBuilder::setup_serial(
+            serial_pins,
+            &mut afio.mapr,
+            device_peripherals.USART2,
+            &clocks,
+        );
 
-        // self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
+        self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
 
 
-        // BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
+        BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
         // usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        // watchdog.start(MilliSeconds::secs(24));
+        watchdog.start(MilliSeconds::secs(24));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        // watchdog.start(MilliSeconds::secs(6));
+        watchdog.start(MilliSeconds::secs(6));
         let storage = match storage {
             Ok(storage) => Some(storage),
             Err(hardware_error) => {
@@ -1347,197 +1349,205 @@ impl BoardBuilder {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
             for _i in 1..10 {
-                cs.set_high();
+                cs_stolen.set_high();
                 delay.delay_ms(100_u32);
-                cs.set_low();
+                cs_stolen.set_low();
                 delay.delay_ms(100_u32);
             }
-            cs.set_high();
+            cs_stolen.set_high(); // TODO: mismatch here, we set this to open drain but since we need sclk to not clock the card it's better to use cs to flash the led. 
             
         }
-        return;
 
-        // self.external_adc = Some(ExternalAdc::new(external_adc_pins));
-        // self.external_adc.as_mut().unwrap().disable(&mut delay);
+        self.external_adc = Some(ExternalAdc::new(external_adc_pins));
+        self.external_adc.as_mut().unwrap().disable(&mut delay);
 
-        // power_pins.enable_3v.set_high();
-        // delay.delay_ms(500_u32);
-        // power_pins.enable_3v.set_low();
-        // delay.delay_ms(500_u32);
-        // power_pins.enable_3v.set_high();
-        // delay.delay_ms(500_u32);
+        power_pins.enable_3v.set_high();
+        delay.delay_ms(500_u32);
+        power_pins.enable_3v.set_low();
+        delay.delay_ms(500_u32);
+        power_pins.enable_3v.set_high();
+        delay.delay_ms(500_u32);
 
-        // // external adc and i2c stability require these steps
-        // power_pins.enable_5v.set_high();
-        // delay.delay_ms(250_u32);
-        // self.external_adc.as_mut().unwrap().enable(&mut delay);
-        // self.external_adc.as_mut().unwrap().reset(&mut delay);
+        // external adc and i2c stability require these steps
+        power_pins.enable_5v.set_high();
+        delay.delay_ms(250_u32);
+        self.external_adc.as_mut().unwrap().enable(&mut delay);
+        self.external_adc.as_mut().unwrap().reset(&mut delay);
 
 
-        // defmt::println!("unhang I2C1 if hung");
+        defmt::println!("unhang I2C1 if hung");
 
-        // let mut scl1 = i2c1_pins
-        //     .i2c1_scl
-        //     .into_open_drain_output(&mut gpio_cr.gpiob_crl);
-        // let mut sda1 = i2c1_pins
-        //     .i2c1_sda
-        //     .into_open_drain_output(&mut gpio_cr.gpiob_crl);
-        // sda1.set_high(); // remove signal from the master
+        let mut scl1 = i2c1_pins
+            .i2c1_scl
+            .into_open_drain_output(&mut gpio_cr.gpiob_crl);
+        let mut sda1 = i2c1_pins
+            .i2c1_sda
+            .into_open_drain_output(&mut gpio_cr.gpiob_crl);
+        sda1.set_high(); // remove signal from the master
 
-        // match try_unhang_i2c(
-        //     &mut scl1,
-        //     &sda1,
-        //     &mut delay,
-        //     i2c_hung_fix::FALLBACK_I2C_FREQUENCY,
-        //     30,
-        // ) {
-        //     Ok(_) => {}
-        //     Err(_e) => {
-        //         defmt::println!("Couln't reset i2c1");
-        //         usb_serial_send("{\"status\":\"i2c1 failed, restarting\"}", &mut delay);
-        //         loop {}
-        //     } // wait for IDWP to reset.   actually we can just hardware reset here?
-        // }
+        match try_unhang_i2c(
+            &mut scl1,
+            &sda1,
+            &mut delay,
+            i2c_hung_fix::FALLBACK_I2C_FREQUENCY,
+            30,
+        ) {
+            Ok(_) => {}
+            Err(_e) => {
+                defmt::println!("Couln't reset i2c1");
+                usb_serial_send("{\"status\":\"i2c1 failed, restarting\"}", &mut delay);
+                loop {}
+            } // wait for IDWP to reset.   actually we can just hardware reset here?
+        }
 
-        // let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
+        let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
-        // // defmt::println!("starting i2c");
-        // core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
-        // let mut i2c1 = BoardBuilder::setup_i2c1(
-        //     i2c1_pins,
-        //     device_peripherals.I2C1,
-        //     &mut afio.mapr,
-        //     &clocks,
-        // );
-        // defmt::println!("set up i2c1 done");
+        // defmt::println!("starting i2c");
+        core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
+        let mut i2c1 = BoardBuilder::setup_i2c1(
+            i2c1_pins,
+            device_peripherals.I2C1,
+            &mut afio.mapr,
+            &clocks,
+        );
+        defmt::println!("set up i2c1 done");
 
-        // // defmt::println!("skipping unhang I2C2 if hung");
+        // defmt::println!("skipping unhang I2C2 if hung");
 
-        // defmt::println!("unhang I2C2 if hung");
+        defmt::println!("unhang I2C2 if hung");
 
-        // let mut scl2 = i2c2_pins
-        //     .i2c2_scl
-        //     .into_open_drain_output(&mut gpio_cr.gpiob_crh);
-        // let mut sda2 = i2c2_pins
-        //     .i2c2_sda
-        //     .into_open_drain_output(&mut gpio_cr.gpiob_crh);
-        // sda2.set_high(); // remove signal from the master
+        let mut scl2 = i2c2_pins
+            .i2c2_scl
+            .into_open_drain_output(&mut gpio_cr.gpiob_crh);
+        let mut sda2 = i2c2_pins
+            .i2c2_sda
+            .into_open_drain_output(&mut gpio_cr.gpiob_crh);
+        sda2.set_high(); // remove signal from the master
 
-        // match try_unhang_i2c(
-        //     &mut scl2,
-        //     &sda2,
-        //     &mut delay,
-        //     100_000,
-        //     i2c_hung_fix::RECOMMENDED_MAX_CLOCK_CYCLES,
-        // ) {
-        //     Ok(ok) => {
-        //         match ok {
-        //             i2c_hung_fix::Sucess::BusNotHung => {}
-        //             i2c_hung_fix::Sucess::FixedHungBus => {
-        //                 defmt::println!("Fixed hung bus");
-        //                 loop {} // wait for IDWD to reset
-        //             }
-        //         }
-        //     }
-        //     Err(_) => {
-        //         usb_serial_send("{\"status\":\"i2c2 failed, restarting\"}", &mut delay);
-        //         loop {} // wait for IDWD to reset.   actually we can just hardware reset here?
-        //     }
-        // }
+        match try_unhang_i2c(
+            &mut scl2,
+            &sda2,
+            &mut delay,
+            100_000,
+            i2c_hung_fix::RECOMMENDED_MAX_CLOCK_CYCLES,
+        ) {
+            Ok(ok) => {
+                match ok {
+                    i2c_hung_fix::Sucess::BusNotHung => {}
+                    i2c_hung_fix::Sucess::FixedHungBus => {
+                        defmt::println!("Fixed hung bus");
+                        loop {} // wait for IDWD to reset
+                    }
+                }
+            }
+            Err(_) => {
+                usb_serial_send("{\"status\":\"i2c2 failed, restarting\"}", &mut delay);
+                loop {} // wait for IDWD to reset.   actually we can just hardware reset here?
+            }
+        }
 
-        // let i2c2_pins = I2c2Pins::rebuild(scl2, sda2, &mut gpio_cr);
+        let i2c2_pins = I2c2Pins::rebuild(scl2, sda2, &mut gpio_cr);
 
-        // let mut i2c2 =
-        //     BoardBuilder::setup_i2c2(i2c2_pins, &mut gpio_cr, device_peripherals.I2C2, &clocks);
-        // defmt::println!("set up i2c2 done");
+        let mut i2c2 =
+            BoardBuilder::setup_i2c2(i2c2_pins, &mut gpio_cr, device_peripherals.I2C2, &clocks);
+        defmt::println!("set up i2c2 done");
 
-        // defmt::println!("i2c1 scanning...");
+        defmt::println!("i2c1 scanning...");
 
-        // for addr in 0x00_u8..0x7F {
-        //     // Write the empty array and check the slave response.
-        //     // defmt::println!("trying {:02x}", addr);
-        //     let mut buf = [b'\0'; 1];
-        //     if i2c1.read(addr, &mut buf).is_ok() {
-        //         defmt::println!("{:02x} good", addr);
-        //     }
+        for addr in 0x00_u8..0x7F {
+            // Write the empty array and check the slave response.
+            // defmt::println!("trying {:02x}", addr);
+            let mut buf = [b'\0'; 1];
+            if i2c1.read(addr, &mut buf).is_ok() {
+                defmt::println!("{:02x} good", addr);
+            }
 
-        //     delay.delay_ms(10_u32);
-        // }
-        // defmt::println!("scan is done");
+            delay.delay_ms(10_u32);
+        }
+        defmt::println!("scan is done");
 
-        // watchdog.feed();
+        watchdog.feed();
 
-        // defmt::println!("i2c2 scanning...");
-        // for addr in 0x00_u8..0x7F {
-        //     // Write the empty array and check the slave response.
-        //     // defmt::println!("trying {:02x}", addr);
-        //     let mut buf = [b'\0'; 1];
-        //     if i2c2.read(addr, &mut buf).is_ok() {
-        //         defmt::println!("{:02x} good", addr);
-        //     }
-        //     delay.delay_ms(10_u32);
-        // }
-        // defmt::println!("scan is done");
+        defmt::println!("i2c2 scanning...");
+        for addr in 0x00_u8..0x7F {
+            // Write the empty array and check the slave response.
+            // defmt::println!("trying {:02x}", addr);
+            let mut buf = [b'\0'; 1];
+            if i2c2.read(addr, &mut buf).is_ok() {
+                defmt::println!("{:02x} good", addr);
+            }
+            delay.delay_ms(10_u32);
+        }
+        defmt::println!("scan is done");
 
-        // watchdog.feed();
+        watchdog.feed();
 
-        // // configure external ADC
-        // self.external_adc.as_mut().unwrap().configure(&mut i2c1);
+        // configure external ADC
+        self.external_adc.as_mut().unwrap().configure(&mut i2c1);
 
-        // self.i2c1 = Some(i2c1);
-        // self.i2c2 = Some(i2c2);
+        self.i2c1 = Some(i2c1);
+        self.i2c2 = Some(i2c2);
 
-        // // a basic idea is to have the struct for a given periphal take ownership of the register block that controls stuff there
-        // // then Board would have ownership of the feature object, and make changes to the the registers (say through shutdown) through the interface of that struct
+        // a basic idea is to have the struct for a given periphal take ownership of the register block that controls stuff there
+        // then Board would have ownership of the feature object, and make changes to the the registers (say through shutdown) through the interface of that struct
 
-        // // build the power control
-        // let mut power_control = Some(PowerControl::new(power_pins)).unwrap();
-        // power_control.cycle_5v(&mut delay);
+        // build the power control
+        let mut power_control = Some(PowerControl::new(power_pins)).unwrap();
+        power_control.cycle_5v(&mut delay);
 
-        // // build the internal adc
-        // let internal_adc_configuration =
-        //     InternalAdcConfiguration::new(internal_adc_pins, device_peripherals.ADC1);
-        // let mut internal_adc = internal_adc_configuration.build(&clocks);
-        // internal_adc.disable();
-        // delay.delay_ms(1000_u32);
-        // internal_adc.enable(&mut delay);
-        // self.internal_adc = Some(internal_adc);
+        // build the internal adc
+        let internal_adc_configuration =
+            InternalAdcConfiguration::new(internal_adc_pins, device_peripherals.ADC1);
+        let mut internal_adc = internal_adc_configuration.build(&clocks);
+        internal_adc.disable();
+        delay.delay_ms(1000_u32);
+        internal_adc.enable(&mut delay);
+        self.internal_adc = Some(internal_adc);
 
-        // self.rgb_led = Some(build_rgb_led(
-        //     rgb_led_pins,
-        //     device_peripherals.TIM1,
-        //     &mut afio.mapr,
-        //     &clocks,
-        // ));
+        self.rgb_led = Some(build_rgb_led(
+            rgb_led_pins,
+            device_peripherals.TIM1,
+            &mut afio.mapr,
+            &clocks,
+        ));
 
-        // self.battery_level = Some(BatteryLevel::new(battery_level_pins));
+        self.battery_level = Some(BatteryLevel::new(battery_level_pins));
 
-        // self.oscillator_control = Some(OscillatorControl::new(oscillator_control_pins));
+        self.oscillator_control = Some(OscillatorControl::new(oscillator_control_pins));
 
-        // self.gpio = Some(dynamic_gpio_pins);
-        // self.gpio_cr = Some(gpio_cr);
+        self.gpio = Some(dynamic_gpio_pins);
+        self.gpio_cr = Some(gpio_cr);
 
-        // self.storage = storage;
+        self.storage = storage;
 
-        // self.delay = Some(delay);
-        // self.precise_delay = Some(precise_delay);
+        self.delay = Some(delay);
+        self.precise_delay = Some(precise_delay);
 
-        // // the millis counter
-        // let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
-        // match counter.start(2.micros()) {
-        //     Ok(_) => defmt::println!("Millis counter start ok"),
-        //     Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
-        // }
-        // self.counter = Some(counter);
+        // the millis counter
+        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        match counter.start(2.micros()) {
+            Ok(_) => defmt::println!("Millis counter start ok"),
+            Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
+        }
+        self.counter = Some(counter);
 
-        // watchdog.feed();
+        watchdog.feed();
 
-        // self.watchdog = Some(watchdog);
+        self.watchdog = Some(watchdog);
 
-        // defmt::println!("setting up RS485 serial b");
-        // setup_serialb(device_peripherals.UART5, &clocks);
+        defmt::println!("setting up RS485 serial b");
+        setup_serialb(device_peripherals.UART5, &clocks);
 
-        // defmt::println!("done with setup");
+        defmt::println!("done with setup");
+
+
+               // enter DFU
+        defmt::println!("enter dfu");
+        backup_domain.write_data_register_low(0, 0x4F42);
+        cortex_m::peripheral::SCB::sys_reset();
+        loop{};
+
+    
 
     }
 }
