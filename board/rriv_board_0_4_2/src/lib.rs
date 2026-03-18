@@ -889,6 +889,10 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn enter_dfu_mode(&self){
+        enter_dfu_mode();
+    }
+
 }
 
 
@@ -1244,12 +1248,18 @@ impl BoardBuilder {
 
         // get an unsafe handle on our the CS pin so we can flash it
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let mut cs = unsafe {
+        let ( mut cs_stolen, mut sclk_stolen) = unsafe {
             let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
-            let mut gpioc = device_peripherals.GPIOC.split();
+            let mut gpioc: gpio::gpioc::Parts = device_peripherals.GPIOC.split();
             let cs = gpioc.pc8;
-            cs.into_push_pull_output(&mut gpioc.crh)
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob: gpio::gpiob::Parts = device_peripherals.GPIOB.split();
+            let sclk = gpiob.pb13;
+            let sclk = sclk.into_push_pull_output(&mut gpiob.crh);
+            (cs, sclk)
         };
+        cs_stolen.set_high();
+        sclk_stolen.set_low();
 
 
         // Prepare the GPIO
@@ -1284,6 +1294,30 @@ impl BoardBuilder {
         let precise_delay = PreciseDelayUs::new();
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
+        defmt::println!("OK");
+        // delay.delay_ms(1200u16);
+
+
+        cs_stolen.set_high();
+        sclk_stolen.set_low();
+        defmt::println!("OK");
+        for i in 0..10 { 
+            let mult = i % 3 + 1;
+            delay.delay_ms(100u16 * mult);
+            cs_stolen.set_low();
+            delay.delay_ms(100u16 * mult);
+            cs_stolen.set_high();
+        };
+
+        while false  { 
+            delay.delay_ms(200u16);
+            cs_stolen.set_low();
+            delay.delay_ms(200u16);
+            cs_stolen.set_high();
+        };
+        cs_stolen.set_low();
+
+
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
@@ -1302,7 +1336,7 @@ impl BoardBuilder {
 
 
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
-        usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
+        // usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
         watchdog.start(MilliSeconds::secs(24));
@@ -1317,14 +1351,14 @@ impl BoardBuilder {
         };
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
-            // so unsafely get the cs pin and flash it
+            // so use the unsafe cs pin and toggle to flash the led
             for _i in 1..10 {
-                cs.set_high();
+                cs_stolen.set_high();
                 delay.delay_ms(100_u32);
-                cs.set_low();
+                cs_stolen.set_low();
                 delay.delay_ms(100_u32);
             }
-            cs.set_high();
+            cs_stolen.set_high(); // TODO: mismatch here, we set this to open drain but since we need sclk to not clock the card it's better to use cs to flash the led. 
             
         }
 
@@ -1509,12 +1543,24 @@ impl BoardBuilder {
         setup_serialb(device_peripherals.UART5, &clocks);
 
         defmt::println!("done with setup");
-
     }
 }
 
 unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
+}
+
+pub fn enter_dfu_mode(){
+    defmt::println!("entering dfu");
+
+    unsafe {
+        let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+        let rcc = device_peripherals.RCC.constrain();
+        let mut pwr = device_peripherals.PWR;
+        let backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
+        backup_domain.write_data_register_low(0, 0x4F42);
+        cortex_m::peripheral::SCB::sys_reset();
+    }
 }
 
 pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
