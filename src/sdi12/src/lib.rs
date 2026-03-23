@@ -2,14 +2,15 @@
 
 use rriv_board::gpio;
 
-const TIMING_TOLERANCE: u16 = 1000;
-const SDI12_BREAK_DURATION_US: u16 = 12000 + TIMING_TOLERANCE;
+const TIMING_TOLERANCE: u16 = 400;
+const SDI12_BREAK_DURATION_US: u16 = 12000;
 const SDI12_MARK_DURATION_US: u16 = 8333;
 const SDI12_TICKS_PER_BIT: u16 = 8333; // 1 bit duration at 1200 baud
-const SDI12_TIMEOUT : u32 = 1000; // timeout for reading response in milliseconds
+// const SDI12_TIMEOUT : u32 = 100; // timeout for reading response in milliseconds
 pub const SDI12_BUFFER_SIZE: usize = 100; // size of the buffer for reading responses
 pub const SDI12_COMMAND_SIZE: usize = 10;
 
+#[derive(PartialEq, Debug)]
 pub enum SDIPinState {
     Sdi12Disabled,         // SDI-12 is disabled, pin mode INPUT, interrupts disabled for the pin
     Sdi12Enabled,          // SDI-12 is enabled, pin mode INPUT, interrupts disabled for the pin 
@@ -84,32 +85,48 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         
         // Hold it HIGH for 12 ms
         self.sdi12_board.write(true);
-        self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US);
+        self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US + TIMING_TOLERANCE);
         
         // Marking by holding it LOW for 8.33 ms
         self.sdi12_board.write(false);
         self.sdi12_board.delay_us(SDI12_MARK_DURATION_US);
     }
 
-    pub fn receive_break(&mut self) -> bool {
+    pub fn receive_break(&mut self) -> bool {   
         self.set_state(SDIPinState::Sdi12Listening);
-        let mut is_valid_break = true;
         if self.sdi12_board.read() == true {
+            defmt::println!("Start for 12ms");
             // check after every 1ms for 12 times to see if it is a valid break
             for _ in 0..12 {
                 self.sdi12_board.delay_us(1000); // Wait 1ms
                 
                 if self.sdi12_board.read() == false {
-                    is_valid_break = false;
-                    break;
+                    defmt::println!("Line dropped low before 12ms");
+                    return false;
                 }
             }
-            if is_valid_break {
-                // wait for the line to drop LOW
-                while self.sdi12_board.read() == true {}
+            defmt::println!("Valid break, waiting...");
+            // wait for the line to drop LOW
+            let mut iter_count = 0;
+            while self.sdi12_board.read() == true {
+                if iter_count > 1 {
+                    defmt::println!("Timeout! line is not falling low");
+                    return false;
+                }
+                self.sdi12_board.delay_us(TIMING_TOLERANCE);
+                iter_count += 1;
             }
+            for _ in 0..8 {
+                self.sdi12_board.delay_us(1000);
+                if self.sdi12_board.read() {
+                    defmt::println!("line went high too early, invalid marking");
+                    return false;
+                }
+            }
+            self.sdi12_board.delay_us(TIMING_TOLERANCE);
+            return true;
         }
-        is_valid_break
+        return false;
     }
 
     pub fn write_char(&mut self, c: char) {
@@ -180,11 +197,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.send_break();
+        self.sdi12_board.delay_us(10000);
         for c in command.iter() {
             self.write_char(*c);
             if *c == '!' {
                 break; // stop at termination character
             }
+            self.sdi12_board.delay_us(10000);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
@@ -223,6 +242,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             if *c == '\n' {
                 break; // stop at termination character
             }
+            self.sdi12_board.delay_us(10000);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
@@ -293,6 +313,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
 
         let n : u8 = response[4].to_digit(10).unwrap_or(0) as u8; // convert ASCII to integer
+
+        self.sdi12_board.delay_us(10000);
         
         SDI12_MResponse {
             address: address_r,
@@ -364,6 +386,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
 
         resp.count = count as u8;
+        
+        self.sdi12_board.delay_us(10000);
 
         resp
     }
