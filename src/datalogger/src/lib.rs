@@ -352,6 +352,7 @@ impl DataLogger {
         //
         // Do the measurement cycle
         //
+        // defmt::println!("Current mode: {}", datalogger::modes::mode_text(&self.mode));
 
         match self.mode {
             DataLoggerMode::Interactive => {
@@ -452,15 +453,18 @@ impl DataLogger {
                                     }
                                 }
                             }
-                            Err(message) => responses::send_command_response_error(board, message, ""),
+                            Err(message) => {
+                                defmt::println!("Error: {}", message);
+                                // responses::send_command_response_error(board, message, "")
+                            }
                         }
                     }
-                    else {
-                        defmt::println!("board sleeping");
-                    }
+                    // else {
+                    //     defmt::println!("board sleeping");
+                    // }
                 }
                 else {
-                    defmt::println!("sdi12 service not setup");
+                    defmt::panic!("sdi12 service not setup");
                 }
             }
         }
