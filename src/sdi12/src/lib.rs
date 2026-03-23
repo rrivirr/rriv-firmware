@@ -153,13 +153,26 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     }
 
     pub fn read_char(&mut self) -> Option<char> {
+        let mut iter_count = 0;
 
         while self.sdi12_board.read() == false {
-            let elapsed_time = self.sdi12_board.millis().wrapping_sub(self.timeout_counter);
-            if elapsed_time > SDI12_TIMEOUT {
-                return None; // SDI12_timeout
+            // let millis = self.sdi12_board.millis();
+            // let elapsed: i32 = millis as i32 - self.timeout_counter as i32;
+            // let mut new_elapsed: u32 = elapsed as u32;
+            // if elapsed < 0 {
+            //     new_elapsed = 65535 - self.timeout_counter + millis;
+            // }
+            // defmt::println!("millis {}, elapsed time: {}, timeout: {}", millis, new_elapsed, self.timeout_counter);
+            // if new_elapsed as u32 > SDI12_TIMEOUT {
+            //     return None; // SDI12_timeout
+            // }
+            if iter_count > 100 {
+                return None;
             }
+            iter_count += 1;
+            self.sdi12_board.delay_us(1000);
         }
+        defmt::println!("detected a start bit");
         self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT / 2);
 
         if self.sdi12_board.read() == false {
