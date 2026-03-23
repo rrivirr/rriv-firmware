@@ -136,10 +136,12 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             defmt::println!("TIMEOUT error");
             return;
         }
+        defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
         if m_response.ttt == 0 {
             let d_response = sdi12.send_d0_command(m_response.address, m_response.n);
             self.data_received = d_response.data;
             self.num_data = d_response.count;
+            defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
         }
     }
 }

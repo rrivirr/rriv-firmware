@@ -200,12 +200,14 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 Some(byte) => {
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
+                    defmt::println!("buffer[{}] = {}", bytes_read, byte);
                     bytes_read += 1;
                     if byte == '!' {
                         break;
                     }
                 },
                 None => {
+                    defmt::println!("Timeout error");
                     break; // SDI12_timeout or error
                 }
             }
@@ -228,6 +230,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn read_response(&mut self) -> [char; SDI12_BUFFER_SIZE] {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Listening);
+        defmt::println!("Reading response...");
         let mut buffer: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
         let mut bytes_read = 0;
         while bytes_read < SDI12_BUFFER_SIZE {
@@ -237,11 +240,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
                     bytes_read += 1;
+                    defmt::println!("buffer[{}] = {}", bytes_read, byte);
                     if byte == '\n' {
                         break;
                     }
                 },
                 None => {
+                    defmt::println!("Timeout SDI12");
                     break; // SDI12_timeout or error
                 }
             }
@@ -310,6 +315,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             last_d_ind: 0
         };
         self.send_command(command);
+        defmt::println!("Sent 0D0!");
         let response = self.read_response();
         // parse the response
         // format: <address><data><CR><LF>

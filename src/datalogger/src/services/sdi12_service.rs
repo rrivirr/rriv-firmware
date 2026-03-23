@@ -108,6 +108,8 @@ impl<'a> Sdi12ByteProcessor {
         let mut sdi12 = SDI12::new(my_board);
         let buffer = sdi12.read_command();
         if buffer[0] != address {
+            self.sleep();
+            defmt::println!("{} != {}", buffer[0], address);
             return Err("Address not matching");
         }
         let mode = match (buffer[1], buffer[2]) {
