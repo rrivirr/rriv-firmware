@@ -62,19 +62,21 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn set_state(&mut self, state: SDIPinState) {
         // set the digital pin to the specified value
-        self.state = state;
-        match self.state {
-            SDIPinState::Sdi12Transmitting => {
-                // set pin mode to OUTPUT
-                self.sdi12_board.pin_mode(gpio::GpioMode::PushPullOutput);
-            },
-            SDIPinState::Sdi12Listening => {
-                // set pin mode to INPUT
-                self.sdi12_board.pin_mode(gpio::GpioMode::FloatingInput);
-            }
-            _ => {
-                // For SDI12_HOLDING, SDI12_DISABLED and SDI12_ENABLED, set pin mode to INPUT
-                self.sdi12_board.pin_mode(gpio::GpioMode::FloatingInput);
+        if self.state != state {
+            self.state = state;
+            match self.state {
+                SDIPinState::Sdi12Transmitting => {
+                    // set pin mode to OUTPUT
+                    self.sdi12_board.pin_mode(gpio::GpioMode::PushPullOutput);
+                },
+                SDIPinState::Sdi12Listening => {
+                    // set pin mode to INPUT
+                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                }
+                _ => {
+                    // For SDI12_HOLDING, SDI12_DISABLED and SDI12_ENABLED, set pin mode to INPUT
+                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                }
             }
         }
     }
