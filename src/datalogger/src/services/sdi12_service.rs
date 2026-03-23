@@ -119,22 +119,23 @@ impl<'a> Sdi12ByteProcessor {
             _ => return Err("Invalid Command"),
         };
 
+        board.delay_ms(10);
+
         Ok(mode)
     }
 
     pub fn send_MAck(&mut self, board: &mut dyn RRIVBoard, address: char, ttt: u32, n: u8) {
         let mut resp_buffer: [char; SDI12_BUFFER_SIZE] = ['0'; SDI12_BUFFER_SIZE];
         resp_buffer[0] = address;
-        let mut t = ttt;
-        let mut i = 1;
-        while t > 0 {
-            resp_buffer[i] = ((t % 10) as u8) as char;
-            t = t / 10;
-            i += 1;
-        }
-        resp_buffer[i] = n as char;
-        resp_buffer[i+1] = '\r';
-        resp_buffer[i+2] = '\n';
+
+        resp_buffer[1] = (b'0' + ((ttt / 100) % 10) as u8) as char; // Hundreds
+        resp_buffer[2] = (b'0' + ((ttt / 10) % 10) as u8) as char;  // Tens
+        resp_buffer[3] = (b'0' + (ttt % 10) as u8) as char;         // Ones
+
+        resp_buffer[4] = (b'0' + n) as char;            
+
+        resp_buffer[5] = '\r';
+        resp_buffer[6] = '\n';
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
         sdi12.send_response(resp_buffer);
