@@ -9,28 +9,28 @@ const DATALOGGER_SETTINGS_UNUSED_BYTES: usize = 13;
 #[bitfield(u8)]
 #[derive(PartialEq)]
 pub struct DataloggerSettingsBitField {
-    #[bits(1)]
+    #[bits(1, default = true)]
     pub external_adc_enabled: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_lorawan_telemetry: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_modbus_rtu: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub debug_includes_values: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub withhold_incomplete_readings: bool,
 
-    #[bits(1)]
+    #[bits(1, default = true)]
     pub log_raw_data: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_interactive_logging: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_sdi12: bool,
 }
 
