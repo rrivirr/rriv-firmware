@@ -190,7 +190,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             iter_count += 1;
             self.sdi12_board.delay_us(1000);
         }
-        defmt::println!("detected a start bit");
+        // defmt::println!("detected a start bit");
         self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT / 2);
 
         if self.sdi12_board.read() == false {
@@ -251,7 +251,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 Some(byte) => {
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
-                    defmt::println!("buffer[{}] = {}", bytes_read, byte);
+                    // defmt::println!("buffer[{}] = {}", bytes_read, byte);
                     bytes_read += 1;
                     if byte == '!' {
                         break;
@@ -292,7 +292,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
                     bytes_read += 1;
-                    defmt::println!("buffer[{}] = {}", bytes_read, byte);
+                    // defmt::println!("buffer[{}] = {}", bytes_read, byte);
                     if byte == '\n' {
                         break;
                     }
