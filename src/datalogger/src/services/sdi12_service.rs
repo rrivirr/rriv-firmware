@@ -135,8 +135,6 @@ impl<'a> Sdi12ByteProcessor {
             _ => return Err("Invalid Command"),
         };
 
-        board.delay_ms(10);
-
         Ok(mode)
     }
 
