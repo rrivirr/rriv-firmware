@@ -8,6 +8,22 @@ pub enum Sdi12Command {
     D(char),
 }
 
+#[allow(non_camel_case_types)]
+pub struct SDI12_MResponse {
+    pub address: char,
+    pub ttt: u32,
+    pub n: u8
+}
+
+#[allow(non_camel_case_types)]
+pub struct SDI12_Dresponse {
+    pub address: char,
+    pub data: [f32; 9],
+    pub count: u8,
+    pub terminate: bool,
+    pub last_d_ind: u8
+}
+
 struct CharBuffer<'a> {
     buffer: &'a mut [char],
     cursor: usize,
@@ -165,6 +181,96 @@ impl<'a> Sdi12ByteProcessor {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
         sdi12.send_response(resp_buffer);
+    }
+
+    pub fn send_m_command(&mut self, board: &mut dyn RRIVBoard, address: char, id: char) -> SDI12_MResponse {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        
+        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        command[0] = address;
+        command[1] = 'M';
+        if id == '\0' {
+            command[2] = '!';
+        }
+        else {
+            command[2] = id;
+            command[3] = '!';
+        }
+        sdi12.send_break();
+        sdi12.send_command(command);
+        defmt::println!("Sent 0M0!");
+        let response = sdi12.read_response();
+        // parse the response
+        // format: <address>tttn<CR><LF>
+        let address_r = response[0];
+        if address_r != address {
+            // invalid response
+            return SDI12_MResponse {
+                address: '\0',
+                ttt: 0,
+                n: 0
+            };
+        }
+
+        let ttt = &response[1..4];
+        // convert ttt from ASCII to integer
+        let mut result: u32 = 0; // Or u32, usize, etc.
+
+        for &c in ttt {
+            // to_digit(10) converts the char to a number from 0-9
+            let digit = c.to_digit(10);
+            if let Some(d) = digit {
+                result = (result * 10) + d as u32;
+            }
+        }
+
+        let n : u8 = response[4].to_digit(10).unwrap_or(0) as u8; // convert ASCII to integer
+
+        // self.sdi12_board.delay_us(SDI12_GAP);
+        
+        SDI12_MResponse {
+            address: address_r,
+            ttt: result,
+            n: n
+        }
+    }
+
+    pub fn send_d0_command(&mut self, board: &mut dyn RRIVBoard, address: char, num_data: u8) -> SDI12_Dresponse {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        
+        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        command[0] = address;
+        command[1] = 'D';
+        command[2] = '0';
+        command[3] = '!';
+        let mut resp : SDI12_Dresponse = SDI12_Dresponse {
+            address: '\0',
+            data: [0.0; 9],
+            count: 0,
+            terminate: false,
+            last_d_ind: 0
+        };
+        sdi12.send_command(command);
+        defmt::println!("Sent 0D0!");
+        let response = sdi12.read_response();
+        // parse the response
+        // format: <address><data><CR><LF>
+        let address_r = response[0];
+        if address_r != address {
+            // invalid response
+            return resp;
+        }
+        resp.address = address_r;
+        let response = &response[1..SDI12_BUFFER_SIZE];
+        (resp.data, resp.count) = sdi12.parse_data(response);
+        
+        if resp.count == num_data {
+            resp.terminate = true;
+        }
+        
+        resp
     }
 }
 

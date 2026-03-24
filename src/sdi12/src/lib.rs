@@ -303,88 +303,16 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 }
             }
         }
+        self.sdi12_board.delay_us(SDI12_GAP);
         buffer
     }
 
-    pub fn send_m_command(&mut self, address: char, id: char) -> SDI12_MResponse {
-        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
-        command[0] = address;
-        command[1] = 'M';
-        if id == '\0' {
-            command[2] = '!';
-        }
-        else {
-            command[2] = id;
-            command[3] = '!';
-        }
-        self.send_break();
-        self.sdi12_board.delay_us(SDI12_GAP);
-        self.send_command(command);
-        defmt::println!("Sent 0M0!");
-        let response = self.read_response();
-        // parse the response
-        // format: <address>tttn<CR><LF>
-        let address_r = response[0];
-        if address_r != address {
-            // invalid response
-            return SDI12_MResponse {
-                address: '\0',
-                ttt: 0,
-                n: 0
-            };
-        }
-
-        let ttt = &response[1..4];
-        // convert ttt from ASCII to integer
-        let mut result: u32 = 0; // Or u32, usize, etc.
-
-        for &c in ttt {
-            // to_digit(10) converts the char to a number from 0-9
-            let digit = c.to_digit(10);
-            if let Some(d) = digit {
-                result = (result * 10) + d as u32;
-            }
-        }
-
-        let n : u8 = response[4].to_digit(10).unwrap_or(0) as u8; // convert ASCII to integer
-
-        self.sdi12_board.delay_us(SDI12_GAP);
-        
-        SDI12_MResponse {
-            address: address_r,
-            ttt: result,
-            n: n
-        }
-    }
-
-    pub fn send_d0_command(&mut self, address: char, num_data: u8) -> SDI12_Dresponse {
-        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
-        command[0] = address;
-        command[1] = 'D';
-        command[2] = '0';
-        command[3] = '!';
-        let mut resp : SDI12_Dresponse = SDI12_Dresponse {
-            address: '\0',
-            data: [0.0; 9],
-            count: 0,
-            terminate: false,
-            last_d_ind: 0
-        };
-        self.send_command(command);
-        defmt::println!("Sent 0D0!");
-        let response = self.read_response();
-        // parse the response
-        // format: <address><data><CR><LF>
-        let address_r = response[0];
-        if address_r != address {
-            // invalid response
-            return resp;
-        }
-        resp.address = address_r;
-        let response = &response[1..SDI12_BUFFER_SIZE];
+    pub fn parse_data(&mut self, response: &[char]) -> ([f32; 9], u8) {
         let mut count = 0;
         let mut temp_buf = [0u8; 16]; 
         let mut temp_len = 0;
+
+        let mut data: [f32; 9] = [0_f32; 9];
 
         for &c in response {
             if c == '+' || c == '-' || c == '\r' || c == '\n' {
@@ -393,7 +321,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     if let Ok(s) = core::str::from_utf8(&temp_buf[..temp_len]) {
                         // Parse the float
                         if let Ok(val) = s.parse::<f32>() {
-                            resp.data[count] = val;
+                            data[count] = val;
                             count += 1;
                         }
                     }
@@ -414,16 +342,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 temp_len += 1;
             }
         }
-        
-        if count == num_data as usize {
-            resp.terminate = true;
-        }
 
-        resp.count = count as u8;
-        
-        self.sdi12_board.delay_us(SDI12_GAP);
-
-        resp
+        (data, count as u8)
     }
 
 }
