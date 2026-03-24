@@ -251,14 +251,15 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 Some(byte) => {
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
-                    // defmt::println!("buffer[{}] = {}", bytes_read, byte);
                     bytes_read += 1;
                     if byte == '!' {
+                        defmt::println!("buffer[{}] = {}", bytes_read, byte);
                         break;
                     }
                 },
                 None => {
                     defmt::println!("Timeout error");
+                    defmt::println!("buffer[{}] = {}", bytes_read, buffer);
                     break; // SDI12_timeout or error
                 }
             }
