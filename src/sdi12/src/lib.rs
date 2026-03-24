@@ -229,14 +229,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
-        self.send_break();
-        self.sdi12_board.delay_us(10000);
+        self.set_state(SDIPinState::Sdi12Transmitting);
         for c in command.iter() {
             self.write_char(*c);
             if *c == '!' {
                 break; // stop at termination character
             }
-            self.sdi12_board.delay_us(10000);
+            self.sdi12_board.delay_us(SDI12_GAP);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
