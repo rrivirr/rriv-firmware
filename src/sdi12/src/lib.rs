@@ -7,6 +7,7 @@ const SDI12_BREAK_DURATION_US: u16 = 12000;
 const SDI12_MARK_DURATION_US: u16 = 8333;
 const SDI12_TICKS_PER_BIT: u16 = 8333; // 1 bit duration at 1200 baud
 // const SDI12_TIMEOUT : u32 = 100; // timeout for reading response in milliseconds
+pub const SDI12_GAP: u16 = 10000;
 pub const SDI12_BUFFER_SIZE: usize = 100; // size of the buffer for reading responses
 pub const SDI12_COMMAND_SIZE: usize = 10;
 
@@ -87,7 +88,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         
         // Hold it HIGH for 12 ms
         self.sdi12_board.write(true);
-        self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US + TIMING_TOLERANCE);
+        self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US);
         
         // Marking by holding it LOW for 8.33 ms
         self.sdi12_board.write(false);
@@ -154,7 +155,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn read_char(&mut self) -> Option<char> {
         let mut iter_count = 0;
-
         while self.sdi12_board.read() == false {
             // let millis = self.sdi12_board.millis();
             // let elapsed: i32 = millis as i32 - self.timeout_counter as i32;
@@ -257,7 +257,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             if *c == '\n' {
                 break; // stop at termination character
             }
-            self.sdi12_board.delay_us(10000);
+            self.sdi12_board.delay_us(SDI12_GAP);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
@@ -300,6 +300,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             command[2] = id;
             command[3] = '!';
         }
+        self.send_break();
+        self.sdi12_board.delay_us(SDI12_GAP);
         self.send_command(command);
         defmt::println!("Sent 0M0!");
         let response = self.read_response();
@@ -329,7 +331,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
         let n : u8 = response[4].to_digit(10).unwrap_or(0) as u8; // convert ASCII to integer
 
-        self.sdi12_board.delay_us(10000);
+        self.sdi12_board.delay_us(SDI12_GAP);
         
         SDI12_MResponse {
             address: address_r,
@@ -402,7 +404,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
         resp.count = count as u8;
         
-        self.sdi12_board.delay_us(10000);
+        self.sdi12_board.delay_us(SDI12_GAP);
 
         resp
     }
