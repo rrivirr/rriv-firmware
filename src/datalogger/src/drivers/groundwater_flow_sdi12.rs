@@ -1,8 +1,7 @@
-use crate::drivers::types::SensorDriver;
+use crate::{drivers::types::SensorDriver, services::sdi12_service};
 use sdi12::SDI12;
 use crate::sensor_name_from_type_id;
 use serde_json::json;
-use crate::sdi12_service::*;
 use super::types::*;
 
 #[derive(Copy, Clone)]
@@ -127,10 +126,8 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
-        let my_board = Sdi12Board::new(self.special_config.gpio, board);
-        let mut sdi12 = SDI12::new(my_board);
-
-        let m_response = sdi12.send_m_command(self.special_config.sensor_address, '0');
+        let mut sdi12_service = sdi12_service::Sdi12ByteProcessor::new(self.special_config.gpio);
+        let m_response = sdi12_service.send_m_command(board, self.special_config.sensor_address, '0');
         if m_response.address == '\0' {
             // invalid response
             defmt::println!("TIMEOUT error");
@@ -138,7 +135,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
         }
         defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
         if m_response.ttt == 0 {
-            let d_response = sdi12.send_d0_command(m_response.address, m_response.n);
+            let d_response = sdi12_service.send_d0_command(board, m_response.address, m_response.n);
             self.data_received = d_response.data;
             self.num_data = d_response.count;
             defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
