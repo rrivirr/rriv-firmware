@@ -99,33 +99,51 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         self.set_state(SDIPinState::Sdi12Listening);
         if self.sdi12_board.read() == true {
             defmt::println!("Start for 12ms");
-            // check after every 1ms for 12 times to see if it is a valid break
-            for _ in 0..12 {
-                self.sdi12_board.delay_us(1000); // Wait 1ms
-                
-                if self.sdi12_board.read() == false {
-                    defmt::println!("Line dropped low before 12ms");
-                    return false;
-                }
-            }
-            defmt::println!("Valid break, waiting...");
-            // wait for the line to drop LOW
+            self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - TIMING_TOLERANCE);
             let mut iter_count = 0;
-            while self.sdi12_board.read() == true {
-                if iter_count > 1 {
+            while self.sdi12_board.read() {
+                defmt::println!("iter_count: {}", iter_count);
+                if iter_count > 10 {
                     defmt::println!("Timeout! line is not falling low");
                     return false;
                 }
-                self.sdi12_board.delay_us(TIMING_TOLERANCE);
                 iter_count += 1;
+                self.sdi12_board.delay_us(TIMING_TOLERANCE);
             }
-            for _ in 0..8 {
-                self.sdi12_board.delay_us(1000);
-                if self.sdi12_board.read() {
-                    defmt::println!("line went high too early, invalid marking");
-                    return false;
-                }
+            // // check after every 1ms for 12 times to see if it is a valid break
+            // for _ in 0..12 {
+            //     self.sdi12_board.delay_us(1000); // Wait 1ms
+                
+            //     if self.sdi12_board.read() == false {
+            //         defmt::println!("Line dropped low before 12ms");
+            //         return false;
+            //     }
+            // }
+            // defmt::println!("Valid break, waiting...");
+            // // wait for the line to drop LOW
+            // let mut iter_count = 0;
+            // while self.sdi12_board.read() == true {
+            //     if iter_count > 1 {
+            //         defmt::println!("Timeout! line is not falling low");
+            //         return false;
+            //     }
+            //     self.sdi12_board.delay_us(TIMING_TOLERANCE);
+            //     iter_count += 1;
+            // }
+            self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * TIMING_TOLERANCE);
+            if self.sdi12_board.read() {
+                defmt::println!("Invalid marking");
+                return false;
             }
+            self.sdi12_board.delay_us(TIMING_TOLERANCE);
+            defmt::println!("Valid marking");
+            // for _ in 0..8 {
+            //     self.sdi12_board.delay_us(1000);
+            //     if self.sdi12_board.read() {
+            //         defmt::println!("line went high too early, invalid marking");
+            //         return false;
+            //     }
+            // }
             self.sdi12_board.delay_us(TIMING_TOLERANCE);
             return true;
         }
