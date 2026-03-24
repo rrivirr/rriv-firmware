@@ -2,12 +2,12 @@
 
 use rriv_board::gpio;
 
-const TIMING_TOLERANCE: u16 = 400;
+const SDI12_TIMING_TOLERANCE: u16 = 400;
 const SDI12_BREAK_DURATION_US: u16 = 12000;
 const SDI12_MARK_DURATION_US: u16 = 8333;
 const SDI12_TICKS_PER_BIT: u16 = 8333; // 1 bit duration at 1200 baud
 // const SDI12_TIMEOUT : u32 = 100; // timeout for reading response in milliseconds
-pub const SDI12_GAP: u16 = 10000;
+const SDI12_GAP: u16 = 5000;
 pub const SDI12_BUFFER_SIZE: usize = 100; // size of the buffer for reading responses
 pub const SDI12_COMMAND_SIZE: usize = 10;
 
@@ -98,17 +98,17 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn receive_break(&mut self) -> bool {   
         self.set_state(SDIPinState::Sdi12Listening);
         if self.sdi12_board.read() == true {
-            defmt::println!("Start for 12ms");
-            self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - TIMING_TOLERANCE);
+            // defmt::println!("Start for 12ms");
+            self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - SDI12_TIMING_TOLERANCE);
             let mut iter_count = 0;
             while self.sdi12_board.read() {
-                defmt::println!("iter_count: {}", iter_count);
+                // defmt::println!("iter_count: {}", iter_count);
                 if iter_count > 10 {
                     defmt::println!("Timeout! line is not falling low");
                     return false;
                 }
                 iter_count += 1;
-                self.sdi12_board.delay_us(TIMING_TOLERANCE);
+                self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
             }
             // // check after every 1ms for 12 times to see if it is a valid break
             // for _ in 0..12 {
@@ -127,16 +127,16 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             //         defmt::println!("Timeout! line is not falling low");
             //         return false;
             //     }
-            //     self.sdi12_board.delay_us(TIMING_TOLERANCE);
+            //     self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
             //     iter_count += 1;
             // }
-            self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * TIMING_TOLERANCE);
+            self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
             if self.sdi12_board.read() {
                 defmt::println!("Invalid marking");
                 return false;
             }
-            self.sdi12_board.delay_us(TIMING_TOLERANCE);
-            defmt::println!("Valid marking");
+            self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
+            // defmt::println!("Valid marking");
             // for _ in 0..8 {
             //     self.sdi12_board.delay_us(1000);
             //     if self.sdi12_board.read() {
@@ -144,7 +144,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             //         return false;
             //     }
             // }
-            self.sdi12_board.delay_us(TIMING_TOLERANCE);
+            self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
             return true;
         }
         return false;
@@ -235,7 +235,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             if *c == '!' {
                 break; // stop at termination character
             }
-            self.sdi12_board.delay_us(SDI12_GAP);
+            // self.sdi12_board.delay_us(SDI12_GAP);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
@@ -263,6 +263,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 }
             }
         }
+        self.sdi12_board.delay_us(SDI12_GAP);
 
         buffer
     }
@@ -274,7 +275,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             if *c == '\n' {
                 break; // stop at termination character
             }
-            self.sdi12_board.delay_us(SDI12_GAP);
+            // self.sdi12_board.delay_us(SDI12_GAP);
         }
         self.set_state(SDIPinState::Sdi12Listening);
     }
