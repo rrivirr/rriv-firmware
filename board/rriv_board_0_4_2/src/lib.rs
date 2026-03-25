@@ -378,6 +378,10 @@ impl RRIVBoard for Board {
         self.delay.delay_ms(ms);
     }
 
+    fn delay_us(&mut self, us: u16) {
+        self.precise_delay.delay_us(us);
+    }
+
     fn set_epoch(&mut self, epoch: i64) {
         let i2c1 = mem::replace(&mut self.i2c1, None);
         let mut ds3231 = Ds323x::new_ds3231(i2c1.unwrap());
