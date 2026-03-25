@@ -134,12 +134,21 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             return;
         }
         defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
-        if m_response.ttt == 0 {
-            let d_response = sdi12_service.send_d0_command(board, m_response.address, m_response.n);
-            self.data_received = d_response.data;
-            self.num_data = d_response.count;
-            defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
+        if m_response.ttt > 0 {
+            // process the delay
+            let mut now = board.epoch_timestamp();
+            let trigger = now + m_response.ttt as i64;
+            while now < trigger {
+                board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
+                board.delay_ms(1000);
+                now = board.epoch_timestamp();
+            }
         }
+
+        let d_response = sdi12_service.send_d0_command(board, m_response.address, m_response.n);
+        self.data_received = d_response.data;
+        self.num_data = d_response.count;
+        defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
     }
 }
 
