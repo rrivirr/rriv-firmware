@@ -3,6 +3,7 @@
 mod datalogger;
 mod services;
 
+use core::f64;
 use core::i16::MAX;
 
 use datalogger::commands::*;
@@ -421,6 +422,8 @@ impl DataLogger {
                 // TODO: hibernate until the requested wake time
             }
             DataLoggerMode::SDI12 => {
+                
+                let mut take_measurement = false;
                 if let Some(sdi12_service) = &mut self.sdi12_service {
                     if sdi12_service.is_awake() == false {
                         sdi12_service.wake_up(board);
@@ -436,17 +439,50 @@ impl DataLogger {
 
                                     Sdi12Command::Mc(digit) => {
                                         if digit == '0' {
-                                            sdi12_service.send_MAck(board, '0', 0, 2);
+                                            let mut total_measurements: usize = 0;
+
+                                            for i in 0 .. self.sensor_drivers.len() {
+                                                if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                    total_measurements = total_measurements + driver.get_measured_parameter_count();
+                                                }
+                                            }
+
+                                            let measurements_in_payload = if total_measurements > 9 { 9 } else { total_measurements as u8 };
+
+                                            let measurement_time = 2; // 2 seconds approximate for now
+                                            sdi12_service.send_MAck(board, '0', measurement_time, measurements_in_payload);
+                                            take_measurement = true;
                                         }
                                         defmt::println!("Sent Ack to M");
                                     }
 
                                     Sdi12Command::D(digit) => {
-                                        let mut data: [f64; 9] = [0_f64; 9];
+                                       
+
                                         if digit == '0' {
-                                            data[0] = 1_f64;
-                                            data[1] = 3.14;
-                                            sdi12_service.send_data(board, '0', data, 2);
+                                            let mut total_measurements: usize = 0;
+                                            let mut data: [f64; 9] = [0_f64; 9];
+                                            for i in 0 .. self.sensor_drivers.len() {
+                                                if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                    total_measurements = total_measurements + driver.get_measured_parameter_count();
+                                                }
+                                            }
+
+                                            let measurements_in_payload: u8 = if total_measurements > 9 { 9 } else { total_measurements as u8 };
+                                            
+                                            let measurement_index = 0;
+                                            for i in 0 .. self.sensor_drivers.len() {
+                                                if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                    for j in 0..driver.get_measured_parameter_count() {
+                                                        data[measurement_index] = match driver.get_measured_parameter_value(j) {
+                                                            Ok(value) => value,
+                                                            Err(_) => f64::MAX,
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            sdi12_service.send_data(board, '0', data, measurements_in_payload);
                                             sdi12_service.sleep();
                                         }
                                         defmt::println!("Sent data");
@@ -465,6 +501,10 @@ impl DataLogger {
                 }
                 else {
                     defmt::panic!("sdi12 service not setup");
+                }
+
+                if take_measurement {
+                    self.measure_sensor_values(board);
                 }
             }
         }
@@ -749,6 +789,7 @@ impl DataLogger {
                 } else {
                     board.write_log_file(format_args!(","));
                 }
+
 
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
