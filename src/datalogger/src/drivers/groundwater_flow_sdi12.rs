@@ -139,6 +139,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             let mut now = board.epoch_timestamp();
             let trigger = now + m_response.ttt as i64;
             while now < trigger {
+                board.usb_serial_send(format_args!("SDI12: waiting...\n"));
                 board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
                 board.delay_ms(1000);
                 now = board.epoch_timestamp();

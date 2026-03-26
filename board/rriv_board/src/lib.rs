@@ -20,6 +20,7 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 #[cfg(feature = "24LC01")]
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
