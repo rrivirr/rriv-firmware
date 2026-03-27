@@ -378,6 +378,10 @@ impl RRIVBoard for Board {
         self.delay.delay_ms(ms);
     }
 
+    fn delay_us(&mut self, us: u16) {
+        self.precise_delay.delay_us(us);
+    }
+
     fn set_epoch(&mut self, epoch: i64) {
         let i2c1 = mem::replace(&mut self.i2c1, None);
         let mut ds3231 = Ds323x::new_ds3231(i2c1.unwrap());
@@ -1151,10 +1155,46 @@ impl BoardBuilder {
 
             USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
 
+            let uid: [u8;12] = Uid::fetch().bytes();
+            
+            let arg = format_args!("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
+                    uid[0],
+                    uid[1],
+                    uid[2],
+                    uid[3],
+                    uid[4],
+                    uid[5],
+                    uid[6],
+                    uid[7],
+                    uid[8],
+                    uid[9],
+                    uid[10],
+                    uid[11]);
+
+            
+            #[allow(unused_assignments)]
+            let mut uid_string: &str = "_rriv";
+            static mut BUF:[u8;24] = [0u8; 24];
+
+            match format_no_std::show(
+                    &mut BUF,
+                    arg 
+                ) {
+                    Ok(formatted) => {
+                        defmt::println!("{}", formatted); // TODO: this uses format!
+                        // uid_string = formatted;s
+                    }
+                    Err(e) => {
+                        // doesn't matter
+                    },
+                }
+
+            defmt::println!("{}", uid_string);
+
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
                 .product("RRIV Data Logger")
-                .serial_number("_rriv")
+                .serial_number(uid_string)
                 .device_class(USB_CLASS_CDC)
                 .build();
 
@@ -1305,16 +1345,27 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(24));
-        let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        watchdog.start(MilliSeconds::secs(6));
-        let storage = match storage {
-            Ok(storage) => Some(storage),
-            Err(hardware_error) => {
-                add_hardware_error(&mut self.hardware_errors, hardware_error);
-                None
-            },
-        };
+
+        let mut enable_storage = true;
+        let storage = None;
+        #[cfg(feature = "disable-storage")]
+        {
+            enable_storage = false;
+        }
+
+        if enable_storage {
+            watchdog.start(MilliSeconds::secs(24));
+            let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+            watchdog.start(MilliSeconds::secs(6));
+            let storage = match result {
+                Ok(storage) => Some(storage),
+                Err(hardware_error) => {
+                    add_hardware_error(&mut self.hardware_errors, hardware_error);
+                    None
+                },
+            };
+
+        }
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
@@ -1535,7 +1586,7 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
                     match err {
                         UsbError::WouldBlock => {
                             if would_block_count > 100 {
-                                defmt::println!("USBWouldBlock limit exceeded");
+                                // defmt::println!("USBWouldBlock limit exceeded");
                                 return;
                             }
                             would_block_count = would_block_count + 1; // handle hung blocking condition.  possibly caused by client not reading and buffer full.
