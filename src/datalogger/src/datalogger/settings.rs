@@ -9,29 +9,29 @@ const DATALOGGER_SETTINGS_UNUSED_BYTES: usize = 13;
 #[bitfield(u8)]
 #[derive(PartialEq)]
 pub struct DataloggerSettingsBitField {
-    #[bits(1)]
+    #[bits(1, default = true)]
     pub external_adc_enabled: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_lorawan_telemetry: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_modbus_rtu: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub debug_includes_values: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub withhold_incomplete_readings: bool,
 
-    #[bits(1)]
+    #[bits(1, default = true)]
     pub log_raw_data: bool,
 
-    #[bits(1)]
+    #[bits(1, default = false)]
     pub enable_interactive_logging: bool,
 
-    #[bits(1)]
-    unused: usize,
+    #[bits(1, default = false)]
+    pub enable_sdi12: bool,
 }
 
 
@@ -142,6 +142,7 @@ impl DataloggerSettings {
         settings.toggles.set_enable_lorawan_telemetry(values.enable_lorawan_telemetry.unwrap_or(self.toggles.enable_lorawan_telemetry()));
         settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
         settings.toggles.set_enable_interactive_logging(values.interactive_logging.unwrap_or(self.toggles.enable_interactive_logging()));
+        settings.toggles.set_enable_sdi12(values.enable_sdi12.unwrap_or(self.toggles.enable_sdi12()));
         settings
     }
 

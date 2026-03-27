@@ -18,7 +18,7 @@ impl PreciseDelayUs {
 impl DelayUs<u16> for PreciseDelayUs {
     fn delay_us(&mut self, us: u16) {
         unsafe {
-            let real_cyc = (us * PER_MICROSEC) as u32 / 4;
+            let real_cyc = (us as u32 * PER_MICROSEC as u32) / 4;
             asm!(
                 // Use local labels to avoid R_ARM_THM_JUMP8 relocations which fail on thumbv6m.
                 "1:",

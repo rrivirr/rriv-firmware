@@ -3,6 +3,7 @@
 mod datalogger;
 mod services;
 
+use core::f64;
 use core::i16::MAX;
 
 use datalogger::commands::*;
@@ -20,6 +21,7 @@ use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
+use crate::services::sdi12_service::{Sdi12Command, MEASUREMENTS_IN_PAYLOAD};
 use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
 
@@ -51,6 +53,7 @@ pub struct DataLogger {
     lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
     modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
     modbus_service: Option<modbus_service::ModbusByteProcessor>,
+    sdi12_service: Option<sdi12_service::Sdi12RxProcessor>,
 
     // measurement cycle
     completed_bursts: u8,
@@ -74,7 +77,8 @@ impl DataLogger {
             modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            modbus_service: None
+            modbus_service: None,
+            sdi12_service: None,
         }
     }
 
@@ -135,6 +139,9 @@ impl DataLogger {
         usart_service::setup(board);
         self.modbus_service = Some(modbus_service::ModbusByteProcessor::new());
         modbus_service::setup(board);
+
+        let sdi12_gpio = 5;
+        self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -346,6 +353,7 @@ impl DataLogger {
         //
         // Do the measurement cycle
         //
+        // defmt::println!("Current mode: {}", datalogger::modes::mode_text(&self.mode));
 
         match self.mode {
             DataLoggerMode::Interactive => {
@@ -412,6 +420,143 @@ impl DataLogger {
                 // this block is processed when we start up, don't get an interactive mode interrupt, and are in HibernateUntil mode
                 // or when we have just entered this mode
                 // TODO: hibernate until the requested wake time
+            }
+            DataLoggerMode::SDI12 => {
+
+                static mut data: [f64; 36] = [0_f64; 36];
+
+                
+                let mut take_measurement = false;
+                if let Some(sdi12_service) = &mut self.sdi12_service {
+                    if sdi12_service.is_awake() == false {
+                        sdi12_service.wake_up(board);
+                    }
+
+                    if sdi12_service.is_awake() {
+                        defmt::println!("board awake!");
+                        match sdi12_service.take_message('0', board) {
+                            Ok(mode) => {
+                                match mode {
+                                    Sdi12Command::M => {
+                                    }
+
+                                    Sdi12Command::Mc(digit) => {
+                                        if digit == '0' {
+                                            let mut total_measurements_count = 0;
+
+                                            for i in 0 .. self.sensor_drivers.len() {
+                                                if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                    let driver_measurements = driver.get_measured_parameter_count();
+                                                    total_measurements_count = total_measurements_count + driver_measurements;
+                                                }
+                                            }
+
+
+                                            let measurement_time = 5; // 5 seconds approximate for now
+                                            sdi12_service.send_m_ack(board, '0', measurement_time, total_measurements_count as u8);
+                                            sdi12_service.set_total_measurements(total_measurements_count);
+                                            take_measurement = true;
+                                            board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                            sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
+                                        }
+                                        defmt::println!("Sent Ack to M");
+                                    }
+
+                                    Sdi12Command::D(digit) => {
+                                       
+                                        // if digit == '0' {
+                                            // defmt::println!("Build data");
+                                            // let mut total_measurements: usize = 0;
+                                            // let mut data: [f64; 9] = [0_f64; 9];
+                                            // for i in 0 .. self.sensor_drivers.len() {
+                                            //     if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                            //         total_measurements = total_measurements + driver.get_measured_parameter_count();
+                                            //     }
+                                            // }
+
+                                            // let measurements_in_payload: u8 = if total_measurements > 9 { 9 } else { total_measurements as u8 };
+                                            // defmt::println!("Build data");
+
+                                            // let mut measurement_index = 0;
+                                            // 'outer: for i in 0 .. self.sensor_drivers.len() {
+                                            //     if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                            //         for j in 0..driver.get_measured_parameter_count() {
+                                            //             data[measurement_index] = match driver.get_measured_parameter_value(j) {
+                                            //                 Ok(value) => value,
+                                            //                 Err(_) => f64::MAX,
+                                            //             };
+                                            //             measurement_index = measurement_index + 1;
+                                            //             if measurement_index >= measurements_in_payload as usize {
+                                            //                 break 'outer;
+                                            //             }
+                                            //         }
+                                            //     }
+                                            // }
+                                            let mut data_send: [f64; MEASUREMENTS_IN_PAYLOAD as usize] = [f64::MAX; MEASUREMENTS_IN_PAYLOAD as usize];
+
+                                            let index = digit.to_digit(10);
+                                            if index.is_none() {
+                                                defmt::println!("parse error");
+                                                return;
+                                                //TODO: best way to handle this?
+                                            }
+                                            let index = index.unwrap() as usize;
+                                            defmt::println!("index {}", index);
+
+                                            let start = index * MEASUREMENTS_IN_PAYLOAD as usize;
+                                            let end = start + MEASUREMENTS_IN_PAYLOAD as usize;
+                                            for i in start..end {
+                                                data_send[i-start] = sdi12_service.get_data(i);
+                                            }
+                                            
+                                            defmt::println!("Data ready");
+                                            sdi12_service.send_data(board, '0', data_send, MEASUREMENTS_IN_PAYLOAD);
+                                            defmt::println!("Sent data");
+                                            board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                            if end == sdi12_service.get_total_measurements() {
+                                                sdi12_service.sleep();
+                                            }
+                                        // }
+                                    }
+                                }
+                            }
+                            Err(message) => {
+                                defmt::println!("Error: {}", message);
+                                // responses::send_command_response_error(board, message, "")
+                            }
+                        }
+                    }
+                    // else {
+                    //     defmt::println!("board sleeping");
+                    // }
+                }
+                else {
+                    defmt::panic!("sdi12 service not setup");
+                }
+
+                if take_measurement {
+                    board.usb_serial_send(format_args!("SDI12: taking measurement\n"));
+
+                    self.measure_sensor_values(board);
+
+                    let sdi12_service =  self.sdi12_service.as_mut().unwrap();
+
+                    let mut measurement_index = 0;
+                    for i in 0 .. self.sensor_drivers.len() {
+                        if let Some(ref mut driver) = self.sensor_drivers[i] {
+                            for j in 0..driver.get_measured_parameter_count() {
+                                let value = match driver.get_measured_parameter_value(j) {
+                                    Ok(value) => value,
+                                    Err(_) => f64::MAX,
+                                };
+                                sdi12_service.fill_data(measurement_index, value);
+                                measurement_index = measurement_index + 1;
+                            }
+                        }
+                    }
+
+                    board.usb_serial_send(format_args!("SDI12: measurement ready\n"));
+                }
             }
         }
     }
@@ -696,6 +841,7 @@ impl DataLogger {
                     board.write_log_file(format_args!(","));
                 }
 
+
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
@@ -773,6 +919,13 @@ impl DataLogger {
                         // switching into field mode should create a new file
                         self.write_column_headers_to_storage(board);
                         persist = true;
+                    }
+                    "sdi12" => {
+                        self.mode = DataLoggerMode::SDI12;
+                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                        board.set_debug(false);
+                        persist = true;
+                        defmt::println!("In SDI12 mode!");
                     }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
@@ -1321,6 +1474,15 @@ impl DataLogger {
             }
         }
 
+        // if let Some(enable_sdi12) = &values.enable_sdi12 {
+        //     if self.settings.toggles.enable_sdi12() != *enable_sdi12 {
+        //        match self.set_up_modbus_rtu(*enable_sdi12) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
+
         let new_settings: DataloggerSettings = self.settings.with_values(values);
         let mut old_settings: DataloggerSettings = self.settings.clone();
         self.settings = new_settings;
@@ -1376,7 +1538,8 @@ impl DataLogger {
            "mode" : datalogger::modes::mode_text(&self.mode),
            "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
-           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
+           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu(),
+           "enable_sdi12" : self.settings.toggles.enable_sdi12(),
         })
     }
 

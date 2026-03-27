@@ -20,6 +20,7 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 #[cfg(feature = "24LC01")]
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
@@ -66,6 +67,7 @@ pub trait RRIVBoard: Send {
     fn rs485_send(&mut self, message : &[u8]);
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
+    fn delay_us(&mut self, us: u16);
     fn timestamp(&mut self) -> i64;
     fn millis(&mut self) -> u32;
 
