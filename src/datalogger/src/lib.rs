@@ -21,7 +21,7 @@ use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
-use crate::services::sdi12_service::Sdi12Command;
+use crate::services::sdi12_service::{Sdi12Command, MEASUREMENTS_IN_PAYLOAD};
 use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
 
@@ -53,7 +53,7 @@ pub struct DataLogger {
     lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
     modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
     modbus_service: Option<modbus_service::ModbusByteProcessor>,
-    sdi12_service: Option<sdi12_service::Sdi12ByteProcessor>,
+    sdi12_service: Option<sdi12_service::Sdi12RxProcessor>,
 
     // measurement cycle
     completed_bursts: u8,
@@ -141,7 +141,7 @@ impl DataLogger {
         modbus_service::setup(board);
 
         let sdi12_gpio = 5;
-        self.sdi12_service = Some(sdi12_service::Sdi12ByteProcessor::new(sdi12_gpio));
+        self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -423,7 +423,6 @@ impl DataLogger {
             }
             DataLoggerMode::SDI12 => {
 
-                static mut total_measurements : usize = 0;
                 static mut data: [f64; 36] = [0_f64; 36];
 
                 
@@ -454,8 +453,8 @@ impl DataLogger {
 
 
                                             let measurement_time = 5; // 5 seconds approximate for now
-                                            sdi12_service.send_MAck(board, '0', measurement_time, total_measurements_count as u8);
-                                            unsafe { total_measurements = total_measurements_count }; // TODO: state var
+                                            sdi12_service.send_m_ack(board, '0', measurement_time, total_measurements_count as u8);
+                                            sdi12_service.set_total_measurements(total_measurements_count);
                                             take_measurement = true;
                                             board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                             sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
@@ -493,8 +492,7 @@ impl DataLogger {
                                             //         }
                                             //     }
                                             // }
-                                            let measurements_in_payload = 4;
-                                            let mut data_send: [f64; 9] = [f64::MAX;9];
+                                            let mut data_send: [f64; MEASUREMENTS_IN_PAYLOAD as usize] = [f64::MAX; MEASUREMENTS_IN_PAYLOAD as usize];
 
                                             let index = digit.to_digit(10);
                                             if index.is_none() {
@@ -505,17 +503,19 @@ impl DataLogger {
                                             let index = index.unwrap() as usize;
                                             defmt::println!("index {}", index);
 
-                                            let start = index * measurements_in_payload;
-                                            let end = start + measurements_in_payload;
+                                            let start = index * MEASUREMENTS_IN_PAYLOAD as usize;
+                                            let end = start + MEASUREMENTS_IN_PAYLOAD as usize;
                                             for i in start..end {
-                                                unsafe { data_send[i-start] = data[i]; }
+                                                data_send[i-start] = sdi12_service.get_data(i);
                                             }
                                             
                                             defmt::println!("Data ready");
-                                            sdi12_service.send_data(board, '0', data_send, measurements_in_payload as u8);
+                                            sdi12_service.send_data(board, '0', data_send, MEASUREMENTS_IN_PAYLOAD);
                                             defmt::println!("Sent data");
                                             board.usb_serial_send(format_args!("SDI12: sleep\n"));
-                                            sdi12_service.sleep();
+                                            if end == sdi12_service.get_total_measurements() {
+                                                sdi12_service.sleep();
+                                            }
                                         // }
                                     }
                                 }
@@ -539,22 +539,17 @@ impl DataLogger {
 
                     self.measure_sensor_values(board);
 
-                
-                    // let measurements_in_payload: u8 = if total_measurements > 9 { 9 } else { total_measurements as u8 };
-                    // defmt::println!("Build data");
-
-                    unsafe { data = [f64::MAX; 36]; }
+                    let sdi12_service =  self.sdi12_service.as_mut().unwrap();
 
                     let mut measurement_index = 0;
                     for i in 0 .. self.sensor_drivers.len() {
                         if let Some(ref mut driver) = self.sensor_drivers[i] {
                             for j in 0..driver.get_measured_parameter_count() {
-                                unsafe { 
-                                    data[measurement_index] = match driver.get_measured_parameter_value(j) {
-                                        Ok(value) => value,
-                                        Err(_) => f64::MAX,
-                                    };
-                                }
+                                let value = match driver.get_measured_parameter_value(j) {
+                                    Ok(value) => value,
+                                    Err(_) => f64::MAX,
+                                };
+                                sdi12_service.fill_data(measurement_index, value);
                                 measurement_index = measurement_index + 1;
                             }
                         }

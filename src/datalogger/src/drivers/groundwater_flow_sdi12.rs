@@ -1,5 +1,4 @@
 use crate::{drivers::types::SensorDriver, services::sdi12_service};
-use sdi12::SDI12;
 use crate::sensor_name_from_type_id;
 use serde_json::json;
 use super::types::*;
@@ -108,7 +107,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     }
 
     fn get_measured_parameter_count(&mut self) -> usize {
-        self.special_config.measured_parameter_count
+        self.num_data as usize
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
@@ -126,13 +125,15 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
-        let mut sdi12_service = sdi12_service::Sdi12ByteProcessor::new(self.special_config.gpio);
-        let m_response = sdi12_service.send_m_command(board, self.special_config.sensor_address, '0');
+        let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
+        let m_response = sdi12_service.send_m_command(board, '0');
         if m_response.address == '\0' {
             // invalid response
             defmt::println!("TIMEOUT error");
+            self.num_data = 0;
             return;
         }
+        self.num_data = m_response.n;
         defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
         if m_response.ttt > 0 {
             // process the delay
@@ -146,10 +147,36 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             }
         }
 
-        let d_response = sdi12_service.send_d0_command(board, m_response.address, m_response.n);
-        self.data_received = d_response.data;
-        self.num_data = d_response.count;
-        defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
+        let mut index: u8 = 0;
+        let mut start = 0;
+
+        loop {
+            match sdi12_service.send_d_command(board, index) {
+                Some(d_response) => {
+                    let end = start + d_response.count as usize;
+                    for i in start..end {
+                        self.data_received[i] = d_response.data[i-start];
+                    }
+                    if end == self.num_data as usize {
+                        defmt::println!("Received all data!");
+                        break;
+                    }
+                    start = end;
+                    if index == 9 {
+                        defmt::println!("Sent D9 and still didn't receive all the data");
+                        break;
+                    }
+                    else {
+                        index += 1;
+                    }
+                },
+                None => {
+                    continue;
+                }
+            }
+        }
+
+        // defmt::println!("Received data: {} {}", d_response.data[0], d_response.data[1]);
     }
 }
 
