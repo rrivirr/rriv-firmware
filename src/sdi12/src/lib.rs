@@ -87,24 +87,24 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         self.set_state(SDIPinState::Sdi12Transmitting);
         
         // Hold it HIGH for 12 ms
-        self.sdi12_board.write(false);
+        self.sdi12_board.write(true);
         self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US);
         
         // Marking by holding it LOW for 8.33 ms
-        self.sdi12_board.write(true);
+        self.sdi12_board.write(false);
         self.sdi12_board.delay_us(SDI12_MARK_DURATION_US);
     }
 
     pub fn receive_break(&mut self) -> bool {   
         self.set_state(SDIPinState::Sdi12Listening);
-        if self.sdi12_board.read() == false {
+        if self.sdi12_board.read() {
             // defmt::println!("Start for 12ms");
             self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - SDI12_TIMING_TOLERANCE);
             let mut iter_count = 0;
-            while self.sdi12_board.read() == false {
+            while self.sdi12_board.read() {
                 // defmt::println!("iter_count: {}", iter_count);
                 if iter_count > 10 {
-                    defmt::println!("Timeout! line is not pulling up");
+                    defmt::println!("Timeout! line is not falling low");
                     return false;
                 }
                 iter_count += 1;
@@ -131,7 +131,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             //     iter_count += 1;
             // }
             self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
-            if self.sdi12_board.read() == false {
+            if self.sdi12_board.read() {
                 defmt::println!("Invalid marking");
                 return false;
             }
