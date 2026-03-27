@@ -95,6 +95,9 @@ static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
 static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
+static mut GPIO_INTERRUPT_FUNCTION: Option<Fn()> = None;
+
+
 #[repr(C)]
 pub struct Usart {
     tx: &'static Mutex<RefCell<Option<Tx<pac::USART2>>>>,
@@ -126,7 +129,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
-    pub hardware_errors: [HardwareError; 5]
+    pub hardware_errors: [HardwareError; 5],
 }
 
 impl Board {
@@ -935,6 +938,15 @@ fn USB_LP_CAN_RX0() {
     });
 }
 
+#[interrupt]
+fn EXTI (){
+    // know which pin triggered the interrupt??
+    cortex_m::interrupt::free(|cs| { // run inside a critical section
+        // call a function that has been registered to handle our GPIO signal
+        GPIO_INTERRUPT_FUNCTION();
+    }
+}
+
 fn usb_interrupt(cs: &CriticalSection) {
     let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
     let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
@@ -1562,6 +1574,13 @@ impl BoardBuilder {
         defmt::println!("done with setup");
 
     }
+
+    fn configure_gpio_interrupt_function(&mut self, function: Fn() ) {
+        // unmask the correct EXTI interrupt for SDI-12 or whatever
+        // store the function we actionally want to call
+        GPIO_INTERRUPT_FUNCTION = function;
+    }
+
 }
 
 unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
