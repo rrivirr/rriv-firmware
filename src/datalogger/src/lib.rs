@@ -436,6 +436,25 @@ impl DataLogger {
                                     Sdi12Command::M => {
                                     }
 
+                                    Sdi12Command::HA => {
+                                        let mut total_measurements_count = 0;
+
+                                        for i in 0 .. self.sensor_drivers.len() {
+                                            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                let driver_measurements = driver.get_measured_parameter_count();
+                                                total_measurements_count = total_measurements_count + driver_measurements;
+                                            }
+                                        }
+
+                                        let measurement_time = 5; // 5 seconds approximate for now
+                                        defmt::println!("total_measurements: {}", total_measurements_count);
+                                        sdi12_service.send_ha_ack(board, '0', measurement_time, total_measurements_count);
+                                        sdi12_service.set_total_measurements(total_measurements_count);
+                                        take_measurement = true;
+                                        board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                        sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
+                                    }
+
                                     Sdi12Command::Mc(digit) => {
                                         if digit == '0' {
                                             let mut total_measurements_count = 0;

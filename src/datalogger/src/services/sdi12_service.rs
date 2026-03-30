@@ -8,16 +8,22 @@ pub enum Sdi12Command {
     M,
     Mc(char),
     D(char),
+    HA,
 }
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, unused)]
 pub struct SDI12_MResponse {
-    pub address: char,
     pub ttt: u32,
     pub n: u8
 }
 
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, unused)]
+pub struct SDI12_HAResponse {
+    pub ttt: u32,
+    pub nnn: u32
+}
+
+#[allow(non_camel_case_types, unused)]
 pub struct SDI12_Dresponse {
     pub address: char,
     pub data: [f32; MEASUREMENTS_IN_PAYLOAD as usize],
@@ -161,6 +167,7 @@ impl<'a> Sdi12RxProcessor {
             ('M', '!') => Sdi12Command::M,
             ('M', d @ '0'..='9') => Sdi12Command::Mc(d),
             ('D', d @ '0'..='9') => Sdi12Command::D(d),
+            ('H', 'A') => Sdi12Command::HA,
             _ => return Err("Invalid Command"),
         };
 
@@ -183,6 +190,26 @@ impl<'a> Sdi12RxProcessor {
         let mut sdi12 = SDI12::new(my_board);
         sdi12.send_response(resp_buffer);
         board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}{}\n", resp_buffer[0], resp_buffer[1], resp_buffer[2], resp_buffer[3], resp_buffer[4])); // TODO: if self.watch
+    }
+
+    pub fn send_ha_ack(&mut self, board: &mut dyn RRIVBoard, address: char, ttt: u32, nnn: usize) {
+        let mut resp_buffer: [char; SDI12_BUFFER_SIZE] = ['0'; SDI12_BUFFER_SIZE];
+        resp_buffer[0] = address;
+
+        resp_buffer[1] = (b'0' + ((ttt / 100) % 10) as u8) as char; // Hundreds
+        resp_buffer[2] = (b'0' + ((ttt / 10) % 10) as u8) as char;  // Tens
+        resp_buffer[3] = (b'0' + (ttt % 10) as u8) as char;         // Ones
+
+        resp_buffer[4] = (b'0' + ((nnn / 100) % 10) as u8) as char; // Hundreds
+        resp_buffer[5] = (b'0' + ((nnn / 10) % 10) as u8) as char;  // Tens
+        resp_buffer[6] = (b'0' + (nnn % 10) as u8) as char;         // Ones          
+
+        resp_buffer[7] = '\r';
+        resp_buffer[8] = '\n';
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        sdi12.send_response(resp_buffer);
+        board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}{}{}{}\n", resp_buffer[0], resp_buffer[1], resp_buffer[2], resp_buffer[3], resp_buffer[4], resp_buffer[5], resp_buffer[6])); // TODO: if self.watch
     }
 
     pub fn send_data(&mut self, board: &mut dyn RRIVBoard, address: char, data: [f64;MEASUREMENTS_IN_PAYLOAD as usize], n: u8) {
@@ -266,6 +293,7 @@ impl<'a> Sdi12TxProcessor {
         sdi12.send_break();
     }
 
+    #[allow(unused)]
     pub fn send_m_command(&mut self, board: &mut dyn RRIVBoard, id: char) -> Option<SDI12_MResponse> {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
@@ -313,13 +341,66 @@ impl<'a> Sdi12TxProcessor {
         // self.sdi12_board.delay_us(SDI12_GAP);
         
         let res = SDI12_MResponse {
-                                    address: address_r,
                                     ttt: result,
                                     n: n
                                 };
         Some(res)
     }
 
+    #[allow(unused)]
+    pub fn send_ha_command(&mut self, board: &mut dyn RRIVBoard) -> Option<SDI12_HAResponse> {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        
+        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        command[0] = self.address;
+        command[1] = 'H';
+        command[2] = 'A';
+        command[3] = '!';
+        sdi12.send_command(command);
+        defmt::println!("Sent 0HA!");
+
+        let response = sdi12.read_response();
+
+        board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}\n", command[0], command[1], command[2], command[3])); // TODO: if self.watch
+        board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}\n", response[0], response[1], response[2], response[3], response[4])); // TODO: if self.watch
+
+        // parse the response
+        // format: <address>tttn<CR><LF>
+        let address_r = response[0];
+        if address_r != self.address {
+            // invalid response
+            return None;
+        }
+
+        let ttt_str = &response[1..4];
+        let mut ttt: u32 = 0; // Or u32, usize, etc.
+        for &c in ttt_str {
+            let digit = c.to_digit(10);
+            if let Some(d) = digit {
+                ttt = (ttt * 10) + d as u32;
+            }
+        }
+
+        let nnn_str = &response[4..7];
+        let mut nnn = 0;
+        for &c in nnn_str {
+            let digit = c.to_digit(10);
+            if let Some(d) = digit {
+                nnn = (nnn * 10) + d as u32;
+            }
+        }
+
+        // self.sdi12_board.delay_us(SDI12_GAP);
+        
+        let res = SDI12_HAResponse {
+                                    ttt: ttt,
+                                    nnn: nnn
+                                };
+        Some(res)
+    }
+    
+    #[allow(unused)]
     pub fn send_d_command(&mut self, board: &mut dyn RRIVBoard, id: u8) -> Option<SDI12_Dresponse> {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
