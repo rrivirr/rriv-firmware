@@ -422,10 +422,6 @@ impl DataLogger {
                 // TODO: hibernate until the requested wake time
             }
             DataLoggerMode::SDI12 => {
-
-                static mut data: [f64; 36] = [0_f64; 36];
-
-                
                 let mut take_measurement = false;
                 if let Some(sdi12_service) = &mut self.sdi12_service {
                     if sdi12_service.is_awake() == false {
@@ -453,8 +449,10 @@ impl DataLogger {
 
 
                                             let measurement_time = 5; // 5 seconds approximate for now
-                                            sdi12_service.send_m_ack(board, '0', measurement_time, total_measurements_count as u8);
-                                            sdi12_service.set_total_measurements(total_measurements_count);
+                                            defmt::println!("total_measurements: {}", total_measurements_count);
+                                            let n = if total_measurements_count > 9 {9_u8} else {total_measurements_count as u8};
+                                            sdi12_service.send_m_ack(board, '0', measurement_time, n);
+                                            sdi12_service.set_total_measurements(n as usize);
                                             take_measurement = true;
                                             board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                             sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
@@ -512,8 +510,8 @@ impl DataLogger {
                                             defmt::println!("Data ready");
                                             sdi12_service.send_data(board, '0', data_send, MEASUREMENTS_IN_PAYLOAD);
                                             defmt::println!("Sent data");
-                                            board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                             if end == sdi12_service.get_total_measurements() {
+                                                board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                                 sdi12_service.sleep();
                                             }
                                         // }
