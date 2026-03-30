@@ -140,6 +140,7 @@ impl<'a> Sdi12RxProcessor {
     }
 
     pub fn sleep(&mut self) {
+        defmt::println!("board asleep");
         self.awake = false;
     }
 
@@ -259,7 +260,13 @@ impl<'a> Sdi12TxProcessor {
         }
     }
 
-    pub fn send_m_command(&mut self, board: &mut dyn RRIVBoard, id: char) -> SDI12_MResponse {
+    pub fn send_break(&mut self, board: &mut dyn RRIVBoard) {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        sdi12.send_break();
+    }
+
+    pub fn send_m_command(&mut self, board: &mut dyn RRIVBoard, id: char) -> Option<SDI12_MResponse> {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
         
@@ -273,7 +280,6 @@ impl<'a> Sdi12TxProcessor {
             command[2] = id;
             command[3] = '!';
         }
-        sdi12.send_break();
         sdi12.send_command(command);
         defmt::println!("Sent 0M0!");
 
@@ -287,11 +293,7 @@ impl<'a> Sdi12TxProcessor {
         let address_r = response[0];
         if address_r != self.address {
             // invalid response
-            return SDI12_MResponse {
-                address: '\0',
-                ttt: 0,
-                n: 0
-            };
+            return None;
         }
 
         let ttt = &response[1..4];
@@ -310,11 +312,12 @@ impl<'a> Sdi12TxProcessor {
 
         // self.sdi12_board.delay_us(SDI12_GAP);
         
-        SDI12_MResponse {
-            address: address_r,
-            ttt: result,
-            n: n
-        }
+        let res = SDI12_MResponse {
+                                    address: address_r,
+                                    ttt: result,
+                                    n: n
+                                };
+        Some(res)
     }
 
     pub fn send_d_command(&mut self, board: &mut dyn RRIVBoard, id: u8) -> Option<SDI12_Dresponse> {
@@ -332,9 +335,7 @@ impl<'a> Sdi12TxProcessor {
             count: 0,
         };
         
-        if id == 0 { sdi12.send_break(); }    // send a break only on D0
         sdi12.send_command(command);
-        defmt::println!("Sent 0D0!");
         let response = sdi12.read_response();
 
         board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}{}\n", command[0], command[1], command[2], command[3], command[4])); // TODO: if self.watch

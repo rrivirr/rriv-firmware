@@ -126,30 +126,37 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
-        let m_response = sdi12_service.send_m_command(board, '0');
-        if m_response.address == '\0' {
-            // invalid response
-            defmt::println!("TIMEOUT error");
-            self.num_data = 0;
-            return;
-        }
-        self.num_data = m_response.n;
-        defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
-        if m_response.ttt > 0 {
-            // process the delay
-            let mut now = board.epoch_timestamp();
-            let trigger = now + m_response.ttt as i64;
-            while now < trigger {
-                board.usb_serial_send(format_args!("SDI12: waiting...\n"));
-                board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
-                board.delay_ms(1000);
-                now = board.epoch_timestamp();
+        loop {
+            sdi12_service.send_break(board);
+            match sdi12_service.send_m_command(board, '0') {
+                Some(m_response) => {
+                    self.num_data = m_response.n;
+                    defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
+                    if m_response.ttt > 0 {
+                        // process the delay
+                        let mut now = board.epoch_timestamp();
+                        let trigger = now + m_response.ttt as i64;
+                        while now < trigger {
+                            board.usb_serial_send(format_args!("SDI12: waiting...\n"));
+                            board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
+                            board.delay_ms(1000);
+                            now = board.epoch_timestamp();
+                        }
+                        break;
+                    }
+                }
+                None => {
+                    self.num_data = 0;
+                    defmt::println!("Invalid ack to M command. Retrying...");
+                    board.delay_ms(1000);
+                    board.run_loop_iteration();
+                }
             }
         }
 
         let mut index: u8 = 0;
         let mut start = 0;
-
+        sdi12_service.send_break(board);    // Break for D0 only
         loop {
             match sdi12_service.send_d_command(board, index) {
                 Some(d_response) => {
@@ -157,6 +164,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
                     for i in start..end {
                         self.data_received[i] = d_response.data[i-start];
                     }
+
                     if end == self.num_data as usize {
                         defmt::println!("Received all data!");
                         break;
@@ -168,10 +176,14 @@ impl SensorDriver for GroundwaterFlowSDI12 {
                     }
                     else {
                         index += 1;
+                        board.delay_ms(1000);
+                        board.run_loop_iteration();
                     }
                 },
                 None => {
-                    continue;
+                    board.delay_ms(1000);
+                    board.run_loop_iteration();
+                    sdi12_service.send_break(board);
                 }
             }
         }
