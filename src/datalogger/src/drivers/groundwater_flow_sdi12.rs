@@ -71,7 +71,7 @@ pub struct GroundwaterFlowSDI12 {
     general_config: SensorDriverGeneralConfiguration,
     special_config: GroundwaterFlowSDI12SpecialConfiguration,
     data_received: [f32; 9],
-    num_data: u8
+    num_data: usize
 }
 
 
@@ -126,16 +126,45 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
+        // loop {
+        //     sdi12_service.send_break(board);
+        //     match sdi12_service.send_m_command(board, '0') {
+        //         Some(m_response) => {
+        //             self.num_data = m_response.n as usize;
+        //             defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
+        //             if m_response.ttt > 0 {
+        //                 // process the delay
+        //                 let mut now = board.epoch_timestamp();
+        //                 let trigger = now + m_response.ttt as i64;
+        //                 while now < trigger {
+        //                     board.usb_serial_send(format_args!("SDI12: waiting...\n"));
+        //                     board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
+        //                     board.delay_ms(1000);
+        //                     now = board.epoch_timestamp();
+        //                 }
+        //                 break;
+        //             }
+        //         }
+        //         None => {
+        //             self.num_data = 0;
+        //             defmt::println!("Invalid ack to M command. Retrying...");
+        //             board.delay_ms(1000);
+        //             board.run_loop_iteration();
+        //         }
+        //     }
+        // }
+        let mut total_measurements: usize = 0;
         loop {
             sdi12_service.send_break(board);
-            match sdi12_service.send_m_command(board, '0') {
-                Some(m_response) => {
-                    self.num_data = m_response.n;
-                    defmt::println!("Response received:\nttt: {}\tn: {}", m_response.ttt, m_response.n);
-                    if m_response.ttt > 0 {
+            match sdi12_service.send_ha_command(board) {
+                Some(ha_response) => {
+                    self.num_data = ha_response.nnn as usize;
+                    total_measurements = ha_response.nnn as usize;
+                    defmt::println!("Response received:\nttt: {}\tn: {}", ha_response.ttt, ha_response.nnn);
+                    if ha_response.ttt > 0 {
                         // process the delay
                         let mut now = board.epoch_timestamp();
-                        let trigger = now + m_response.ttt as i64;
+                        let trigger = now + ha_response.ttt as i64;
                         while now < trigger {
                             board.usb_serial_send(format_args!("SDI12: waiting...\n"));
                             board.run_loop_iteration(); // feeds the watchdog and keeps the board layer updated
@@ -154,24 +183,24 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             }
         }
 
-        let mut index: u8 = 0;
+        let mut index: usize = 0;
         let mut start = 0;
         sdi12_service.send_break(board);    // Break for D0 only
         loop {
-            match sdi12_service.send_d_command(board, index) {
+            match sdi12_service.send_d_command(board, index as u8) {
                 Some(d_response) => {
                     let end = start + d_response.count as usize;
                     for i in start..end {
                         self.data_received[i] = d_response.data[i-start];
                     }
 
-                    if end == self.num_data as usize {
+                    if end == total_measurements as usize {
                         defmt::println!("Received all data!");
                         break;
                     }
                     start = end;
-                    if index == 9 {
-                        defmt::println!("Sent D9 and still didn't receive all the data");
+                    if index == 999 {
+                        defmt::println!("Sent D999 and still didn't receive all the data");
                         break;
                     }
                     else {
