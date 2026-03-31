@@ -54,7 +54,7 @@ use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rriv_board::{
-    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SerialRxPeripheral
+    EEPROM_TOTAL_SENSOR_SLOTS, GPIO_INTERRUPT_FUNCTION, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
@@ -94,8 +94,6 @@ static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
-
-// static mut GPIO_INTERRUPT_FUNCTION: Option<Fn()> = None;
 
 
 #[repr(C)]
@@ -896,9 +894,7 @@ impl RRIVBoard for Board {
         }
     }
     
-    fn configure_gpio_interrupt_function(&self) {
-        todo!()
-    }
+
 
 }
 
@@ -947,7 +943,12 @@ fn EXTI2 (){
     // know which pin triggered the interrupt??
     cortex_m::interrupt::free(|cs| { // run inside a critical section
         // call a function that has been registered to handle our GPIO signal
-        // GPIO_INTERRUPT_FUNCTION();
+        unsafe {
+            #[allow(static_mut_refs)]
+            if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
+                gpio_interrupt_function();
+            }
+        }
     });
 }
 
@@ -1588,12 +1589,6 @@ impl BoardBuilder {
 
         defmt::println!("done with setup");
 
-    }
-
-    fn configure_gpio_interrupt_function<T: Fn()>(&mut self, function: T ) {
-        // unmask the correct EXTI interrupt for SDI-12 or whatever
-        // store the function we actionally want to call
-        // GPIO_INTERRUPT_FUNCTION = function;
     }
 
 }
