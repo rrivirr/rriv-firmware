@@ -122,6 +122,9 @@ pub trait RRIVBoard: Send {
     // TODO: can't put this here because of 'static, but don't need self anyway
     // fn configure_gpio_interrupt_function<T: Fn() + 'static>(&self, function: T );
 
+    fn enable_interrupt(&self);
+    fn disable_interrupt(&self);
+
 }
 
 
@@ -134,6 +137,8 @@ pub fn configure_gpio_interrupt_function<T: Fn() + 'static>(function: T ) {
         GPIO_INTERRUPT_FUNCTION = Some(Box::new(function));
     }
 }
+
+
 
 pub trait RRIVBoardBuilder {
     fn setup(&mut self);
