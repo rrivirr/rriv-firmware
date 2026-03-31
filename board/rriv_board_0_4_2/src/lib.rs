@@ -1157,7 +1157,7 @@ impl BoardBuilder {
 
             let uid: [u8;12] = Uid::fetch().bytes();
             
-            let arg = format_args!("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
+            let arg = format_args!("rriv_{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
                     uid[0],
                     uid[1],
                     uid[2],
@@ -1173,8 +1173,8 @@ impl BoardBuilder {
 
             
             #[allow(unused_assignments)]
-            let mut uid_string: &str = "_rriv";
-            static mut BUF:[u8;24] = [0u8; 24];
+            let mut uid_string: &str = "rriv";
+            static mut BUF:[u8;29] = [0u8; 29];
 
             match format_no_std::show(
                     &mut BUF,
@@ -1182,7 +1182,7 @@ impl BoardBuilder {
                 ) {
                     Ok(formatted) => {
                         defmt::println!("{}", formatted); // TODO: this uses format!
-                        // uid_string = formatted;s
+                        uid_string = formatted;
                     }
                     Err(e) => {
                         // doesn't matter
@@ -1193,7 +1193,7 @@ impl BoardBuilder {
 
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
-                .product("RRIV Data Logger")
+                .product("Data Logger")
                 .serial_number(uid_string)
                 .device_class(USB_CLASS_CDC)
                 .build();
