@@ -108,6 +108,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+        board.set_gpio_pin_mode(5, rriv_board::gpio::GpioMode::PullDownInput);
         rriv_board::configure_gpio_interrupt_function(exti_triggered);
     }
 

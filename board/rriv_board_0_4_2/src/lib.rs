@@ -895,6 +895,14 @@ impl RRIVBoard for Board {
     }
     
 
+    fn enable_interrupt(&self){
+        unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+    }
+    
+    fn disable_interrupt(&self){
+        NVIC::mask(pac::Interrupt::EXTI2);
+    }
+
 
 }
 
