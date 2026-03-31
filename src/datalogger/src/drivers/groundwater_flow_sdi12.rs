@@ -1,7 +1,12 @@
 use crate::{drivers::types::SensorDriver, services::sdi12_service};
 use crate::sensor_name_from_type_id;
+use rriv_board::RRIVBoard;
 use serde_json::json;
 use super::types::*;
+
+fn exti_triggered(){
+    defmt::println!("got triggered");
+}
 
 #[derive(Copy, Clone)]
 pub struct GroundwaterFlowSDI12SpecialConfiguration {
@@ -103,7 +108,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        
+        rriv_board::configure_gpio_interrupt_function(exti_triggered);
     }
 
     fn get_measured_parameter_count(&mut self) -> usize {

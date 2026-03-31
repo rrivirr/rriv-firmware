@@ -119,9 +119,21 @@ pub trait RRIVBoard: Send {
     fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
     fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
  
-    fn configure_gpio_interrupt_function(&self); // something like this
+    // TODO: can't put this here because of 'static, but don't need self anyway
+    // fn configure_gpio_interrupt_function<T: Fn() + 'static>(&self, function: T );
+
 }
 
+
+pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn()> > = None;
+
+pub fn configure_gpio_interrupt_function<T: Fn() + 'static>(function: T ) {
+    // unmask the correct EXTI interrupt for SDI-12 or whatever
+    // store the function we actionally want to call
+    unsafe {
+        GPIO_INTERRUPT_FUNCTION = Some(Box::new(function));
+    }
+}
 
 pub trait RRIVBoardBuilder {
     fn setup(&mut self);
