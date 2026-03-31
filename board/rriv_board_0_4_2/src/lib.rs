@@ -27,7 +27,7 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::Pin;
+use stm32f1xx_hal::gpio::{Edge, ExtiPin, Pin};
 use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
@@ -95,7 +95,7 @@ static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
 static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
-static mut GPIO_INTERRUPT_FUNCTION: Option<Fn()> = None;
+// static mut GPIO_INTERRUPT_FUNCTION: Option<Fn()> = None;
 
 
 #[repr(C)]
@@ -895,6 +895,10 @@ impl RRIVBoard for Board {
             }
         }
     }
+    
+    fn configure_gpio_interrupt_function(&self) {
+        todo!()
+    }
 
 }
 
@@ -939,12 +943,12 @@ fn USB_LP_CAN_RX0() {
 }
 
 #[interrupt]
-fn EXTI (){
+fn EXTI2 (){
     // know which pin triggered the interrupt??
     cortex_m::interrupt::free(|cs| { // run inside a critical section
         // call a function that has been registered to handle our GPIO signal
-        GPIO_INTERRUPT_FUNCTION();
-    }
+        // GPIO_INTERRUPT_FUNCTION();
+    });
 }
 
 fn usb_interrupt(cs: &CriticalSection) {
@@ -1280,7 +1284,7 @@ impl BoardBuilder {
         defmt::println!("board builder setup");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
-        let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
+        let mut device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
         let uid = Uid::fetch();
         defmt::println!("uid: {:X}", uid.bytes());
@@ -1342,6 +1346,13 @@ impl BoardBuilder {
 
         watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
+
+        dynamic_gpio_pins.gpio5.make_interrupt_source(&mut afio);
+        dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::Rising);
+        dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
+        
+        unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1568,17 +1579,21 @@ impl BoardBuilder {
 
         self.watchdog = Some(watchdog);
 
-        defmt::println!("setting up RS485 serial b");
-        setup_serialb(device_peripherals.UART5, &clocks);
+        // defmt::println!("setting up RS485 serial b");
+        // setup_serialb(device_peripherals.UART5, &clocks);
+
+        // setup GPIO5 as EXTI2 interrupt PD2
+
+      
 
         defmt::println!("done with setup");
 
     }
 
-    fn configure_gpio_interrupt_function(&mut self, function: Fn() ) {
+    fn configure_gpio_interrupt_function<T: Fn()>(&mut self, function: T ) {
         // unmask the correct EXTI interrupt for SDI-12 or whatever
         // store the function we actionally want to call
-        GPIO_INTERRUPT_FUNCTION = function;
+        // GPIO_INTERRUPT_FUNCTION = function;
     }
 
 }
