@@ -28,10 +28,10 @@ struct MeasurementOutputs {
     calibrated: bool,
 
     #[bits(1, default = false)]
-    differences: bool,
+    differences: bool, // not supported yet
 
     #[bits(1, default = false)]
-    vector: bool,
+    vector: bool, // not supported yet
 
     #[bits(4, access = RO, default = 0)]
     reserved: u8,
@@ -47,6 +47,16 @@ impl MeasurementOutputs {
             MeasurementOutputMode::Calibrated
         } else {
             MeasurementOutputMode::Raw
+        }
+    }
+
+    fn total_parameter_count(&self, channels: usize, sensors: usize){
+        let mut count = 0;
+        if self.raw() {
+            count = count + channels * sensors;
+        }
+        if self.calibrated() {
+            count = count + channels * sensors;
         }
     }
 }
@@ -341,17 +351,19 @@ impl SensorDriver for RingMuxTemperatureDriver {
             channels_used = self.special_config.channels;
         }
         
-        let mut count = 0;
+        self.special_config.measurement_outputs.total_parameter_count(channels_used, self.special_config.sensors)
+
+        // let mut count = 0;
         
-        if self.special_config.measurement_outputs.raw() {
-            count = count + channels_used;
-        }
+        // if self.special_config.measurement_outputs.raw() {
+        //     count = count + channels_used;
+        // }
 
-        if self.special_config.measurement_outputs.calibrated() {
-            count = count + channels_used;
-        }
+        // if self.special_config.measurement_outputs.calibrated() {
+        //     count = count + channels_used;
+        // }
 
-        count
+        // count
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
