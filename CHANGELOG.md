@@ -1,3 +1,42 @@
+# [1.13.0-preview-usb-device-id-etc.1](https://github.com/rrivirr/rriv-firmware/compare/v1.12.6...v1.13.0-preview-usb-device-id-etc.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* add some defaults for settings bools struct ([e93628d](https://github.com/rrivirr/rriv-firmware/commit/e93628d2110f422ba19e8d3e38826c69b685f7dc))
+* cargo setup for sdi12 ([d167825](https://github.com/rrivirr/rriv-firmware/commit/d1678252bc5a1dc5b8925f8606d3d82a21538e14))
+* mack fn ascii conversion fixed ([522f234](https://github.com/rrivirr/rriv-firmware/commit/522f234d40ca767fcf8674ebd61a5becb5c5ae01))
+* millis overlapping fixed ([dacc722](https://github.com/rrivirr/rriv-firmware/commit/dacc722ebf4c4f8266d408e6f2f743f3e0e03f8c))
+* move defmt out of loop ([e0a1519](https://github.com/rrivirr/rriv-firmware/commit/e0a1519b0e3f1de0bf4a967ebb58323a96c82fd9))
+* no sending of break before every command ([9a9b545](https://github.com/rrivirr/rriv-firmware/commit/9a9b54598402abbcf667b99ddef95fe78427a292))
+* precise delay cast error ([e8e7295](https://github.com/rrivirr/rriv-firmware/commit/e8e72955bd0fe800de92473b0498760c68c6be16))
+* rebase merge error fixed ([2d3c9b0](https://github.com/rrivirr/rriv-firmware/commit/2d3c9b015c9cfefa998d2a9ff292712d4a6f8432))
+* receive break with relaxed constraints ([53d5191](https://github.com/rrivirr/rriv-firmware/commit/53d51914337482e5052022578021340e6427b67f))
+* registry merge conflicts ([6c7531d](https://github.com/rrivirr/rriv-firmware/commit/6c7531d17e2188e4f285ec023b846da10b903816))
+* sensor name len exceeded ([1a6c89a](https://github.com/rrivirr/rriv-firmware/commit/1a6c89ab3be60a54b740da9323cdccb70cfcebb5))
+* set state only if not equal ([5fa7f2f](https://github.com/rrivirr/rriv-firmware/commit/5fa7f2f6958c5d163c7f30adb7013633239302ca))
+* setting up SDI12 datalogger mode ([54d6f29](https://github.com/rrivirr/rriv-firmware/commit/54d6f29a342d86c0bedf8be0e5d33d9a1760c466))
+* some changes to device id ([17d4ff0](https://github.com/rrivirr/rriv-firmware/commit/17d4ff02ca208818262143f35a21dae493f9a9ff))
+* timeout millis not working ([43f4c86](https://github.com/rrivirr/rriv-firmware/commit/43f4c86c4c257e48cfbe938dec13d41a0fe8a692))
+
+
+### Features
+
+* added debug statements ([2c85b17](https://github.com/rrivirr/rriv-firmware/commit/2c85b1731a810806847c65ea3096e154e47fd545))
+* added debug statements ([f1efe23](https://github.com/rrivirr/rriv-firmware/commit/f1efe230742c90308b46df3df1b6d7f92629e196))
+* added delay_us fn in rriv board ([4d9b772](https://github.com/rrivirr/rriv-firmware/commit/4d9b77219f9ef0e3df573afd23553c8b61e90861))
+* added sdi12 enable and datalogger mode ([731e351](https://github.com/rrivirr/rriv-firmware/commit/731e351ca13efc7e4a3b60e8fd605510187dc768))
+* added timing gaps bewteen every event ([0b7b2a1](https://github.com/rrivirr/rriv-firmware/commit/0b7b2a168483fa376091e90ab42b0abe3904282a))
+* code organisation changes ([0ab8b89](https://github.com/rrivirr/rriv-firmware/commit/0ab8b892f4a83acaf40ae43900238200264ee96d))
+* commented out defmt statements ([1b795a7](https://github.com/rrivirr/rriv-firmware/commit/1b795a79e3e83221d9b0de03db631cb6ab168551))
+* commented out uart message ([630b509](https://github.com/rrivirr/rriv-firmware/commit/630b50927eeb6f66b02548d362e324b60d5253e7))
+* created driver for sdi12 ([bdb5a91](https://github.com/rrivirr/rriv-firmware/commit/bdb5a91c9bef7a066c2d78294ac02f90a7c742ba))
+* created sdi12 library ([e6544ee](https://github.com/rrivirr/rriv-firmware/commit/e6544ee590c1c630dec415e4e5855172b49d180b))
+* created sdi12 service ([ec1dcba](https://github.com/rrivirr/rriv-firmware/commit/ec1dcba482066bfe67817ff47f05f73d301c69cf))
+* tightened timing constraints ([0800abc](https://github.com/rrivirr/rriv-firmware/commit/0800abc937e4dcd78c2c0323b826401df2a03be7))
+* timing tolerance added ([cb10f2f](https://github.com/rrivirr/rriv-firmware/commit/cb10f2f090cf9a474fa9b714cb2b521eceb84f8a))
+* updated driver to use sdi12_service ([37f177d](https://github.com/rrivirr/rriv-firmware/commit/37f177db7763443d121619d2cfd65b9960f99d52))
+
 ## [1.12.6](https://github.com/rrivirr/rriv-firmware/compare/v1.12.5...v1.12.6) (2026-03-17)
 
 
