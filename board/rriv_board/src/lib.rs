@@ -128,9 +128,9 @@ pub trait RRIVBoard: Send {
 }
 
 
-pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn()> > = None;
+pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn(&mut dyn RRIVBoard)> > = None;
 
-pub fn configure_gpio_interrupt_function<T: Fn() + 'static>(function: T ) {
+pub fn configure_gpio_interrupt_function<T: Fn(&mut dyn RRIVBoard) + 'static>(function: T ) {
     // unmask the correct EXTI interrupt for SDI-12 or whatever
     // store the function we actionally want to call
     unsafe {

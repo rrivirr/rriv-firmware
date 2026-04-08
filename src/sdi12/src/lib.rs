@@ -232,6 +232,44 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         Some(character_data as char)
     }
 
+    pub fn read_char_interrupt(&mut self) -> Option<char> {
+        // defmt::println!("detected a start bit");
+        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT / 2);
+
+        if self.sdi12_board.read() == false {
+            return None; 
+        }
+
+        let mut byte: u8 = 0;
+
+        for i in 0..8 {
+            self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+            let bit_value = match self.sdi12_board.read() {
+                true => 0,
+                false => 1
+            };
+            byte |= bit_value << i;
+        }
+
+        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+        let stop_bit = self.sdi12_board.read();
+
+        if stop_bit {
+            return None;
+        }
+
+        let character_data = byte & 0x7F;
+
+        // Verify the parity bit here before returning)
+        let parity_bit_received = (byte >> 7) & 1 == 1;
+        let parity_bit_calculated = parity_bit(character_data);
+        if parity_bit_received != parity_bit_calculated {
+            return None;
+        }
+
+        Some(character_data as char)
+    }
+
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Transmitting);
@@ -274,6 +312,35 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         buffer
     }
 
+    pub fn read_command_interrupt(&mut self) -> [char; SDI12_COMMAND_SIZE] {
+        self.set_state(SDIPinState::Sdi12Listening);
+        let mut buffer: [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        let mut bytes_read = 0;
+
+        while bytes_read < SDI12_COMMAND_SIZE {
+            self.timeout_counter = self.sdi12_board.millis();
+            match self.read_char_interrupt() {
+                Some(byte) => {
+                    // store the byte in the response buffer
+                    buffer[bytes_read] = byte;
+                    bytes_read += 1;
+                    if byte == '!' {
+                        defmt::println!("buffer[{}] = {}", bytes_read, byte);
+                        break;
+                    }
+                },
+                None => {
+                    defmt::println!("Timeout error");
+                    defmt::println!("buffer[{}] = {}", bytes_read, buffer);
+                    break; // SDI12_timeout or error
+                }
+            }
+        }
+        self.sdi12_board.delay_us(SDI12_GAP);
+
+        buffer
+    }
+
     pub fn send_response(&mut self, data: [char; SDI12_BUFFER_SIZE]) {
         self.set_state(SDIPinState::Sdi12Transmitting);
         for c in data.iter() {
@@ -295,6 +362,33 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         while bytes_read < SDI12_BUFFER_SIZE {
             self.timeout_counter = self.sdi12_board.millis();
             match self.read_char() {
+                Some(byte) => {
+                    // store the byte in the response buffer
+                    buffer[bytes_read] = byte;
+                    bytes_read += 1;
+                    // defmt::println!("buffer[{}] = {}", bytes_read, byte);
+                    if byte == '\n' {
+                        break;
+                    }
+                },
+                None => {
+                    defmt::println!("Timeout SDI12");
+                    break; // SDI12_timeout or error
+                }
+            }
+        }
+        self.sdi12_board.delay_us(SDI12_GAP);
+        buffer
+    }
+
+    pub fn read_response_interrupt(&mut self) -> [char; SDI12_BUFFER_SIZE] {
+        // sdi-12 implementation
+        defmt::println!("Reading response...");
+        let mut buffer: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
+        let mut bytes_read = 0;
+        while bytes_read < SDI12_BUFFER_SIZE {
+            self.timeout_counter = self.sdi12_board.millis();
+            match self.read_char_interrupt() {
                 Some(byte) => {
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;

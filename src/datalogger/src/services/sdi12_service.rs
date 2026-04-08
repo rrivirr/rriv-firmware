@@ -302,6 +302,146 @@ impl<'a> Sdi12TxProcessor {
     }
 
     #[allow(unused)]
+    pub fn send_command_interrupt(&mut self, board: &mut dyn RRIVBoard, cmd: Sdi12Command) {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        
+        let mut command : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        command[0] = self.address;
+        match cmd {
+            Sdi12Command::HA => {
+                command[1] = 'H';
+                command[2] = 'A';
+                command[3] = '!';
+            }
+            Sdi12Command::M => {
+                command[1] = 'M';
+                command[2] = '!';
+            }
+            Sdi12Command::Mc(id) => {
+                command[1] = 'M';
+                command[2] = id;
+                command[3] = '!';
+            }
+            Sdi12Command::D(id) => {
+                command[1] = 'D';
+                command[2] = id;
+                command[3] = '!';
+            }
+            _ => {
+                defmt::println!("Wrong command");
+                return;
+            }
+        }
+        sdi12.send_command(command);
+    }
+
+    #[allow(unused)]
+    pub fn read_buffer_interrupt(&mut self, board: &mut dyn RRIVBoard) -> [char; SDI12_BUFFER_SIZE] {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        sdi12.read_response_interrupt()
+    }
+
+    #[allow(unused)]
+    pub fn parse_ha_command(&mut self, response: [char; SDI12_BUFFER_SIZE]) -> Option<SDI12_HAResponse> {
+        let address_r = response[0];
+        if address_r != self.address {
+            // invalid response
+            return None;
+        }
+
+        let ttt_str = &response[1..4];
+        let mut ttt: u32 = 0; // Or u32, usize, etc.
+        for &c in ttt_str {
+            let digit = c.to_digit(10);
+            if let Some(d) = digit {
+                ttt = (ttt * 10) + d as u32;
+            }
+        }
+
+        let nnn_str = &response[4..7];
+        let mut nnn = 0;
+        for &c in nnn_str {
+            let digit = c.to_digit(10);
+            if let Some(d) = digit {
+                nnn = (nnn * 10) + d as u32;
+            }
+        }
+
+        // self.sdi12_board.delay_us(SDI12_GAP);
+        
+        let res = SDI12_HAResponse {
+                                    ttt: ttt,
+                                    nnn: nnn
+                                };
+        Some(res)
+    }
+
+    #[allow(unused)]
+    pub fn parse_d_command(&mut self, board: &mut dyn RRIVBoard, response: [char; SDI12_BUFFER_SIZE]) -> Option<SDI12_Dresponse> {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        
+        let mut resp : SDI12_Dresponse = SDI12_Dresponse {
+            address: '\0',
+            data: [0.0; MEASUREMENTS_IN_PAYLOAD as usize],
+            count: 0,
+        };
+
+        // parse the response
+        // format: <address><data><CR><LF>
+        let address_r = response[0];
+        if address_r != self.address {
+            // invalid response
+            return None;
+        }
+        resp.address = address_r;
+        let response = &response[1..SDI12_BUFFER_SIZE];
+        let (parsed_data, count) = sdi12.parse_data(response);
+
+        resp.count = count;
+        for i in 0..MEASUREMENTS_IN_PAYLOAD as usize {
+            resp.data[i] = parsed_data[i];
+        }
+        
+        board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
+            response[0], 
+            response[1], 
+            response[2], 
+            response[3], 
+            response[4], 
+            response[5], 
+            response[6], 
+            response[7], 
+            response[8],
+            response[9],
+            response[10], 
+            response[11], 
+            response[12], 
+            response[13], 
+            response[14], 
+            response[15], 
+            response[16], 
+            response[17], 
+            response[18],
+            response[19],
+            response[20], 
+            response[21], 
+            response[22], 
+            response[23], 
+            response[24], 
+            response[25], 
+            response[26], 
+            response[27], 
+            response[28],
+            response[29]
+        )); // TODO: if self.watch
+
+        Some(resp)
+    }
+
+    #[allow(unused)]
     pub fn send_m_command(&mut self, board: &mut dyn RRIVBoard, id: char) -> Option<SDI12_MResponse> {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
