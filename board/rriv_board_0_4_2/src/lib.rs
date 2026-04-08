@@ -946,18 +946,38 @@ fn USB_LP_CAN_RX0() {
     });
 }
 
+// static mut LAST_TICK: u32 = 0;
+// const LOCKOUT_CYCLES: u32 = SYSCLK_MHZ * 10; 
+
 #[interrupt]
-fn EXTI2 (){
-    // know which pin triggered the interrupt??
-    cortex_m::interrupt::free(|cs| { // run inside a critical section
-        // call a function that has been registered to handle our GPIO signal
-        unsafe {
-            #[allow(static_mut_refs)]
-            if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
-                gpio_interrupt_function();
+fn EXTI2() {
+    let exti = unsafe { &*pac::EXTI::ptr() };
+    if exti.pr.read().pr2().bit_is_set() {
+        exti.pr.write(|w| w.pr2().set_bit());
+
+        cortex_m::interrupt::free(|_cs| {
+            unsafe {
+                if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
+                    gpio_interrupt_function();
+                }
             }
-        }
-    });
+        });
+        // For debounce implementation
+        // let now = cortex_m::peripheral::DWT::cycle_count();
+        // unsafe {
+        //     // 3. Check if enough time has passed since the last valid interrupt
+        //     if now.wrapping_sub(LAST_TICK) > LOCKOUT_CYCLES {
+        //         LAST_TICK = now;
+
+        //         // 4. Execute your registered callback
+        //         cortex_m::interrupt::free(|_cs| {
+        //             if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
+        //                 gpio_interrupt_function();
+        //             }
+        //         });
+        //     }
+        // }
+    }
 }
 
 fn usb_interrupt(cs: &CriticalSection) {

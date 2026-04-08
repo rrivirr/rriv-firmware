@@ -90,6 +90,14 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
     fn millis(&mut self) -> u32 {
         self.board.millis()
     }
+
+    fn enable_interrupt(&mut self) {
+        self.board.enable_interrupt();
+    }
+
+    fn disable_interrupt(&mut self) {
+        self.board.disable_interrupt();
+    }
 }
 
 

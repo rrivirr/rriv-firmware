@@ -4,7 +4,7 @@ use rriv_board::RRIVBoard;
 use serde_json::json;
 use super::types::*;
 
-fn exti_triggered(){
+fn exti_triggered() {
     defmt::println!("got triggered");
 }
 

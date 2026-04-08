@@ -26,6 +26,8 @@ pub trait BoardForSDI12 {
     fn delay_us(&mut self, us: u16);
     fn pin_mode(&mut self, mode: gpio::GpioMode);
     fn millis(&mut self) -> u32;
+    fn enable_interrupt(&mut self);
+    fn disable_interrupt(&mut self);
 }
 
 #[allow(non_camel_case_types)]
@@ -69,14 +71,17 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 SDIPinState::Sdi12Transmitting => {
                     // set pin mode to OUTPUT
                     self.sdi12_board.pin_mode(gpio::GpioMode::PushPullOutput);
+                    self.sdi12_board.disable_interrupt();
                 },
                 SDIPinState::Sdi12Listening => {
                     // set pin mode to INPUT
                     self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                    self.sdi12_board.enable_interrupt();
                 }
                 _ => {
                     // For SDI12_HOLDING, SDI12_DISABLED and SDI12_ENABLED, set pin mode to INPUT
                     self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                    self.sdi12_board.disable_interrupt();
                 }
             }
         }
