@@ -12,7 +12,7 @@ fn exti_triggered(board: &mut dyn rriv_board::RRIVBoard) {
     let gpio = 5;
     let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(gpio, addr);
     defmt::println!("got triggered");
-    board.disable_interrupts();
+    board.disable_interrupt();
     unsafe {
         SDI12_BUFFER = sdi12_service.read_buffer_interrupt(board);
         RECEIEVED = true;
