@@ -903,6 +903,10 @@ impl RRIVBoard for Board {
         NVIC::mask(pac::Interrupt::EXTI2);
     }
 
+    fn get_current_time(&self) -> u32 {
+        cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ
+    }
+
 
 }
 
@@ -946,37 +950,21 @@ fn USB_LP_CAN_RX0() {
     });
 }
 
-// static mut LAST_TICK: u32 = 0;
-// const LOCKOUT_CYCLES: u32 = SYSCLK_MHZ * 10; 
-
 #[interrupt]
 fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
-
+        let now = cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ;
         cortex_m::interrupt::free(|_cs| {
             unsafe {
+                let is_low = (*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0;
+                let gpio_state = if is_low { false } else { true };
                 if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
-                    gpio_interrupt_function();
+                    gpio_interrupt_function(now, gpio_state);
                 }
             }
         });
-        // For debounce implementation
-        // let now = cortex_m::peripheral::DWT::cycle_count();
-        // unsafe {
-        //     // 3. Check if enough time has passed since the last valid interrupt
-        //     if now.wrapping_sub(LAST_TICK) > LOCKOUT_CYCLES {
-        //         LAST_TICK = now;
-
-        //         // 4. Execute your registered callback
-        //         cortex_m::interrupt::free(|_cs| {
-        //             if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
-        //                 gpio_interrupt_function();
-        //             }
-        //         });
-        //     }
-        // }
     }
 }
 
@@ -1377,7 +1365,7 @@ impl BoardBuilder {
         watchdog.feed();
 
         dynamic_gpio_pins.gpio5.make_interrupt_source(&mut afio);
-        dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::Rising);
+        dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::RisingFalling);
         dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
         
         unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };

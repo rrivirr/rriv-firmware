@@ -2,14 +2,26 @@
 
 use rriv_board::gpio;
 
+// SDI-12 Timing Constants (in microseconds)
 const SDI12_TIMING_TOLERANCE: u16 = 400;
-const SDI12_BREAK_DURATION_US: u16 = 12000;
-const SDI12_MARK_DURATION_US: u16 = 8333;
-const SDI12_TICKS_PER_BIT: u16 = 8333; // 1 bit duration at 1200 baud
+const SDI12_BREAK_DURATION_US: u16 = 12100;
+const SDI12_MARK_DURATION_US: u16 = 8400;
+const SDI12_TICKS_PER_BIT: u16 = 833; // 1 bit duration at 1200 baud
 // const SDI12_TIMEOUT : u32 = 100; // timeout for reading response in milliseconds
 const SDI12_GAP: u16 = 5000;
 pub const SDI12_BUFFER_SIZE: usize = 100; // size of the buffer for reading responses
 pub const SDI12_COMMAND_SIZE: usize = 10;
+
+// RX BUFFER DATA
+const WAITING_FOR_START_BIT: u8 = 255;
+static mut LAST_TICK: u32 = 0;
+static mut RX_STATE: u8 = WAITING_FOR_START_BIT;      // 255 means idle state, 0-7 means receiving bits for a byte, 8 means waiting for stop bit
+static mut RX_VALUE: u8 = 0x00;
+static mut RX_MASK: u8 = 0x01;
+
+static mut RX_BUFFER: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
+static mut RX_HEAD: usize = 0;
+static mut RX_TAIL: usize = 0;
 
 #[derive(PartialEq, Debug)]
 pub enum SDIPinState {
@@ -28,6 +40,7 @@ pub trait BoardForSDI12 {
     fn millis(&mut self) -> u32;
     fn enable_interrupt(&mut self);
     fn disable_interrupt(&mut self);
+    fn get_current_time(&self) -> u32;  // microseconds
 }
 
 #[allow(non_camel_case_types)]
@@ -77,6 +90,10 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     // set pin mode to INPUT
                     self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
                     self.sdi12_board.enable_interrupt();
+                    unsafe { 
+                        RX_STATE = WAITING_FOR_START_BIT;     // reset the interrupt state variables
+                        LAST_TICK = self.sdi12_board.get_current_time();
+                    }      
                 }
                 _ => {
                     // For SDI12_HOLDING, SDI12_DISABLED and SDI12_ENABLED, set pin mode to INPUT
@@ -115,40 +132,12 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 iter_count += 1;
                 self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
             }
-            // // check after every 1ms for 12 times to see if it is a valid break
-            // for _ in 0..12 {
-            //     self.sdi12_board.delay_us(1000); // Wait 1ms
-                
-            //     if self.sdi12_board.read() == false {
-            //         defmt::println!("Line dropped low before 12ms");
-            //         return false;
-            //     }
-            // }
-            // defmt::println!("Valid break, waiting...");
-            // // wait for the line to drop LOW
-            // let mut iter_count = 0;
-            // while self.sdi12_board.read() == true {
-            //     if iter_count > 1 {
-            //         defmt::println!("Timeout! line is not falling low");
-            //         return false;
-            //     }
-            //     self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
-            //     iter_count += 1;
-            // }
             self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
             if self.sdi12_board.read() {
                 defmt::println!("Invalid marking");
                 return false;
             }
             self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
-            // defmt::println!("Valid marking");
-            // for _ in 0..8 {
-            //     self.sdi12_board.delay_us(1000);
-            //     if self.sdi12_board.read() {
-            //         defmt::println!("line went high too early, invalid marking");
-            //         return false;
-            //     }
-            // }
             self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
             return true;
         }
@@ -232,44 +221,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         Some(character_data as char)
     }
 
-    pub fn read_char_interrupt(&mut self) -> Option<char> {
-        // defmt::println!("detected a start bit");
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT / 2);
-
-        if self.sdi12_board.read() == false {
-            return None; 
-        }
-
-        let mut byte: u8 = 0;
-
-        for i in 0..8 {
-            self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
-            let bit_value = match self.sdi12_board.read() {
-                true => 0,
-                false => 1
-            };
-            byte |= bit_value << i;
-        }
-
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
-        let stop_bit = self.sdi12_board.read();
-
-        if stop_bit {
-            return None;
-        }
-
-        let character_data = byte & 0x7F;
-
-        // Verify the parity bit here before returning)
-        let parity_bit_received = (byte >> 7) & 1 == 1;
-        let parity_bit_calculated = parity_bit(character_data);
-        if parity_bit_received != parity_bit_calculated {
-            return None;
-        }
-
-        Some(character_data as char)
-    }
-
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Transmitting);
@@ -291,35 +242,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         while bytes_read < SDI12_COMMAND_SIZE {
             self.timeout_counter = self.sdi12_board.millis();
             match self.read_char() {
-                Some(byte) => {
-                    // store the byte in the response buffer
-                    buffer[bytes_read] = byte;
-                    bytes_read += 1;
-                    if byte == '!' {
-                        defmt::println!("buffer[{}] = {}", bytes_read, byte);
-                        break;
-                    }
-                },
-                None => {
-                    defmt::println!("Timeout error");
-                    defmt::println!("buffer[{}] = {}", bytes_read, buffer);
-                    break; // SDI12_timeout or error
-                }
-            }
-        }
-        self.sdi12_board.delay_us(SDI12_GAP);
-
-        buffer
-    }
-
-    pub fn read_command_interrupt(&mut self) -> [char; SDI12_COMMAND_SIZE] {
-        self.set_state(SDIPinState::Sdi12Listening);
-        let mut buffer: [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
-        let mut bytes_read = 0;
-
-        while bytes_read < SDI12_COMMAND_SIZE {
-            self.timeout_counter = self.sdi12_board.millis();
-            match self.read_char_interrupt() {
                 Some(byte) => {
                     // store the byte in the response buffer
                     buffer[bytes_read] = byte;
@@ -381,33 +303,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         buffer
     }
 
-    pub fn read_response_interrupt(&mut self) -> [char; SDI12_BUFFER_SIZE] {
-        // sdi-12 implementation
-        defmt::println!("Reading response...");
-        let mut buffer: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
-        let mut bytes_read = 0;
-        while bytes_read < SDI12_BUFFER_SIZE {
-            self.timeout_counter = self.sdi12_board.millis();
-            match self.read_char_interrupt() {
-                Some(byte) => {
-                    // store the byte in the response buffer
-                    buffer[bytes_read] = byte;
-                    bytes_read += 1;
-                    // defmt::println!("buffer[{}] = {}", bytes_read, byte);
-                    if byte == '\n' {
-                        break;
-                    }
-                },
-                None => {
-                    defmt::println!("Timeout SDI12");
-                    break; // SDI12_timeout or error
-                }
-            }
-        }
-        self.sdi12_board.delay_us(SDI12_GAP);
-        buffer
-    }
-
     pub fn parse_data(&mut self, response: &[char]) -> ([f32; 9], u8) {
         let mut count = 0;
         let mut temp_buf = [0u8; 16]; 
@@ -447,10 +342,46 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         (data, count as u8)
     }
 
+    pub fn available(&mut self) -> usize {
+        unsafe {
+            (RX_TAIL + SDI12_BUFFER_SIZE - RX_HEAD) % SDI12_BUFFER_SIZE
+        }
+    }
+
+    pub fn read(&mut self) -> Option<char> {
+        unsafe {
+            if RX_HEAD == RX_TAIL {
+                None
+            }
+            else {
+                let c = RX_BUFFER[RX_HEAD];
+                RX_HEAD = (RX_HEAD + 1) % SDI12_BUFFER_SIZE;
+                Some(c)
+            }
+        }
+    }
+
+    pub fn peek(&mut self) -> Option<char> {
+        unsafe {
+            if RX_HEAD == RX_TAIL {
+                None
+            }
+            else {
+                Some(RX_BUFFER[RX_HEAD])
+            }
+        }
+    }
+
+    pub fn clear_buffer(&mut self) {
+        unsafe {
+            RX_HEAD = 0;
+            RX_TAIL = 0;
+        }
+    }
 }
 
 // Helper functions
-pub fn parity_bit(byte: u8) -> bool {
+fn parity_bit(byte: u8) -> bool {
     // returns the parity bit for the given byte, true for odd parity, false for even parity
     let mut count = 0;
     for i in 0..8 {
@@ -459,4 +390,96 @@ pub fn parity_bit(byte: u8) -> bool {
         }
     }
     count % 2 == 1
+}
+
+fn num_bits_passed(dt: u32) -> u16 {
+    ((dt + 2) / SDI12_TICKS_PER_BIT as u32) as u16
+}
+
+// Interrupt Handlers
+fn start_char() {
+    unsafe {
+        RX_STATE = 0;
+        RX_VALUE = 0x00;
+        RX_MASK = 0x01;
+    }
+}
+
+fn char_to_buffer(c: char) {
+    unsafe {
+        if (RX_TAIL + 1) % SDI12_BUFFER_SIZE == RX_HEAD {
+            defmt::println!("Buffer overflow, discarding data");
+        }
+        else {
+            RX_BUFFER[RX_TAIL] = c;
+            RX_TAIL = (RX_TAIL + 1) % SDI12_BUFFER_SIZE;
+        }
+    }
+}
+
+pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
+
+    let dt = now.wrapping_sub(unsafe { LAST_TICK });
+    let bits_passed = num_bits_passed(dt);
+    unsafe { LAST_TICK = now; }
+    let mut rx_state = unsafe { RX_STATE };
+    let mut rx_value = unsafe { RX_VALUE };
+    let mut rx_mask = unsafe { RX_MASK };
+
+    // Waiting for start bit
+    if rx_state == WAITING_FOR_START_BIT {
+        if gpio_state == true {
+            // it is a start bit
+            start_char();
+        }
+        return;
+    }
+    else {
+        // Receiving bits for a byte
+        let bits_left = 9 - rx_state;
+
+        let next_char_started = bits_passed > bits_left as u16;
+        let mut bits_to_process = if next_char_started { bits_left } else { bits_passed as u8 };
+        rx_state += bits_to_process;
+
+        if gpio_state == true {
+            while bits_to_process > 0 {
+                rx_value |= rx_mask;      // all the LOW bits are stored as 1
+                rx_mask <<= 1;
+                bits_to_process -= 1;
+            }
+            rx_mask <<= 1;   // for the current bit which is HIGH is stored as 0
+        }
+        else {
+            rx_mask <<= bits_to_process - 1;   // if the bit is LOW, just move the mask
+            rx_value |= rx_mask;  // store the LOW bit as 1
+        }
+
+        if rx_state > 7 {
+            // check parity bit
+            let parity_bit_received = (rx_value >> 7) & 1 == 1;
+            let parity_bit_calculated = parity_bit(rx_value & 0x7F);
+            if parity_bit_received == parity_bit_calculated {
+                char_to_buffer((rx_value & 0x7F) as char);
+            }
+            else {
+                defmt::println!("Parity error, discarding byte");
+                start_char();
+                return;
+            }
+
+            if gpio_state == false || !next_char_started {
+                rx_state = WAITING_FOR_START_BIT;
+            }
+            else {
+                start_char();
+                return;
+            }
+        }
+    }
+    unsafe {
+        RX_STATE = rx_state;
+        RX_VALUE = rx_value;
+        RX_MASK = rx_mask;
+    }
 }

@@ -98,6 +98,11 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
     fn disable_interrupt(&mut self) {
         self.board.disable_interrupt();
     }
+
+    fn get_current_time(&self) -> u32 {
+        self.board.get_current_time()
+    }
+
 }
 
 
@@ -295,6 +300,10 @@ impl<'a> Sdi12TxProcessor {
         }
     }
 
+    pub fn setup(&mut self) {
+        rriv_board::configure_gpio_interrupt_function(sdi12::datalogger_interrupt_handler);
+    }
+
     pub fn send_break(&mut self, board: &mut dyn RRIVBoard) {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
@@ -302,7 +311,7 @@ impl<'a> Sdi12TxProcessor {
     }
 
     #[allow(unused)]
-    pub fn send_command_interrupt(&mut self, board: &mut dyn RRIVBoard, cmd: Sdi12Command) {
+    pub fn send_command(&mut self, board: &mut dyn RRIVBoard, cmd: Sdi12Command) {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
         
@@ -336,11 +345,24 @@ impl<'a> Sdi12TxProcessor {
         sdi12.send_command(command);
     }
 
-    #[allow(unused)]
-    pub fn read_buffer_interrupt(&mut self, board: &mut dyn RRIVBoard) -> [char; SDI12_BUFFER_SIZE] {
+    pub fn read_response(&mut self, board: &mut dyn RRIVBoard) -> [char; SDI12_BUFFER_SIZE] {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
-        sdi12.read_response_interrupt()
+        let mut response : [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
+        let mut i = 0;
+        loop {
+            if sdi12.available() > 0 {
+                if let Some(c) = sdi12.read() {
+                    response[i] = c;
+                    i += 1;
+                    if c == '\n' || i >= SDI12_BUFFER_SIZE {
+                        sdi12.clear_buffer();
+                        break;
+                    }
+                }
+            }
+        }
+        response
     }
 
     #[allow(unused)]

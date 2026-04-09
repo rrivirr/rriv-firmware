@@ -1,23 +1,7 @@
 use crate::{drivers::types::SensorDriver, services::sdi12_service};
 use crate::sensor_name_from_type_id;
-use sdi12::SDI12_BUFFER_SIZE;
 use serde_json::json;
 use super::types::*;
-
-static mut SDI12_BUFFER: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
-static mut RECEIEVED: bool = false;
-
-fn exti_triggered(board: &mut dyn rriv_board::RRIVBoard) {
-    let addr = '0';
-    let gpio = 5;
-    let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(gpio, addr);
-    defmt::println!("got triggered");
-    board.disable_interrupt();
-    unsafe {
-        SDI12_BUFFER = sdi12_service.read_buffer_interrupt(board);
-        RECEIEVED = true;
-    }
-}
     
 #[derive(Copy, Clone)]
 pub struct GroundwaterFlowSDI12SpecialConfiguration {
@@ -123,7 +107,8 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     #[allow(unused)]
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         board.set_gpio_pin_mode(5, rriv_board::gpio::GpioMode::PullDownInput);
-        rriv_board::configure_gpio_interrupt_function(exti_triggered);
+        let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
+        sdi12_service.setup();
     }
 
     fn get_measured_parameter_count(&mut self) -> usize {
@@ -267,19 +252,10 @@ impl GroundwaterFlowSDI12 {
     pub fn command_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
         sdi12_service.send_break(board);
-        sdi12_service.send_command_interrupt(board, sdi12_service::Sdi12Command::HA);
-        let mut timeout = 0;
-        while !unsafe { RECEIEVED } {
-            board.delay_ms(1);
-            timeout += 1;
-            if timeout > 100 { // 100ms timeout
-                defmt::println!("Timeout waiting for HA response");
-                return;
-            }
-        }
-        unsafe { RECEIEVED = false };
+        sdi12_service.send_command(board, sdi12_service::Sdi12Command::HA);
+
         // if received, process the buffer
-        let buffer = unsafe { SDI12_BUFFER };
+        let buffer = sdi12_service.read_response(board);
         let ha_response = sdi12_service.parse_ha_command(buffer);
         match ha_response {
             Some(ha_response) => {
@@ -313,18 +289,10 @@ impl GroundwaterFlowSDI12 {
             sdi12_service.send_break(board);    // Break for D0 only
         }
         let ind_char = (b'0' + (self.index as u8)) as char;
-        sdi12_service.send_command_interrupt(board, sdi12_service::Sdi12Command::D(ind_char));
-        let mut timeout = 0;
-        while !unsafe { RECEIEVED } {
-            board.delay_ms(1);
-            timeout += 1;
-            if timeout > 100 { // 100ms timeout
-                defmt::println!("Timeout waiting for D{} response", self.index);
-                return;
-            }
-        }
+        sdi12_service.send_command(board, sdi12_service::Sdi12Command::D(ind_char));
+
         // if received, process the buffer
-        let buffer = unsafe { SDI12_BUFFER };
+        let buffer = sdi12_service.read_response(board);
         let d_response = sdi12_service.parse_d_command(board, buffer);
         match d_response {
             Some(d_response) => {

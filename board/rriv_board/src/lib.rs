@@ -124,13 +124,14 @@ pub trait RRIVBoard: Send {
 
     fn enable_interrupt(&self);
     fn disable_interrupt(&self);
+    fn get_current_time(&self) -> u32;
 
 }
 
 
-pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn(&mut dyn RRIVBoard)> > = None;
+pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn(u32, bool)> > = None;
 
-pub fn configure_gpio_interrupt_function<T: Fn(&mut dyn RRIVBoard) + 'static>(function: T ) {
+pub fn configure_gpio_interrupt_function<T: Fn(u32, bool) + 'static>(function: T ) {
     // unmask the correct EXTI interrupt for SDI-12 or whatever
     // store the function we actionally want to call
     unsafe {
