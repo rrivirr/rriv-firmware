@@ -956,6 +956,7 @@ fn EXTI2() {
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
         let now = cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ;
+        defmt::println!("GPIO interrupt at {}", now);
         cortex_m::interrupt::free(|_cs| {
             unsafe {
                 let is_low = (*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0;

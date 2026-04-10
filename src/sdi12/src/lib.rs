@@ -449,6 +449,8 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
 
+    defmt::println!("Interrupt! gpio_state: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, dt, bits_passed, rx_state);
+
     // Waiting for start bit
     if rx_state == WAITING_FOR_START_BIT {
         if gpio_state == true {
@@ -511,10 +513,11 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
 
     let dt = now.wrapping_sub(unsafe { LAST_TICK });
     let bits_passed = num_bits_passed(dt);
-    unsafe { LAST_TICK = now; }
     let mut rx_state = unsafe { RX_STATE };
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
+    defmt::println!("Interrupt! gpio_state: {}, LAST_TICK: {}, bits_passed: {}, rx_state: {}", gpio_state, unsafe { LAST_TICK }, bits_passed, rx_state);
+    unsafe { LAST_TICK = now; }
 
     match rx_state {
         WAITING_FOR_BREAK => {

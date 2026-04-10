@@ -369,6 +369,8 @@ impl<'a> Sdi12TxProcessor {
             }
         }
         sdi12.send_command(command);
+        board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}\n", command[0], command[1], command[2], command[3])); // TODO: if self.watch
+
     }
 
     pub fn read_response(&mut self, board: &mut dyn RRIVBoard) -> Result<[char; SDI12_BUFFER_SIZE], &'static str> {
@@ -395,6 +397,7 @@ impl<'a> Sdi12TxProcessor {
                 return Err("Response timeout");
             }
         }
+        board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}\n", response[0], response[1], response[2], response[3], response[4])); // TODO: if self.watch
         Ok(response)
     }
 

@@ -207,6 +207,9 @@ impl DataLogger {
                 // if we are launching into field mode, write column headers to a new file
                 self.write_column_headers_to_storage(board);
             },
+            DataLoggerMode::SDI12 => {
+                sdi12_service::setup();
+            }
             _ => {
                 if self.settings.toggles.enable_interactive_logging() {
                     self.write_column_headers_to_storage(board);
