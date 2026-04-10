@@ -106,10 +106,8 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
 }
 
 
-#[allow(unused)]
-pub fn setup(board: &mut dyn RRIVBoard) {
-    // not implemented, does nothing.  
-    // see notes below
+pub fn setup() {
+    rriv_board::configure_gpio_interrupt_function(sdi12::probe_interrupt_handler);
 }
 
 pub struct Sdi12RxProcessor {
@@ -129,6 +127,7 @@ impl<'a> Sdi12RxProcessor {
         }
     }
 
+    #[allow(unused)]
     pub fn wake_up(&mut self, board: &mut dyn RRIVBoard) {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
@@ -154,22 +153,49 @@ impl<'a> Sdi12RxProcessor {
         self.total_measurements
     }
 
-    pub fn is_awake(&mut self) -> bool {
+    pub fn is_awake(&mut self, board: &mut dyn RRIVBoard) -> bool {
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        self.awake = sdi12.awake();
         self.awake
     }
 
-    pub fn sleep(&mut self) {
+    pub fn sleep(&mut self, board: &mut dyn RRIVBoard) {
         defmt::println!("board asleep");
         self.awake = false;
+        let my_board = Sdi12Board::new(self.gpio, board);
+        let mut sdi12 = SDI12::new(my_board);
+        sdi12.sleep();
     }
 
     pub fn take_message(&mut self, address: char, board: &mut dyn RRIVBoard) -> Result<Sdi12Command, &str> {
-        let my_board = Sdi12Board::new(self.gpio, board);
-        let mut sdi12 = SDI12::new(my_board);
-        let buffer = sdi12.read_command();
+        let mut buffer : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
+        let mut i = 0;
+        let mut now = board.get_current_time();
+        loop {
+            let my_board = Sdi12Board::new(self.gpio, board);
+            let mut sdi12 = SDI12::new(my_board);
+            if sdi12.available() > 0 {
+                if let Some(c) = sdi12.read() {
+                    buffer[i] = c;
+                    i += 1;
+                    if c == '!' || i >= SDI12_COMMAND_SIZE {
+                        sdi12.clear_buffer();
+                        break;
+                    }
+                }
+                now = board.get_current_time(); // reset timeout timer on every received character
+            }
+            else if board.get_current_time().wrapping_sub(now) > 100000 {
+                // timeout after 100 milliseconds
+                defmt::println!("SDI12: command reception timeout");
+                return Err("Command reception timeout");
+            }
+        }
+
         if buffer[0] != address {
+            self.sleep(board);
             board.usb_serial_send(format_args!("SDI12: sleep\n"));
-            self.sleep();
             defmt::println!("{} != {}", buffer[0], address);
             return Err("Address not matching");
         }
@@ -345,12 +371,13 @@ impl<'a> Sdi12TxProcessor {
         sdi12.send_command(command);
     }
 
-    pub fn read_response(&mut self, board: &mut dyn RRIVBoard) -> [char; SDI12_BUFFER_SIZE] {
-        let my_board = Sdi12Board::new(self.gpio, board);
-        let mut sdi12 = SDI12::new(my_board);
-        let mut response : [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
+    pub fn read_response(&mut self, board: &mut dyn RRIVBoard) -> Result<[char; SDI12_BUFFER_SIZE], &'static str> {
+        let mut now = board.get_current_time();
         let mut i = 0;
+        let mut response : [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
         loop {
+            let my_board = Sdi12Board::new(self.gpio, board);
+            let mut sdi12 = SDI12::new(my_board);
             if sdi12.available() > 0 {
                 if let Some(c) = sdi12.read() {
                     response[i] = c;
@@ -360,9 +387,15 @@ impl<'a> Sdi12TxProcessor {
                         break;
                     }
                 }
+                now = board.get_current_time(); // reset timeout timer on every received character
+            }
+            else if board.get_current_time().wrapping_sub(now) > 15000 {
+                // timeout after 15 milliseconds
+                defmt::println!("SDI12: response timeout");
+                return Err("Response timeout");
             }
         }
-        response
+        Ok(response)
     }
 
     #[allow(unused)]

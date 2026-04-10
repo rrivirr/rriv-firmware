@@ -424,11 +424,11 @@ impl DataLogger {
             DataLoggerMode::SDI12 => {
                 let mut take_measurement = false;
                 if let Some(sdi12_service) = &mut self.sdi12_service {
-                    if sdi12_service.is_awake() == false {
-                        sdi12_service.wake_up(board);
-                    }
+                    // if sdi12_service.is_awake() == false {
+                    //     sdi12_service.wake_up(board);
+                    // }
 
-                    if sdi12_service.is_awake() {
+                    if sdi12_service.is_awake(board) {
                         defmt::println!("board awake!");
                         match sdi12_service.take_message('0', board) {
                             Ok(mode) => {
@@ -451,8 +451,8 @@ impl DataLogger {
                                         sdi12_service.send_ha_ack(board, '0', measurement_time, total_measurements_count);
                                         sdi12_service.set_total_measurements(total_measurements_count);
                                         take_measurement = true;
+                                        sdi12_service.sleep(board); // this sensor doesn't have readings immediately available.
                                         board.usb_serial_send(format_args!("SDI12: sleep\n"));
-                                        sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
                                     }
 
                                     Sdi12Command::Mc(digit) => {
@@ -473,42 +473,14 @@ impl DataLogger {
                                             sdi12_service.send_m_ack(board, '0', measurement_time, n);
                                             sdi12_service.set_total_measurements(n as usize);
                                             take_measurement = true;
+                                            sdi12_service.sleep(board); // this sensor doesn't have readings immediately available.
                                             board.usb_serial_send(format_args!("SDI12: sleep\n"));
-                                            sdi12_service.sleep(); // this sensor doesn't have readings immediately available.
                                         }
                                         defmt::println!("Sent Ack to M");
                                     }
 
                                     Sdi12Command::D(digit) => {
                                        
-                                        // if digit == '0' {
-                                            // defmt::println!("Build data");
-                                            // let mut total_measurements: usize = 0;
-                                            // let mut data: [f64; 9] = [0_f64; 9];
-                                            // for i in 0 .. self.sensor_drivers.len() {
-                                            //     if let Some(ref mut driver) = self.sensor_drivers[i] {
-                                            //         total_measurements = total_measurements + driver.get_measured_parameter_count();
-                                            //     }
-                                            // }
-
-                                            // let measurements_in_payload: u8 = if total_measurements > 9 { 9 } else { total_measurements as u8 };
-                                            // defmt::println!("Build data");
-
-                                            // let mut measurement_index = 0;
-                                            // 'outer: for i in 0 .. self.sensor_drivers.len() {
-                                            //     if let Some(ref mut driver) = self.sensor_drivers[i] {
-                                            //         for j in 0..driver.get_measured_parameter_count() {
-                                            //             data[measurement_index] = match driver.get_measured_parameter_value(j) {
-                                            //                 Ok(value) => value,
-                                            //                 Err(_) => f64::MAX,
-                                            //             };
-                                            //             measurement_index = measurement_index + 1;
-                                            //             if measurement_index >= measurements_in_payload as usize {
-                                            //                 break 'outer;
-                                            //             }
-                                            //         }
-                                            //     }
-                                            // }
                                             let mut data_send: [f64; MEASUREMENTS_IN_PAYLOAD as usize] = [f64::MAX; MEASUREMENTS_IN_PAYLOAD as usize];
 
                                             let index = digit.to_digit(10);
@@ -530,8 +502,8 @@ impl DataLogger {
                                             sdi12_service.send_data(board, '0', data_send, MEASUREMENTS_IN_PAYLOAD);
                                             defmt::println!("Sent data");
                                             if end == sdi12_service.get_total_measurements() {
+                                                sdi12_service.sleep(board);
                                                 board.usb_serial_send(format_args!("SDI12: sleep\n"));
-                                                sdi12_service.sleep();
                                             }
                                         // }
                                     }
@@ -940,6 +912,7 @@ impl DataLogger {
                     "sdi12" => {
                         self.mode = DataLoggerMode::SDI12;
                         self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                        sdi12_service::setup();
                         board.set_debug(false);
                         persist = true;
                         defmt::println!("In SDI12 mode!");

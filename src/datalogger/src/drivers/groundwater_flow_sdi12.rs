@@ -256,7 +256,13 @@ impl GroundwaterFlowSDI12 {
 
         // if received, process the buffer
         let buffer = sdi12_service.read_response(board);
-        let ha_response = sdi12_service.parse_ha_command(buffer);
+        if buffer.is_err() {
+            self.num_data = 0;
+            defmt::println!("Timeout to HA command. Retrying...");
+            self.mode = 0; // stay in command mode
+            return;
+        }
+        let ha_response = sdi12_service.parse_ha_command(buffer.unwrap());
         match ha_response {
             Some(ha_response) => {
                 self.num_data = ha_response.nnn as usize;
@@ -293,7 +299,12 @@ impl GroundwaterFlowSDI12 {
 
         // if received, process the buffer
         let buffer = sdi12_service.read_response(board);
-        let d_response = sdi12_service.parse_d_command(board, buffer);
+        if buffer.is_err() {
+            defmt::println!("Timeout to D{} command. Retrying...", self.index);
+            self.mode = 1; // stay in data mode to try again
+            return;
+        }
+        let d_response = sdi12_service.parse_d_command(board, buffer.unwrap());
         match d_response {
             Some(d_response) => {
                 let end = self.start + d_response.count as usize;

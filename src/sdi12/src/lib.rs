@@ -14,6 +14,10 @@ pub const SDI12_COMMAND_SIZE: usize = 10;
 
 // RX BUFFER DATA
 const WAITING_FOR_START_BIT: u8 = 255;
+const WAITING_FOR_BREAK: u8 = 254;
+const WAITING_FOR_MARK: u8 = 253;
+const WAITING_FOR_START_AFTER_BREAK: u8 = 252;
+
 static mut LAST_TICK: u32 = 0;
 static mut RX_STATE: u8 = WAITING_FOR_START_BIT;      // 255 means idle state, 0-7 means receiving bits for a byte, 8 means waiting for stop bit
 static mut RX_VALUE: u8 = 0x00;
@@ -23,9 +27,11 @@ static mut RX_BUFFER: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
 static mut RX_HEAD: usize = 0;
 static mut RX_TAIL: usize = 0;
 
+static mut RECEIVED_BREAK: bool = false;
+
 #[derive(PartialEq, Debug)]
 pub enum SDIPinState {
-    Sdi12Disabled,         // SDI-12 is disabled, pin mode INPUT, interrupts disabled for the pin
+    Sdi12Sleep,            // SDI-12 slave is sleeping, pin mode INPUT, interrupts enabled for the pin
     Sdi12Enabled,          // SDI-12 is enabled, pin mode INPUT, interrupts disabled for the pin 
     Sdi12Holding,          // The line is being held LOW, pin mode OUTPUT, interrupts disabled for the pin
     Sdi12Transmitting,     // Data is being transmitted by the SDI-12 master, pin mode OUTPUT, interrupts disabled for the pin
@@ -95,8 +101,17 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                         LAST_TICK = self.sdi12_board.get_current_time();
                     }      
                 }
+                SDIPinState::Sdi12Sleep => {
+                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                    self.sdi12_board.enable_interrupt();
+                    unsafe { 
+                        RX_STATE = WAITING_FOR_BREAK;     // reset the interrupt state variables
+                        RECEIVED_BREAK = false;
+                        LAST_TICK = self.sdi12_board.get_current_time();
+                    }  
+                }
                 _ => {
-                    // For SDI12_HOLDING, SDI12_DISABLED and SDI12_ENABLED, set pin mode to INPUT
+                    // For SDI12_HOLDING and SDI12_ENABLED, set pin mode to INPUT
                     self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
                     self.sdi12_board.disable_interrupt();
                 }
@@ -378,6 +393,14 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             RX_TAIL = 0;
         }
     }
+
+    pub fn sleep(&mut self) {
+        self.set_state(SDIPinState::Sdi12Sleep);
+    }
+
+    pub fn awake(&mut self) -> bool {
+        unsafe { RECEIVED_BREAK }
+    }
 }
 
 // Helper functions
@@ -477,6 +500,112 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
             }
         }
     }
+    unsafe {
+        RX_STATE = rx_state;
+        RX_VALUE = rx_value;
+        RX_MASK = rx_mask;
+    }
+}
+
+pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
+
+    let dt = now.wrapping_sub(unsafe { LAST_TICK });
+    let bits_passed = num_bits_passed(dt);
+    unsafe { LAST_TICK = now; }
+    let mut rx_state = unsafe { RX_STATE };
+    let mut rx_value = unsafe { RX_VALUE };
+    let mut rx_mask = unsafe { RX_MASK };
+
+    match rx_state {
+        WAITING_FOR_BREAK => {
+            if gpio_state == true {
+                defmt::println!("Break started!");
+                rx_state = WAITING_FOR_MARK;
+            }
+        }
+        WAITING_FOR_MARK => {
+            if gpio_state == false {
+                if dt > (SDI12_MARK_DURATION_US - SDI12_TIMING_TOLERANCE) as u32 {
+                    defmt::println!("Valid marking condition detected, ready to receive data");
+                    rx_state = WAITING_FOR_START_AFTER_BREAK;
+                }
+                else {
+                    defmt::println!("Invalid marking condition, waiting for break again");
+                    rx_state = WAITING_FOR_BREAK;
+                }
+            }
+            else {
+                rx_state = WAITING_FOR_BREAK;
+            }
+        }
+        WAITING_FOR_START_AFTER_BREAK => {
+            if gpio_state == true {
+                // it is a start bit after valid marking condition
+                if dt > (SDI12_MARK_DURATION_US - SDI12_TIMING_TOLERANCE) as u32 {
+                    unsafe { RECEIVED_BREAK = true; }
+                    start_char();
+                    return;
+                }
+                else {
+                    defmt::println!("Invalid marking condition, waiting for break again");
+                    rx_state = WAITING_FOR_BREAK;
+                }
+            }
+            else {
+                rx_state = WAITING_FOR_BREAK;
+            }
+        }
+        WAITING_FOR_START_BIT => {
+            if gpio_state == true {
+                // it is a start bit
+                start_char();
+                return;
+            }
+        }
+        _ => {
+            // Receiving bits for a byte
+            let bits_left = 9 - rx_state;
+            let next_char_started = bits_passed > bits_left as u16;
+            let mut bits_to_process = if next_char_started { bits_left } else { bits_passed as u8 };
+            rx_state += bits_to_process;
+
+            if gpio_state == true {
+                while bits_to_process > 0 {
+                    rx_value |= rx_mask;      // all the LOW bits are stored as 1
+                    rx_mask <<= 1;
+                    bits_to_process -= 1;
+                }
+                rx_mask <<= 1;   // for the current bit which is HIGH is stored as 0
+            }
+            else {
+                rx_mask <<= bits_to_process - 1;   // if the bit is LOW, just move the mask
+                rx_value |= rx_mask;  // store the LOW bit as 1
+            }
+
+            if rx_state > 7 {
+                // check parity bit
+                let parity_bit_received = (rx_value >> 7) & 1 == 1;
+                let parity_bit_calculated = parity_bit(rx_value & 0x7F);
+                if parity_bit_received == parity_bit_calculated {
+                    char_to_buffer((rx_value & 0x7F) as char);
+                }
+                else {
+                    defmt::println!("Parity error, discarding byte");
+                    start_char();
+                    return;
+                }
+
+                if gpio_state == false || !next_char_started {
+                    rx_state = WAITING_FOR_START_BIT;
+                }
+                else {
+                    start_char();
+                    return;
+                }
+            }
+        }
+    }
+
     unsafe {
         RX_STATE = rx_state;
         RX_VALUE = rx_value;
