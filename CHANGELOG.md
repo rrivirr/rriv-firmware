@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/rrivirr/rriv-firmware/compare/v1.12.6...v1.13.0) (2026-04-11)
+
+
+### Features
+
+* separate device ids ([c1204da](https://github.com/rrivirr/rriv-firmware/commit/c1204da20f8d8a945e7a3fc23022648d2b2b4d99))
+
 ## [1.12.6](https://github.com/rrivirr/rriv-firmware/compare/v1.12.5...v1.12.6) (2026-03-17)
 
 
