@@ -1151,10 +1151,46 @@ impl BoardBuilder {
 
             USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
 
+            let uid: [u8;12] = Uid::fetch().bytes();
+
+            let arg = format_args!("rriv_{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+                    uid[0],
+                    uid[1],
+                    uid[2],
+                    uid[3],
+                    uid[4],
+                    uid[5],
+                    uid[6],
+                    uid[7],
+                    uid[8],
+                    uid[9],
+                    uid[10],
+                    uid[11]);
+
+
+            #[allow(unused_assignments)]
+            let mut uid_string: &str = "rriv";
+            static mut BUF:[u8;29] = [0u8; 29];
+
+            match format_no_std::show(
+                    &mut BUF,
+                    arg
+                ) {
+                    Ok(formatted) => {
+                        defmt::println!("{}", formatted); // TODO: this uses format!
+                        uid_string = formatted;
+                    }
+                    Err(e) => {
+                        // doesn't matter
+                    },
+                }
+
+            defmt::println!("{}", uid_string);
+
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
-                .product("RRIV Data Logger")
-                .serial_number("_rriv")
+                .product("Data Logger")
+                .serial_number(uid_string)
                 .device_class(USB_CLASS_CDC)
                 .build();
 
