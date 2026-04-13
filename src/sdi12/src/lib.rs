@@ -399,7 +399,11 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     }
 
     pub fn awake(&mut self) -> bool {
-        unsafe { RECEIVED_BREAK }
+        let received_break = unsafe { RECEIVED_BREAK };
+        if !received_break {
+            self.set_state(SDIPinState::Sdi12Sleep);
+        }
+        received_break
     }
 }
 
@@ -516,7 +520,7 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
     let mut rx_state = unsafe { RX_STATE };
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
-    defmt::println!("Interrupt! gpio_state: {}, LAST_TICK: {}, bits_passed: {}, rx_state: {}", gpio_state, unsafe { LAST_TICK }, bits_passed, rx_state);
+    defmt::println!("Interrupt! gpio_state: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, dt, bits_passed, rx_state);
     unsafe { LAST_TICK = now; }
 
     match rx_state {

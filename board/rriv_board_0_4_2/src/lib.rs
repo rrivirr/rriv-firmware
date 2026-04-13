@@ -955,8 +955,9 @@ fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
-        let now = cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ;
+        let now = cortex_m::peripheral::DWT::cycle_count();
         defmt::println!("GPIO interrupt at {}", now);
+        let now = now / SYSCLK_MHZ; // convert to microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
                 let is_low = (*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0;
@@ -1465,6 +1466,7 @@ impl BoardBuilder {
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
         // defmt::println!("starting i2c");
+        core_peripherals.DCB.enable_trace();
         core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
