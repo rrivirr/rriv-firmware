@@ -106,8 +106,11 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
 }
 
 
-pub fn setup() {
+pub fn setup(board: &mut dyn RRIVBoard, gpio: u8) {
     rriv_board::configure_gpio_interrupt_function(sdi12::probe_interrupt_handler);
+    let my_board = Sdi12Board::new(gpio, board);
+    let mut sdi12 = SDI12::new(my_board);
+    sdi12.sleep();
 }
 
 pub struct Sdi12RxProcessor {
@@ -122,7 +125,7 @@ impl<'a> Sdi12RxProcessor {
         Sdi12RxProcessor {
             gpio: gpio,
             awake: false,
-            data: [f64::MAX; 36],
+            data: [-5.0; 36],
             total_measurements: 0,
         }
     }
@@ -275,7 +278,39 @@ impl<'a> Sdi12RxProcessor {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
         sdi12.send_response(resp_buffer);
-        board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
+        // board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
+        //     resp_buffer[0], 
+        //     resp_buffer[1], 
+        //     resp_buffer[2], 
+        //     resp_buffer[3], 
+        //     resp_buffer[4], 
+        //     resp_buffer[5], 
+        //     resp_buffer[6], 
+        //     resp_buffer[7], 
+        //     resp_buffer[8],
+        //     resp_buffer[9],
+        //     resp_buffer[10], 
+        //     resp_buffer[11], 
+        //     resp_buffer[12], 
+        //     resp_buffer[13], 
+        //     resp_buffer[14], 
+        //     resp_buffer[15], 
+        //     resp_buffer[16], 
+        //     resp_buffer[17], 
+        //     resp_buffer[18],
+        //     resp_buffer[19],
+        //     resp_buffer[20], 
+        //     resp_buffer[21], 
+        //     resp_buffer[22], 
+        //     resp_buffer[23], 
+        //     resp_buffer[24], 
+        //     resp_buffer[25], 
+        //     resp_buffer[26], 
+        //     resp_buffer[27], 
+        //     resp_buffer[28],
+        //     resp_buffer[29]
+        // )); // TODO: if self.watch
+        defmt::println!("SDI12: sent {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
             resp_buffer[0], 
             resp_buffer[1], 
             resp_buffer[2], 
@@ -306,7 +341,7 @@ impl<'a> Sdi12RxProcessor {
             resp_buffer[27], 
             resp_buffer[28],
             resp_buffer[29]
-        )); // TODO: if self.watch
+        ); // TODO: if self.watch
 
     }
 }
@@ -333,6 +368,7 @@ impl<'a> Sdi12TxProcessor {
     pub fn send_break(&mut self, board: &mut dyn RRIVBoard) {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
+        defmt::println!("Sent break");
         sdi12.send_break();
     }
 
@@ -369,7 +405,8 @@ impl<'a> Sdi12TxProcessor {
             }
         }
         sdi12.send_command(command);
-        board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}\n", command[0], command[1], command[2], command[3])); // TODO: if self.watch
+        defmt::println!("SDI12: sent {}{}{}{}", command[0], command[1], command[2], command[3]);
+        // board.usb_serial_send(format_args!("SDI12: sent {}{}{}{}\n", command[0], command[1], command[2], command[3])); // TODO: if self.watch
 
     }
 
@@ -384,6 +421,7 @@ impl<'a> Sdi12TxProcessor {
                 if let Some(c) = sdi12.read() {
                     response[i] = c;
                     i += 1;
+                    // defmt::println!("SDI12: read char {}", c);
                     if c == '\n' || i >= SDI12_BUFFER_SIZE {
                         sdi12.clear_buffer();
                         break;
@@ -391,13 +429,17 @@ impl<'a> Sdi12TxProcessor {
                 }
                 now = board.get_current_time(); // reset timeout timer on every received character
             }
-            else if board.get_current_time().wrapping_sub(now) > 15000 {
+            else if board.get_current_time().wrapping_sub(now) > 150000 {
                 // timeout after 15 milliseconds
                 defmt::println!("SDI12: response timeout");
+                let my_board = Sdi12Board::new(self.gpio, board);
+                let mut sdi12 = SDI12::new(my_board);
+                sdi12.clear_buffer();
                 return Err("Response timeout");
             }
         }
-        board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}\n", response[0], response[1], response[2], response[3], response[4])); // TODO: if self.watch
+        defmt::println!("SDI12: received {}{}{}{}{}\n", response[0], response[1], response[2], response[3], response[4]);
+        // board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}\n", response[0], response[1], response[2], response[3], response[4])); // TODO: if self.watch
         Ok(response)
     }
 
@@ -463,38 +505,38 @@ impl<'a> Sdi12TxProcessor {
             resp.data[i] = parsed_data[i];
         }
         
-        board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
-            response[0], 
-            response[1], 
-            response[2], 
-            response[3], 
-            response[4], 
-            response[5], 
-            response[6], 
-            response[7], 
-            response[8],
-            response[9],
-            response[10], 
-            response[11], 
-            response[12], 
-            response[13], 
-            response[14], 
-            response[15], 
-            response[16], 
-            response[17], 
-            response[18],
-            response[19],
-            response[20], 
-            response[21], 
-            response[22], 
-            response[23], 
-            response[24], 
-            response[25], 
-            response[26], 
-            response[27], 
-            response[28],
-            response[29]
-        )); // TODO: if self.watch
+        // board.usb_serial_send(format_args!("SDI12: received {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}\n", 
+        //     response[0], 
+        //     response[1], 
+        //     response[2], 
+        //     response[3], 
+        //     response[4], 
+        //     response[5], 
+        //     response[6], 
+        //     response[7], 
+        //     response[8],
+        //     response[9],
+        //     response[10], 
+        //     response[11], 
+        //     response[12], 
+        //     response[13], 
+        //     response[14], 
+        //     response[15], 
+        //     response[16], 
+        //     response[17], 
+        //     response[18],
+        //     response[19],
+        //     response[20], 
+        //     response[21], 
+        //     response[22], 
+        //     response[23], 
+        //     response[24], 
+        //     response[25], 
+        //     response[26], 
+        //     response[27], 
+        //     response[28],
+        //     response[29]
+        // )); // TODO: if self.watch
 
         Some(resp)
     }

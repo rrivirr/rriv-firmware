@@ -291,9 +291,9 @@ impl GroundwaterFlowSDI12 {
 
     pub fn data_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
-        if self.index == 0 {
+        // if self.index == 0 {
             sdi12_service.send_break(board);    // Break for D0 only
-        }
+        // }
         let ind_char = (b'0' + (self.index as u8)) as char;
         sdi12_service.send_command(board, sdi12_service::Sdi12Command::D(ind_char));
 
@@ -310,27 +310,32 @@ impl GroundwaterFlowSDI12 {
                 let end = self.start + d_response.count as usize;
                 for i in self.start..end {
                     self.data_received[i] = d_response.data[i-self.start];
+                    defmt::println!("Received data[{}]: {}", i, self.data_received[i]);
                 }
 
-                if end == self.num_data as usize {
+                if end >= self.num_data as usize {
                     defmt::println!("Received all data!");
                     self.mode = 0; // switch back to command mode for next measurement
-                    return;
+                    self.index = 0;
+                    self.start = 0;
                 }
-                self.start = end;
-                if self.index == 999 {
+                else if self.index == 999 {
                     defmt::println!("Sent D999 and still didn't receive all the data");
                     self.mode = 0; // switch back to command mode to try again next time
-                    return;
+                    self.index = 0;
+                    self.start = 0;
                 }
-                self.index += 1;
+                else {
+                    self.start = end;
+                    self.index += 1;
+                }
             },
             None => {
                 defmt::println!("Invalid ack to D{} command.", self.index);
                 self.mode = 1; // stay in data mode to try again
-                return;
             }
         }
+        board.delay_ms(1000);
     }
 
 }

@@ -84,37 +84,37 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn set_state(&mut self, state: SDIPinState) {
         // set the digital pin to the specified value
-        if self.state != state {
-            self.state = state;
-            match self.state {
-                SDIPinState::Sdi12Transmitting => {
-                    // set pin mode to OUTPUT
-                    self.sdi12_board.pin_mode(gpio::GpioMode::PushPullOutput);
-                    self.sdi12_board.disable_interrupt();
-                },
-                SDIPinState::Sdi12Listening => {
-                    // set pin mode to INPUT
-                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
-                    self.sdi12_board.enable_interrupt();
-                    unsafe { 
-                        RX_STATE = WAITING_FOR_START_BIT;     // reset the interrupt state variables
-                        LAST_TICK = self.sdi12_board.get_current_time();
-                    }      
+        self.state = state;
+        match self.state {
+            SDIPinState::Sdi12Transmitting => {
+                // set pin mode to OUTPUT
+                self.sdi12_board.pin_mode(gpio::GpioMode::PushPullOutput);
+                self.sdi12_board.disable_interrupt();
+            },
+            SDIPinState::Sdi12Listening => {
+                // set pin mode to INPUT
+                self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);        
+                unsafe { 
+                    RX_STATE = WAITING_FOR_START_BIT;     // reset the interrupt state variables
+                    LAST_TICK = self.sdi12_board.get_current_time();
                 }
-                SDIPinState::Sdi12Sleep => {
-                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
-                    self.sdi12_board.enable_interrupt();
-                    unsafe { 
-                        RX_STATE = WAITING_FOR_BREAK;     // reset the interrupt state variables
-                        RECEIVED_BREAK = false;
-                        LAST_TICK = self.sdi12_board.get_current_time();
-                    }  
-                }
-                _ => {
-                    // For SDI12_HOLDING and SDI12_ENABLED, set pin mode to INPUT
-                    self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
-                    self.sdi12_board.disable_interrupt();
-                }
+                self.sdi12_board.enable_interrupt();
+                defmt::println!("State changed to: Sdi12Listening");      
+            }
+            SDIPinState::Sdi12Sleep => {
+                self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                unsafe { 
+                    RX_STATE = WAITING_FOR_BREAK;     // reset the interrupt state variables
+                    RECEIVED_BREAK = false;
+                    LAST_TICK = self.sdi12_board.get_current_time();
+                }  
+                self.sdi12_board.enable_interrupt();
+                defmt::println!("State changed to: Sdi12Sleep");
+            }
+            _ => {
+                // For SDI12_HOLDING and SDI12_ENABLED, set pin mode to INPUT
+                self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
+                self.sdi12_board.disable_interrupt();
             }
         }
     }
@@ -159,25 +159,89 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         return false;
     }
 
-    pub fn write_char(&mut self, c: char) {
-        // sdi-12 write character implementation
-        // convert char to byte and write it bit by bit, LSB first, with a start bit and a stop bit
-        let mut byte = c as u8;
-        let parity = parity_bit(byte);
-        byte |= (parity as u8) << 7;    // add parity bit as the most significant bit
+    // pub fn write_char(&mut self, c: char) {
+    //     // sdi-12 write character implementation
+    //     // convert char to byte and write it bit by bit, LSB first, with a start bit and a stop bit
+    //     let mut byte = c as u8;
+    //     let parity = parity_bit(byte);
+    //     byte |= (parity as u8) << 7;    // add parity bit as the most significant bit
 
-        // start bit
-        self.sdi12_board.write(true);
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
-        // data bits
-        for i in 0..8 {
-            let bit = (byte >> i) & 1;
-            self.sdi12_board.write(bit == 0);
-            self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //     // start bit
+    //     self.sdi12_board.write(true);
+    //     self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //     // data bits
+    //     for i in 0..8 {
+    //         let bit = (byte >> i) & 1;
+    //         self.sdi12_board.write(bit == 0);
+    //         self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //     }
+    //     // stop bit
+    //     self.sdi12_board.write(false);
+    //     self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    // }
+
+    pub fn write_char(&mut self, c: char) {
+        let mut out_char = c as u8;
+        let ticks_per_bit: u32 = SDI12_TICKS_PER_BIT as u32; // SDI12_TICKS_PER_BIT
+        
+        let mut start_time = self.sdi12_board.get_current_time();
+
+        // 1. Immediately get going on the start bit (HIGH)
+        self.sdi12_board.write(true); 
+
+        // 2. Calculate parity while the start bit is physically holding the line
+        let parity_bit = (out_char.count_ones() as u8) & 1; 
+        out_char |= parity_bit << 7; 
+
+        // 3. Calculate the position of the last bit that is a 0/HIGH.
+        let mut last_high_bit: u8 = 9;
+        let mut msb_mask: u8 = 0x80;
+        
+        while (msb_mask & out_char) != 0 {
+            last_high_bit -= 1;
+            msb_mask >>= 1;
         }
-        // stop bit
+
+        // 4. Hold the line for the rest of the start bit duration
+        while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
+        start_time = start_time.wrapping_add(ticks_per_bit); 
+
+        // 5. Send data bits until the last bit different from marking (LOW)
+        let mut current_tx_bit_num: u8 = 1;
+        
+        while current_tx_bit_num < last_high_bit {
+            let bit_value = out_char & 0x01;
+            
+            if bit_value != 0 {
+                self.sdi12_board.write(false); // LOW for 1's
+            } else {
+                self.sdi12_board.write(true);  // HIGH for 0's
+            }
+
+            // Wait for bit duration
+            while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
+            start_time = start_time.wrapping_add(ticks_per_bit);
+
+            out_char >>= 1; 
+            current_tx_bit_num += 1;
+        }
+
+        // 6. Set the line LOW for the remaining 1's AND the stop bit
         self.sdi12_board.write(false);
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+
+        // =========================================================
+        // ARCHITECTURE NOTE: 
+        // In the C++ version, interrupts were turned back on right here.
+        // Since your caller manages interrupts, the CPU will remain 
+        // "deaf" to interrupts during this final sleep block as well. 
+        // =========================================================
+
+        // 7. Hold the line LOW until the end of the 10th bit
+        let remaining_bits = 10 - last_high_bit;
+        let bit_time_remaining = ticks_per_bit * (remaining_bits as u32);
+        
+        // Notice we use `start_time` here, so the trailing bits stay locked to the grid
+        while self.sdi12_board.get_current_time().wrapping_sub(start_time) < bit_time_remaining {}
     }
 
     pub fn read_char(&mut self) -> Option<char> {
@@ -239,6 +303,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Transmitting);
+        self.sdi12_board.delay_us(SDI12_GAP);
         for c in command.iter() {
             self.write_char(*c);
             if *c == '!' {
@@ -246,6 +311,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
             // self.sdi12_board.delay_us(SDI12_GAP);
         }
+        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+        defmt::println!("Command sent, switching to listening mode");
         self.set_state(SDIPinState::Sdi12Listening);
     }
 
@@ -280,6 +347,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn send_response(&mut self, data: [char; SDI12_BUFFER_SIZE]) {
         self.set_state(SDIPinState::Sdi12Transmitting);
+        self.sdi12_board.delay_us(SDI12_GAP);
         for c in data.iter() {
             self.write_char(*c);
             if *c == '\n' {
@@ -287,7 +355,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
             // self.sdi12_board.delay_us(SDI12_GAP);
         }
-        self.set_state(SDIPinState::Sdi12Listening);
+        // self.set_state(SDIPinState::Sdi12Listening);
     }
 
     pub fn read_response(&mut self) -> [char; SDI12_BUFFER_SIZE] {
@@ -400,9 +468,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn awake(&mut self) -> bool {
         let received_break = unsafe { RECEIVED_BREAK };
-        if !received_break {
-            self.set_state(SDIPinState::Sdi12Sleep);
-        }
         received_break
     }
 }
@@ -453,7 +518,7 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
 
-    defmt::println!("Interrupt! gpio_state: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, dt, bits_passed, rx_state);
+    // defmt::println!("Interrupt! gpio_state: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, dt, bits_passed, rx_state);
 
     // Waiting for start bit
     if rx_state == WAITING_FOR_START_BIT {
@@ -486,16 +551,17 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
 
         if rx_state > 7 {
             // check parity bit
-            let parity_bit_received = (rx_value >> 7) & 1 == 1;
-            let parity_bit_calculated = parity_bit(rx_value & 0x7F);
-            if parity_bit_received == parity_bit_calculated {
-                char_to_buffer((rx_value & 0x7F) as char);
-            }
-            else {
-                defmt::println!("Parity error, discarding byte");
-                start_char();
-                return;
-            }
+            // let parity_bit_received = (rx_value >> 7) & 1 == 0;
+            // let parity_bit_calculated = parity_bit(rx_value & 0x7F);
+            // if parity_bit_received == parity_bit_calculated {
+            //     char_to_buffer((rx_value & 0x7F) as char);
+            // }
+            // else {
+            //     defmt::println!("Parity error, discarding byte");
+            //     start_char();
+            //     return;
+            // }
+            char_to_buffer((rx_value & 0x7F) as char);
 
             if gpio_state == false || !next_char_started {
                 rx_state = WAITING_FOR_START_BIT;
@@ -520,7 +586,7 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
     let mut rx_state = unsafe { RX_STATE };
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
-    defmt::println!("Interrupt! gpio_state: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, dt, bits_passed, rx_state);
+    // defmt::println!("Interrupt! gpio_state: {}, LAST_TICK: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, unsafe { LAST_TICK }, dt, bits_passed, rx_state);
     unsafe { LAST_TICK = now; }
 
     match rx_state {
@@ -591,17 +657,17 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
 
             if rx_state > 7 {
                 // check parity bit
-                let parity_bit_received = (rx_value >> 7) & 1 == 1;
-                let parity_bit_calculated = parity_bit(rx_value & 0x7F);
-                if parity_bit_received == parity_bit_calculated {
-                    char_to_buffer((rx_value & 0x7F) as char);
-                }
-                else {
-                    defmt::println!("Parity error, discarding byte");
-                    start_char();
-                    return;
-                }
-
+                // let parity_bit_received = (rx_value >> 7) & 1 == 0;
+                // let parity_bit_calculated = parity_bit(rx_value & 0x7F);
+                // if parity_bit_received == parity_bit_calculated {
+                //     char_to_buffer((rx_value & 0x7F) as char);
+                // }
+                // else {
+                //     defmt::println!("Parity error, discarding byte");
+                //     start_char();
+                //     return;
+                // }
+                char_to_buffer((rx_value & 0x7F) as char);
                 if gpio_state == false || !next_char_started {
                     rx_state = WAITING_FOR_START_BIT;
                 }

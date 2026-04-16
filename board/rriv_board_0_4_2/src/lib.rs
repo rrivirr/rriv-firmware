@@ -956,17 +956,17 @@ fn EXTI2() {
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
         let now = cortex_m::peripheral::DWT::cycle_count();
-        defmt::println!("GPIO interrupt at {}", now);
+        let is_low = unsafe {(*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0 };
+        let gpio_state = if is_low { false } else { true };
         let now = now / SYSCLK_MHZ; // convert to microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
-                let is_low = (*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0;
-                let gpio_state = if is_low { false } else { true };
                 if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
                     gpio_interrupt_function(now, gpio_state);
                 }
             }
         });
+        // defmt::println!("GPIO interrupt at {}", now);
     }
 }
 
@@ -1370,7 +1370,9 @@ impl BoardBuilder {
         dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::RisingFalling);
         dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
         
-        unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+        // unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+        // Disable interrupts on start
+        NVIC::mask(pac::Interrupt::EXTI2);
 
 
         BoardBuilder::setup_serial(
