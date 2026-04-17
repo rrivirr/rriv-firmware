@@ -22,3 +22,7 @@ format_no_std = "1.2.0"
 defmt = "1.0.1"
 num-traits = { version = "0.2", default-features = false }
 
+
+[features]
+default = []
+sdi-12-locked = []
