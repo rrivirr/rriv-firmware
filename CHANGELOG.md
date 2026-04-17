@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.2](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.1...v1.14.0-preview-sdi12-pwm-groundwater.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* use the true parameter count ([73174dd](https://github.com/rrivirr/rriv-firmware/commit/73174dd6e91b08823af42e08bcaf8d35336cf8a2))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.1](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0...v1.14.0-preview-sdi12-pwm-groundwater.1) (2026-04-17)
 
 
