@@ -20,6 +20,7 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 #[cfg(feature = "24LC01")]
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
@@ -119,8 +120,27 @@ pub trait RRIVBoard: Send {
 
     fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
     fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
-    
+ 
+    // TODO: can't put this here because of 'static, but don't need self anyway
+    // fn configure_gpio_interrupt_function<T: Fn() + 'static>(&self, function: T );
+
+    fn enable_interrupt(&self);
+    fn disable_interrupt(&self);
+    fn get_current_time(&self) -> u32;
+
 }
+
+
+pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn(u32, bool)> > = None;
+
+pub fn configure_gpio_interrupt_function<T: Fn(u32, bool) + 'static>(function: T ) {
+    // unmask the correct EXTI interrupt for SDI-12 or whatever
+    // store the function we actionally want to call
+    unsafe {
+        GPIO_INTERRUPT_FUNCTION = Some(Box::new(function));
+    }
+}
+
 
 
 pub trait RRIVBoardBuilder {
