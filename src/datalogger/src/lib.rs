@@ -443,14 +443,12 @@ impl DataLogger {
                                     Sdi12Command::HA => {
                                         let mut total_measurements_count = 0;
 
-                                        // for i in 0 .. self.sensor_drivers.len() {
-                                        //     if let Some(ref mut driver) = self.sensor_drivers[i] {
-                                        //         let driver_measurements = driver.get_measured_parameter_count();
-                                        //         total_measurements_count = total_measurements_count + driver_measurements;
-                                        //     }
-                                        // }
-
-                                        total_measurements_count = 17;
+                                        for i in 0 .. self.sensor_drivers.len() {
+                                            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                let driver_measurements = driver.get_measured_parameter_count();
+                                                total_measurements_count = total_measurements_count + driver_measurements;
+                                            }
+                                        }
 
                                         let measurement_time = 5; // 5 seconds approximate for now
                                         defmt::println!("total_measurements: {}", total_measurements_count);
