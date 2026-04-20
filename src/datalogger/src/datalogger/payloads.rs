@@ -21,7 +21,8 @@ pub struct DataloggerSettingsValues {
     pub enable_lorawan_telemetry: Option<bool>,
     pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
-    pub enable_sdi12: Option<bool>
+    pub enable_sdi12: Option<bool>,
+    pub lock_mode: Option<bool>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -40,6 +41,7 @@ pub struct DataloggerSetPayload {
     pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
     pub enable_sdi12: Option<bool>,
+    pub lock_mode: Option<bool>
     // pub user_note: Option<Value>, // not implemented for now
     // pub user_value: Option<i16>
 }
@@ -118,6 +120,10 @@ impl DataloggerSetPayload {
 
         if let Some(enable_sdi12) = self.enable_sdi12 {
             datalogger_settings_values.enable_sdi12 = Some(enable_sdi12);
+        }
+
+        if let Some(lock_mode) = self.lock_mode {
+            datalogger_settings_values.lock_mode = Some(lock_mode);
         }
 
         datalogger_settings_values
