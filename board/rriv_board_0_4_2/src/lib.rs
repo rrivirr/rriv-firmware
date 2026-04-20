@@ -1238,7 +1238,7 @@ impl BoardBuilder {
                 ) {
                     Ok(formatted) => {
                         defmt::println!("{}", formatted); // TODO: this uses format!
-                        // uid_string = formatted;s
+                        uid_string = formatted;
                     }
                     Err(e) => {
                         // doesn't matter
