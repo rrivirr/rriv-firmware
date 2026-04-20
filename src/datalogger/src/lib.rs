@@ -774,6 +774,9 @@ impl DataLogger {
                         self.write_column_headers_to_storage(board);
                         persist = true;
                     }
+                    "dfu" => {
+                        board.enter_dfu_mode();
+                    }
                     _ => {
                         self.mode = DataLoggerMode::Interactive;
                         self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;

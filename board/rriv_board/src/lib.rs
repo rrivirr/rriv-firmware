@@ -116,6 +116,8 @@ pub trait RRIVBoard: Send {
 
     fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
     fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
+
+    fn enter_dfu_mode(&self);
     
 }
 
