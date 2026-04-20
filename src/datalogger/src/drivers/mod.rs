@@ -8,6 +8,7 @@ pub mod generic_analog;
 pub mod ring_temperature;
 pub mod ring_w_mux;
 pub mod ring_temperature_sim;
+pub mod ring_w_mux_sim;
 pub mod timed_switch_2;
 pub mod ds18b20;
 pub mod k30_co2;
