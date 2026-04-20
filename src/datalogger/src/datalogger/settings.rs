@@ -19,7 +19,7 @@ pub struct DataloggerSettingsBitField {
     pub enable_modbus_rtu: bool,
 
     #[bits(1, default = false)]
-    pub debug_includes_values: bool,
+    pub lock_mode: bool,
 
     #[bits(1, default = false)]
     pub withhold_incomplete_readings: bool,
@@ -143,6 +143,7 @@ impl DataloggerSettings {
         settings.toggles.set_enable_modbus_rtu(values.enable_modbus_rtu.unwrap_or(self.toggles.enable_modbus_rtu()));
         settings.toggles.set_enable_interactive_logging(values.interactive_logging.unwrap_or(self.toggles.enable_interactive_logging()));
         settings.toggles.set_enable_sdi12(values.enable_sdi12.unwrap_or(self.toggles.enable_sdi12()));
+        settings.toggles.set_lock_mode(values.lock_mode.unwrap_or(self.toggles.lock_mode()));
         settings
     }
 

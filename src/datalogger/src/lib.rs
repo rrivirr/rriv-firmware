@@ -881,57 +881,71 @@ impl DataLogger {
     }
 
     pub fn set_mode(&mut self, board: &mut impl RRIVBoard, mode: Value) -> bool {
-        let mut persist = false;
-        match mode {
+
+        let mode_value =  match mode {
             Value::String(mode) => {
-                let mode = mode.as_str();
-                // TODO: perhaps watch should be separate from mode, so you can watch any mode
-                // TODO: and rrivctl can still accept commands when in watch mode
-                match mode {
-                    "watch" => {
-                        self.write_column_headers_to_serial(board);
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(true);
-                    }
-                    "watch-debug" => {
-                        self.write_column_headers_to_serial(board);
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
-                        board.set_debug(true);
-                        self.set_telemeter_watch(true);
-                    }
-                    "quiet" => {
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(false);
-                    }
-                    "field" => {
-                        self.mode = DataLoggerMode::Field;
-                        // switching into field mode should create a new file
-                        self.write_column_headers_to_storage(board);
-                        persist = true;
-                    }
-                    "sdi12" => {
-                        self.mode = DataLoggerMode::SDI12;
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
-                        sdi12_service::setup(board, 5);
-                        board.set_debug(false);
-                        persist = true;
-                        defmt::println!("In SDI12 mode!");
-                    }
-                    _ => {
-                        self.mode = DataLoggerMode::Interactive;
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(false);
-                        persist = true;
-                    }
-                }
+                mode
             }
-            _ => {}
+            _ => { return false; }
+        };
+        let mode = mode_value.as_str();
+
+        // TODO: these are not true modes, need to be factored elsewhere
+        let mut done = true;
+        match mode {
+            "watch" => {
+                self.write_column_headers_to_serial(board);
+                self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
+                board.set_debug(false);
+                self.set_telemeter_watch(true);
+            }
+            "watch-debug" => {
+                self.write_column_headers_to_serial(board);
+                self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
+                board.set_debug(true);
+                self.set_telemeter_watch(true);
+            }
+            "quiet" => {
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                board.set_debug(false);
+                self.set_telemeter_watch(false);
+            }
+            _ => {
+                done = false;
+            }
         }
+        if done { 
+            return false;
+        }
+
+        if self.settings.toggles.lock_mode() {
+            // persistant mode is locked, do nothing.
+            return false;
+        }
+        
+        match mode {
+            "field" => {
+                self.mode = DataLoggerMode::Field;
+                // switching into field mode should create a new file
+                self.write_column_headers_to_storage(board);
+            }
+            "sdi12" => {
+                self.mode = DataLoggerMode::SDI12;
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                sdi12_service::setup(board, 5);
+                board.set_debug(false);
+                defmt::println!("In SDI12 mode!");
+            }
+            _ => {
+                self.mode = DataLoggerMode::Interactive;
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                board.set_debug(false);
+                self.set_telemeter_watch(false);
+            }
+        };
         self.settings.mode = self.mode.to_u8();
-        return persist;
+        return true;
+
     }
 
     fn set_telemeter_watch(&mut self, watch: bool) {
@@ -1528,6 +1542,7 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
+           "lock_mode" : self.settings.toggles.lock_mode(),
            "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
            "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu(),
