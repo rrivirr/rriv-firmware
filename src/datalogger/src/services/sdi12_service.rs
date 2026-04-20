@@ -203,7 +203,8 @@ impl<'a> Sdi12RxProcessor {
             return Err("Address not matching");
         }
         
-        board.usb_serial_send(format_args!("SDI12: received {}{}{}\n", buffer[0], buffer[1], buffer[2]));
+        // board.usb_serial_send(format_args!("SDI12: received {}{}{}\n", buffer[0], buffer[1], buffer[2]));
+        defmt::println!("SDI12: received {}{}{}", buffer[0], buffer[1], buffer[2]);
 
         let mode = match (buffer[1], buffer[2]) {
             ('M', '!') => Sdi12Command::M,
