@@ -443,14 +443,14 @@ impl DataLogger {
                                     Sdi12Command::HA => {
                                         let mut total_measurements_count = 0;
 
-                                        // for i in 0 .. self.sensor_drivers.len() {
-                                        //     if let Some(ref mut driver) = self.sensor_drivers[i] {
-                                        //         let driver_measurements = driver.get_measured_parameter_count();
-                                        //         total_measurements_count = total_measurements_count + driver_measurements;
-                                        //     }
-                                        // }
+                                        for i in 0 .. self.sensor_drivers.len() {
+                                            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                let driver_measurements = driver.get_measured_parameter_count();
+                                                total_measurements_count = total_measurements_count + driver_measurements;
+                                            }
+                                        }
 
-                                        total_measurements_count = 17;
+                                        // total_measurements_count = 17;
 
                                         let measurement_time = 5; // 5 seconds approximate for now
                                         defmt::println!("total_measurements: {}", total_measurements_count);
@@ -533,26 +533,27 @@ impl DataLogger {
                 if take_measurement {
                     board.usb_serial_send(format_args!("SDI12: taking measurement\n"));
 
-                    // self.measure_sensor_values(board);
+                    self.measure_sensor_values(board);
 
                     let sdi12_service =  self.sdi12_service.as_mut().unwrap();
 
-                    // let mut measurement_index = 0;
-                    // for i in 0 .. self.sensor_drivers.len() {
-                    //     if let Some(ref mut driver) = self.sensor_drivers[i] {
-                    //         for j in 0..driver.get_measured_parameter_count() {
-                    //             let value = match driver.get_measured_parameter_value(j) {
-                    //                 Ok(value) => value,
-                    //                 Err(_) => f64::MAX,
-                    //             };
-                    //             sdi12_service.fill_data(measurement_index, value);
-                    //             measurement_index = measurement_index + 1;
-                    //         }
-                    //     }
-                    // }
-                    for i in 0..17 {
-                        sdi12_service.fill_data(i, (i + 1) as f64 / 10.0);
+                    let mut measurement_index = 0;
+                    for i in 0 .. self.sensor_drivers.len() {
+                        if let Some(ref mut driver) = self.sensor_drivers[i] {
+                            for j in 0..driver.get_measured_parameter_count() {
+                                let value = match driver.get_measured_parameter_value(j) {
+                                    Ok(value) => value,
+                                    Err(_) => f64::MAX,
+                                };
+                                sdi12_service.fill_data(measurement_index, value);
+                                // defmt::println!("data[{}] = {}", measurement_index, value);
+                                measurement_index = measurement_index + 1;
+                            }
+                        }
                     }
+                    // for i in 0..17 {
+                    //     sdi12_service.fill_data(i, (i + 1) as f64 / 10.0);
+                    // }
 
                     board.usb_serial_send(format_args!("SDI12: measurement ready\n"));
                 }

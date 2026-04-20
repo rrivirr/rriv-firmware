@@ -122,9 +122,18 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
         let mut buffer = [0u8; 16];
         buffer[0..6].copy_from_slice("value_".as_bytes());
-        let c = char::from_digit(index as u32, 10).unwrap();
-        let a = c as u8;
-        buffer[6] = a;
+        if index < 10 {
+            let c = char::from_digit(index as u32, 10).unwrap();
+            let a = c as u8;
+            buffer[6] = a;
+        } else {
+            let c = char::from_digit((index as u32) % 10, 10).unwrap();
+            let a = c as u8;
+            buffer[6] = a;
+            let c = char::from_digit((index as u32) / 10, 10).unwrap();
+            let a = c as u8;
+            buffer[7] = a;
+        }
         buffer
     }
 
@@ -224,12 +233,21 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
         // Interrupt Implementation
         if self.mode == 0 {
-            self.command_mode(board);
+            loop {
+                let ack = self.command_mode(board);
+                if ack {
+                    break;
+                }
+            }
         }
-        else {
-            self.data_mode(board);
+        if self.mode == 1 {
+            loop {
+                let done = self.data_mode(board);
+                if done {
+                    break;
+                }
+            }
         }
-
     }
 }
 
@@ -249,18 +267,19 @@ impl GroundwaterFlowSDI12 {
         }
     }
 
-    pub fn command_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+    pub fn command_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) -> bool {
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
         sdi12_service.send_break(board);
         sdi12_service.send_command(board, sdi12_service::Sdi12Command::HA);
 
+        let mut ack_received = false;
         // if received, process the buffer
         let buffer = sdi12_service.read_response(board);
         if buffer.is_err() {
             self.num_data = 0;
             defmt::println!("Timeout to HA command. Retrying...");
             self.mode = 0; // stay in command mode
-            return;
+            return ack_received;
         }
         let ha_response = sdi12_service.parse_ha_command(buffer.unwrap());
         match ha_response {
@@ -279,17 +298,19 @@ impl GroundwaterFlowSDI12 {
                     }
                 }
                 self.mode = 1; // switch to data mode
+                ack_received = true;
             },
             None => {
                 self.num_data = 0;
                 defmt::println!("Invalid ack to M command.");
                 self.mode = 0; // stay in command mode
-                return;
+                ack_received = false;
             }
         }
+        ack_received
     }
 
-    pub fn data_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+    pub fn data_mode(&mut self, board: &mut dyn rriv_board::RRIVBoard) -> bool {
         let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
         // if self.index == 0 {
             sdi12_service.send_break(board);    // Break for D0 only
@@ -302,8 +323,9 @@ impl GroundwaterFlowSDI12 {
         if buffer.is_err() {
             defmt::println!("Timeout to D{} command. Retrying...", self.index);
             self.mode = 1; // stay in data mode to try again
-            return;
+            return false;
         }
+        let mut received_all_data = false;
         let d_response = sdi12_service.parse_d_command(board, buffer.unwrap());
         match d_response {
             Some(d_response) => {
@@ -318,6 +340,7 @@ impl GroundwaterFlowSDI12 {
                     self.mode = 0; // switch back to command mode for next measurement
                     self.index = 0;
                     self.start = 0;
+                    received_all_data = true;
                 }
                 else if self.index == 999 {
                     defmt::println!("Sent D999 and still didn't receive all the data");
@@ -335,7 +358,9 @@ impl GroundwaterFlowSDI12 {
                 self.mode = 1; // stay in data mode to try again
             }
         }
-        board.delay_ms(1000);
+        board.delay_ms(50);
+        board.run_loop_iteration();
+        received_all_data
     }
 
 }
