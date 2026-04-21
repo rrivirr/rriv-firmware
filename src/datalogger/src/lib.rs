@@ -555,9 +555,6 @@ impl DataLogger {
                             }
                         }
                     }
-                    // for i in 0..17 {
-                    //     sdi12_service.fill_data(i, (i + 1) as f64 / 10.0);
-                    // }
 
                     board.usb_serial_send(format_args!("SDI12: measurement ready\n"));
                 }
