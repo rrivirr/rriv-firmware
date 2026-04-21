@@ -557,6 +557,8 @@ impl DataLogger {
                     }
 
                     board.usb_serial_send(format_args!("SDI12: measurement ready\n"));
+                    self.write_last_measurement_to_serial(board); // watch mode stuff
+
                 }
             }
         }
