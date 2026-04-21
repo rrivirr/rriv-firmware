@@ -1,3 +1,30 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.3](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.2...v1.14.0-preview-sdi12-pwm-groundwater.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* add watch mode data for sdi12 ([fd13486](https://github.com/rrivirr/rriv-firmware/commit/fd13486bfbf1e66444e8ede29fe444b724f68ef7))
+* clear data received each time we query ([5a0390d](https://github.com/rrivirr/rriv-firmware/commit/5a0390d9684f4d539b563d3f38f4e72878b8cfe5))
+* commented usb serial send ([118a6d0](https://github.com/rrivirr/rriv-firmware/commit/118a6d0e038a3cd12525feff4f4c94ac9d3faab6))
+* get rid of rtt ([ed5daa0](https://github.com/rrivirr/rriv-firmware/commit/ed5daa041622820c0fb96b69503a5e807c72adae))
+* go back to sdi12 sleep after timeout ([fb0ebb8](https://github.com/rrivirr/rriv-firmware/commit/fb0ebb808c1f5ccca49c498c6454ba2c2ea65549))
+* handle garbled out of range data requests without crashing ([7da189c](https://github.com/rrivirr/rriv-firmware/commit/7da189c7c3fc562c802d047cd62e8809f19110d9))
+* handle hung SDI12, timeout and restart command mode ([4a0e857](https://github.com/rrivirr/rriv-firmware/commit/4a0e85718641efe984da3333c3e61f4c62ceb6b6))
+* remove dead code ([4b586cb](https://github.com/rrivirr/rriv-firmware/commit/4b586cbbf9e654bb61059b36e80e1825b2ddd942))
+* remove spamming dfmt message ([740d6a6](https://github.com/rrivirr/rriv-firmware/commit/740d6a697bde83b1b47aacb500a0983115812d52))
+* rename pwm_type to hardware_pwm for clarity ([3829e63](https://github.com/rrivirr/rriv-firmware/commit/3829e63739540852f42dfbef7e73f4f6db0e49a0))
+* rendering order of digits ([8ee73f3](https://github.com/rrivirr/rriv-firmware/commit/8ee73f319daa1a1b05549cb991d8f4745784f208))
+* send a decimal thats only 2 long and format it correctly ([065fc82](https://github.com/rrivirr/rriv-firmware/commit/065fc824444bf6180ae44569b0555425d1b5f281))
+* shorten var names so we dont use up the buffer ([5694fa9](https://github.com/rrivirr/rriv-firmware/commit/5694fa90eab4249a641e569a8ac3f041e5f9df93))
+* uid in usb identity ([289e360](https://github.com/rrivirr/rriv-firmware/commit/289e360869359b30e0aa44dbba4b225dbb7b8750))
+* watch and driver fixes ([33de368](https://github.com/rrivirr/rriv-firmware/commit/33de368f76cddc8f2ce3b3aa52708586645aed63))
+
+
+### Features
+
+* allow selection of output parameters in ring mux driver ([efd491d](https://github.com/rrivirr/rriv-firmware/commit/efd491d4e1368b678bc72312ea7e5f3cc3cb0032))
+* implement mode locking ([28b0308](https://github.com/rrivirr/rriv-firmware/commit/28b03085901103a35a5e314b4c75e05eb896f9e3))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.2](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.1...v1.14.0-preview-sdi12-pwm-groundwater.2) (2026-04-17)
 
 
