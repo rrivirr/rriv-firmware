@@ -7,7 +7,6 @@ use super::mcp9808::*;
 use super::types::*;
 use alloc::boxed::Box;
 use bitfield_struct::bitfield;
-use rtt_target::rprint;
 use serde_json::json;
 
 const MULTIPLEXER_ADDRESS: u8 = 0x70;
