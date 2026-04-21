@@ -139,6 +139,9 @@ impl SensorDriver for GroundwaterFlowSDI12 {
 
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
+        // clear the data
+        self.data_received =  [0.0; 36];
+
         // let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
         // loop {
         //     sdi12_service.send_break(board);
