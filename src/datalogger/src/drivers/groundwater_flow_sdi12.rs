@@ -129,10 +129,10 @@ impl SensorDriver for GroundwaterFlowSDI12 {
         } else {
             let c = char::from_digit((index as u32) % 10, 10).unwrap();
             let a = c as u8;
-            buffer[6] = a;
+            buffer[7] = a;
             let c = char::from_digit((index as u32) / 10, 10).unwrap();
             let a = c as u8;
-            buffer[7] = a;
+            buffer[6] = a;
         }
         buffer
     }
