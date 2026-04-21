@@ -497,8 +497,14 @@ impl DataLogger {
                                             let index = index.unwrap() as usize;
                                             defmt::println!("index {}", index);
 
+                                            let total_measurements = sdi12_service.get_total_measurements();
                                             let start = index * MEASUREMENTS_IN_PAYLOAD as usize;
-                                            let end = start + min(MEASUREMENTS_IN_PAYLOAD as usize, sdi12_service.get_total_measurements() - start);
+                                            if start > total_measurements {
+                                                defmt::println!("SDI12: error, data request out of range");
+                                                return;
+                                            }
+                                            defmt::println!("total {}, start {}", total_measurements, start);
+                                            let end = start + min(MEASUREMENTS_IN_PAYLOAD as usize, total_measurements - start);
                                             for i in start..end {
                                                 data_send[i-start] = sdi12_service.get_data(i);
                                             }
