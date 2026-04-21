@@ -14,7 +14,7 @@ pub struct TimedSwitch2SpecialConfiguration {
     initial_state: bool, // 'on' 'off'
     // polarity // 'low_is_on', 'high_is_on'
     pwm_enable: bool,
-    pwm_type: bool,
+    hardware_pwm: bool,
     period: f32,
     ratio: f32,
     _empty: [u8; 13],
@@ -89,14 +89,14 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
-        match &values["pwm_type"] {
+        match &values["hardware_pwm"] {
             serde_json::Value::String(s) => {
-                let pwm_type: bool = match s.to_ascii_lowercase().as_str() {
+                let hardware_pwm: bool = match s.to_ascii_lowercase().as_str() {
                     "hw" => true,
                     "sw" => false,
                     _ => true,
                 };
-                self.pwm_type = pwm_type;
+                self.hardware_pwm = hardware_pwm;
                 return Ok(());
             },
             _ => {}
@@ -209,12 +209,12 @@ impl TimedSwitch2SpecialConfiguration {
             }
         }
 
-        let s = match &value["pwm_type"] {
+        let s = match &value["hardware_pwm"] {
             serde_json::Value::String(s) => s.as_str(),
             _ => "hw"
         };
         
-        let pwm_type: bool = match s.to_ascii_lowercase().as_str() {
+        let hardware_pwm: bool = match s.to_ascii_lowercase().as_str() {
             "hw" => true,
             "sw" => false,
             _ => true,
@@ -253,7 +253,7 @@ impl TimedSwitch2SpecialConfiguration {
             gpio_pin,
             initial_state,
             pwm_enable,
-            pwm_type,
+            hardware_pwm,
             period,
             ratio,
             _empty: [b'\0'; 13],
@@ -304,11 +304,11 @@ impl SensorDriver for TimedSwitch2 {
             true => 1,
             false => 0,
         };
-        if !self.special_config.pwm_type {
+        if !self.special_config.hardware_pwm {
             board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
             board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
         }
-        else if self.special_config.pwm_enable && self.special_config.pwm_type {
+        else if self.special_config.pwm_enable && self.special_config.hardware_pwm {
             let mut period_ms = (self.special_config.period * 1000.0) as u32;
             if period_ms > 1000 {
                 period_ms = 1000;
@@ -364,7 +364,7 @@ impl SensorDriver for TimedSwitch2 {
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
-            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
             // defmt::println!("{}", hardware_pwm);
             if hardware_pwm == true {
                 // chip produces pwm on pin 1 only
@@ -382,12 +382,12 @@ impl SensorDriver for TimedSwitch2 {
             }
         } else if self.state == 1 {
             // heater is on
-            let hardware_pwm = self.special_config.pwm_enable && self.special_config.pwm_type;
+            let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
             if hardware_pwm {
                 // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
             } 
-            else if self.special_config.pwm_enable && !self.special_config.pwm_type {
+            else if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
             // duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
@@ -455,7 +455,8 @@ impl SensorDriver for TimedSwitch2 {
             "period" : self.special_config.period,
             "ratio" : self.special_config.ratio,
             "initial_state" : initial_state_str,  
-            "pwm_enable" : self.special_config.pwm_enable      
+            "pwm_enable" : self.special_config.pwm_enable,
+            "hardware_pwm" : self.special_config.hardware_pwm
         })
     }
     
