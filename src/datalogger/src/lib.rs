@@ -547,7 +547,7 @@ impl DataLogger {
                             for j in 0..driver.get_measured_parameter_count() {
                                 let value = match driver.get_measured_parameter_value(j) {
                                     Ok(value) => value,
-                                    Err(_) => f64::MAX,
+                                    Err(_) => -99.0, // can't send max b/c we only use 4 chars.
                                 };
                                 sdi12_service.fill_data(measurement_index, value);
                                 // defmt::println!("data[{}] = {}", measurement_index, value);
@@ -773,7 +773,7 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let value = (value * 1000f64) as u32;
+                            let value = (value * 1000f64) as i32;
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
@@ -849,7 +849,7 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let value = (value * 1000f64) as u32;
+                            let value = (value * 1000f64) as i32;
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };

@@ -49,7 +49,7 @@ pub fn format_error<'a>(error: &'a dyn Debug, buffer: &'a mut [u8]) -> &'a str {
     }
 }
 
-pub fn format_decimal(value: u32) -> Result<([u8;20], usize), ()> {
+pub fn format_decimal(value: i32) -> Result<([u8;20], usize), ()> {
     let format_int = format_args!("{}", value );
 
     let mut buf: [u8; _] = [0u8; 20];
