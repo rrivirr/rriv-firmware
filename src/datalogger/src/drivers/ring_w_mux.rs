@@ -317,7 +317,7 @@ impl SensorDriver for RingMuxTemperatureDriver {
 
     // TODO: this should come from a derived trait
     fn get_configuration_json(&mut self) -> serde_json::Value {
-        
+
         let mut sensor_id = self.get_id();
         let sensor_id = match util::str_from_utf8(&mut sensor_id) {
             Ok(sensor_id) => sensor_id,
