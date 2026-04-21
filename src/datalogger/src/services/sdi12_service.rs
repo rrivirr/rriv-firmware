@@ -191,6 +191,9 @@ impl<'a> Sdi12RxProcessor {
             }
             else if board.get_current_time().wrapping_sub(now) > 100000 {
                 // timeout after 100 milliseconds
+                let my_board = Sdi12Board::new(self.gpio, board);
+                let mut sdi12 = SDI12::new(my_board);
+                sdi12.sleep();
                 defmt::println!("SDI12: command reception timeout");
                 return Err("Command reception timeout");
             }
