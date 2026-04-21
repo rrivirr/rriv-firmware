@@ -5,7 +5,7 @@
 
 
 pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, TODO: what a waste!
-pub const BUFFER_SIZE: usize = 200;
+pub const BUFFER_SIZE: usize = 320;
 
 pub struct CommandData {
     receiving: bool,
