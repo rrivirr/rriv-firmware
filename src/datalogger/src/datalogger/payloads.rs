@@ -185,13 +185,15 @@ impl SensorSetPayload {
                         Ok(sensor_type) => sensor_type_id = Some(sensor_type),
                         Err(_) => {
                             // responses::send_command_response_message(board, "sensor type not found");
-                            return Err("sensor type not found");
+                            // return Err("sensor type not found");
+                            sensor_type_id = None;
                         }
                     }
                 }
                 _ => {
                     // responses::send_command_response_message(board, "sensor type not specified");
-                    return Err("sensor type not specified");
+                    // return Err("sensor type not specified");
+                    sensor_type_id = None;
                 }
             }
         } else {
