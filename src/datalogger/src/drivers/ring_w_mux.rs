@@ -114,14 +114,14 @@ impl RingMuxTemperatureDriverSpecialConfiguration {
         }
 
         let mut measurement_outputs = MeasurementOutputs::new();
-        match &value["measurements_raw"] {
+        match &value["m_raw"] {
             serde_json::Value::Bool(value) => {
                 measurement_outputs.set_raw(*value);
             }
             _ => {}
         }
 
-        match &value["measurements_calibrated"] {
+        match &value["m_cal"] {
             serde_json::Value::Bool(value) => {
                 measurement_outputs.set_calibrated(*value);
             }
@@ -330,10 +330,10 @@ impl SensorDriver for RingMuxTemperatureDriver {
             "calibration_offset": self.special_config.calibration_offset,
             "channels": self.special_config.channels,
             "sensors": self.special_config.sensors,
-            "measurements_raw" : self.special_config.measurement_outputs.raw(),
-            "measurements_calibrated" : self.special_config.measurement_outputs.calibrated(),
-            "measurements_differences" : self.special_config.measurement_outputs.differences(),
-            "measurements_vector" : self.special_config.measurement_outputs.vector(),
+            "m_raw" : self.special_config.measurement_outputs.raw(),
+            "m_cal" : self.special_config.measurement_outputs.calibrated(),
+            // "measurements_differences" : self.special_config.measurement_outputs.differences(),
+            // "measurements_vector" : self.special_config.measurement_outputs.vector(),
         })
     }
 
