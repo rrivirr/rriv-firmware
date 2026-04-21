@@ -235,19 +235,27 @@ impl SensorDriver for GroundwaterFlowSDI12 {
         // }
 
         // Interrupt Implementation
+        let max  = 20;
         if self.mode == 0 {
-            loop {
+            for i in 0..max {
                 let ack = self.command_mode(board);
                 if ack {
                     break;
                 }
+                if i == max - 1 {
+                    defmt::println!("SDI12: command timed out");
+                }
             }
         }
         if self.mode == 1 {
-            loop {
+            for i in 0..max {
                 let done = self.data_mode(board);
                 if done {
                     break;
+                }
+                if i == max - 1 {
+                    self.mode = 0;
+                    defmt::println!("SDI12: data timed out");
                 }
             }
         }
@@ -301,6 +309,7 @@ impl GroundwaterFlowSDI12 {
                     }
                 }
                 self.mode = 1; // switch to data mode
+                self.index = 0;
                 ack_received = true;
             },
             None => {
