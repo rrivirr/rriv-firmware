@@ -1,3 +1,13 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.4](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.3...v1.14.0-preview-sdi12-pwm-groundwater.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* allow sensor update payloads without sensor type key ([7db5d4f](https://github.com/rrivirr/rriv-firmware/commit/7db5d4f0103615a019ef0a4a9b9fa728c2993e7e))
+* correct id for ring mux ([c160127](https://github.com/rrivirr/rriv-firmware/commit/c16012794f769b7af36d0f9eef6a833796e780d1))
+* increase buffer size for longer rrivctl payloads ([c4ba7b0](https://github.com/rrivirr/rriv-firmware/commit/c4ba7b0eb012b11878435f595249dd69e497f04d))
+* remove that white space ([fd1226b](https://github.com/rrivirr/rriv-firmware/commit/fd1226bf3e84d91fa7b1e1d4ca24cf7eaa4ad8a9))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.3](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.2...v1.14.0-preview-sdi12-pwm-groundwater.3) (2026-04-21)
 
 
