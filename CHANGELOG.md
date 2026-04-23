@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.5](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.4...v1.14.0-preview-sdi12-pwm-groundwater.5) (2026-04-23)
+
+
+### Bug Fixes
+
+* increase size of command buffer ([c6e62c7](https://github.com/rrivirr/rriv-firmware/commit/c6e62c7dec883904f78a643d5f39608a0603f3b6))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.4](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.3...v1.14.0-preview-sdi12-pwm-groundwater.4) (2026-04-21)
 
 
