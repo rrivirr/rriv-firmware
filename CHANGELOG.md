@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.6](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.5...v1.14.0-preview-sdi12-pwm-groundwater.6) (2026-04-27)
+
+
+### Bug Fixes
+
+* increase size sdi12 values buffer ([d59e1e3](https://github.com/rrivirr/rriv-firmware/commit/d59e1e3fb2ca36a45dbd8ea04f1a3d285d012931))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.5](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.4...v1.14.0-preview-sdi12-pwm-groundwater.5) (2026-04-23)
 
 
