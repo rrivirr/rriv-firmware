@@ -70,7 +70,7 @@ impl GroundwaterFlowSDI12SpecialConfiguration {
 pub struct GroundwaterFlowSDI12 {
     general_config: SensorDriverGeneralConfiguration,
     special_config: GroundwaterFlowSDI12SpecialConfiguration,
-    data_received: [f32; 36],
+    data_received: [f32; 100],
     num_data: usize,
     index: usize,
     start: usize,
@@ -140,7 +140,7 @@ impl SensorDriver for GroundwaterFlowSDI12 {
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
 
         // clear the data
-        self.data_received =  [0.0; 36];
+        self.data_received =  [0.0; 100];
 
         // let mut sdi12_service = sdi12_service::Sdi12TxProcessor::new(self.special_config.gpio, self.special_config.sensor_address);
         // loop {
@@ -270,7 +270,7 @@ impl GroundwaterFlowSDI12 {
         GroundwaterFlowSDI12 {
             general_config,
             special_config,
-            data_received: [0.0; 36],
+            data_received: [0.0; 100],
             num_data: 0,
             index: 0,
             start: 0,
