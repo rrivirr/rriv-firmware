@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.9](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.8...v1.14.0-preview-sdi12-pwm-groundwater.9) (2026-04-29)
+
+
+### Bug Fixes
+
+* remove software gpio from hardware pwm ([4220e3e](https://github.com/rrivirr/rriv-firmware/commit/4220e3ee9915ab285e1a522ca9c3e1575ca09879))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.8](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.7...v1.14.0-preview-sdi12-pwm-groundwater.8) (2026-04-29)
 
 
