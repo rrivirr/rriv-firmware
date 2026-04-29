@@ -338,6 +338,9 @@ impl SensorDriver for TimedSwitch2 {
         self.duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
         self.duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - self.duty_cycle_on_time;
         // defmt::println!("Initial state is set to {}", self.state);
+
+        self.apply_hardware_pwm(board);
+
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
@@ -374,30 +377,45 @@ impl SensorDriver for TimedSwitch2 {
         let timestamp = board.timestamp();
         let millis = board.millis();
         let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
+        let software_pwm = self.special_config.pwm_enable && !self.special_config.hardware_pwm;
 
-        let mut gpio_state = false;
-        let mut toggle_state = false;
-        self.apply_hardware_pwm(board);
+        let mut software_pwm_gpio_state = false;
+        let mut software_pwm_toggle_state = false;
         if self.state == 0 {
             // heater is off
             // defmt::println!("{}", hardware_pwm);
-
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
                 defmt::println!("state is 0, toggle triggered");
-                toggle_state = true;
-                gpio_state = true;
+                software_pwm_toggle_state = true;
+                software_pwm_gpio_state = true;
                 self.state = 1;
                 self.last_duty_cycle_update = millis;
                 self.duty_cycle_state = true;
                 self.last_state_updated_at = timestamp;
-                self.apply_hardware_pwm(board);
             }
         } else if self.state == 1 {
             // heater is on
 
-            //software pwm
-            if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
-            // duty cycle implementation
+            // end of on_time (outer cycle)
+            if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
+                defmt::println!("state is 1, toggle triggered");
+                software_pwm_toggle_state = true;
+                software_pwm_gpio_state = false;
+                self.state = 0;
+                self.last_state_updated_at = timestamp;
+            }
+
+        }
+
+        if hardware_pwm {
+
+            self.apply_hardware_pwm(board);
+
+        } else if software_pwm {
+
+            if self.state == 1 {
+                //software pwm
+                //duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
                 if elapsed < 0 {
@@ -406,34 +424,29 @@ impl SensorDriver for TimedSwitch2 {
                 }
                 
                 if self.duty_cycle_state == true && new_elapsed > self.duty_cycle_on_time {
-                    toggle_state = true;
-                    gpio_state = false;
+                    software_pwm_toggle_state = true;
+                    software_pwm_gpio_state = false;
                     self.last_duty_cycle_update = millis;
                     self.duty_cycle_state  = false;
                 } else if self.duty_cycle_state == false && new_elapsed > self.duty_cycle_off_time {
-                    toggle_state = true;
-                    gpio_state = true;
+                    software_pwm_toggle_state = true;
+                    software_pwm_gpio_state = true;
                     self.last_duty_cycle_update = millis;
                     self.duty_cycle_state  = true;
                 } 
             }
-            // end of on_time (outer cycle)
-            if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
-                defmt::println!("state is 1, toggle triggered");
-                toggle_state = true;
-                gpio_state = false;
-                self.state = 0;
-                self.last_state_updated_at = timestamp;
-                self.apply_hardware_pwm(board);
+
+            if software_pwm_toggle_state { 
+                defmt::println!("toggled to {}", software_pwm_gpio_state);
+                // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
+                board.write_gpio_pin(self.special_config.gpio_pin, software_pwm_gpio_state);
             }
-
         }
 
-        if toggle_state && !hardware_pwm { 
-            defmt::println!("toggled to {}", gpio_state);
-            // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
-            board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
-        }
+
+
+
+
     }
     
     fn get_configuration_json(&mut self) -> serde_json::Value {
