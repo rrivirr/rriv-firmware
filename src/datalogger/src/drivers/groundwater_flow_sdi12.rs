@@ -334,6 +334,7 @@ impl GroundwaterFlowSDI12 {
         let buffer = sdi12_service.read_response(board);
         if buffer.is_err() {
             defmt::println!("Timeout to D{} command. Retrying...", self.index);
+            board.delay_ms(100); // wait briefly.
             self.mode = 1; // stay in data mode to try again
             return false;
         }
