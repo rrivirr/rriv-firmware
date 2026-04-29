@@ -300,13 +300,17 @@ impl TimedSwitch2 {
     fn apply_hardware_pwm(&self, board: &mut dyn rriv_board::RRIVBoard){
         let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
 
+        defmt::println!("applying hardware pwm");
         if hardware_pwm {
+            defmt::println!("really applying hardware pwm");
             if self.state == 0 {
                 // chip produces pwm on pin 1 only
-                board.write_pwm_pin_duty(0);        
+                board.write_pwm_pin_duty(0);
+                defmt::println!("applied hardware pwm 0");
             } else if self.state == 1 {
                 // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
+                defmt::println!("applied hardware pwm {}", (255_f32 * self.special_config.ratio) as u8);
             }
         }
     }
@@ -338,6 +342,7 @@ impl SensorDriver for TimedSwitch2 {
         self.duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
         self.duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - self.duty_cycle_on_time;
         // defmt::println!("Initial state is set to {}", self.state);
+        self.apply_hardware_pwm(board);
     }
 
     fn get_requested_gpios(&self) -> super::resources::gpio::GpioRequest {
