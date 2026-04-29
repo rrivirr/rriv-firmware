@@ -57,9 +57,19 @@ pub fn read_bytes_from_eeprom(board: &mut crate::Board, block: u8, start_address
                     // rprint!("read {} address {}\n", b[0], message[0]);
                     buffer[i] = b[0];
                 }
-                Err(_) => {
-                    board.usb_serial_send(format_args!("EEPROM read failure, restarting"));
-                    panic!("EEPROM read failure");
+                Err(error) => {
+                    // match error {
+                    //     stm32f1xx_hal::i2c::Error::Bus => todo!(),
+                    //     stm32f1xx_hal::i2c::Error::Arbitration => todo!(),
+                    //     stm32f1xx_hal::i2c::Error::Acknowledge => todo!(),
+                    //     stm32f1xx_hal::i2c::Error::Overrun => todo!(),
+                    //     stm32f1xx_hal::i2c::Error::Timeout => todo!(),
+                    //     _ => todo!(),
+                    // }
+                    let mut err_buf = [0u8; 20];
+                    let err_message = util::format_error(&error, &mut err_buf);
+                    board.usb_serial_send(format_args!("EEPROM read failure, restarting {}", err_message));
+                    panic!("EEPROM read failure {}", err_message);
                 }
             }
             i = i + 1;

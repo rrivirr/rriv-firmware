@@ -1,3 +1,122 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.9](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.8...v1.14.0-preview-sdi12-pwm-groundwater.9) (2026-04-29)
+
+
+### Bug Fixes
+
+* remove software gpio from hardware pwm ([4220e3e](https://github.com/rrivirr/rriv-firmware/commit/4220e3ee9915ab285e1a522ca9c3e1575ca09879))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.8](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.7...v1.14.0-preview-sdi12-pwm-groundwater.8) (2026-04-29)
+
+
+### Bug Fixes
+
+* attempt at pwm fix ([2acc85f](https://github.com/rrivirr/rriv-firmware/commit/2acc85f2754fa3bdb12d573e61ad12a54db651e8))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.7](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.6...v1.14.0-preview-sdi12-pwm-groundwater.7) (2026-04-29)
+
+
+### Bug Fixes
+
+* error out if we end up without any more bits ([754c6ae](https://github.com/rrivirr/rriv-firmware/commit/754c6ae301a8a252fbbf4e41fd35f5e3dbf7daf5))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.6](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.5...v1.14.0-preview-sdi12-pwm-groundwater.6) (2026-04-27)
+
+
+### Bug Fixes
+
+* increase size sdi12 values buffer ([d59e1e3](https://github.com/rrivirr/rriv-firmware/commit/d59e1e3fb2ca36a45dbd8ea04f1a3d285d012931))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.5](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.4...v1.14.0-preview-sdi12-pwm-groundwater.5) (2026-04-23)
+
+
+### Bug Fixes
+
+* increase size of command buffer ([c6e62c7](https://github.com/rrivirr/rriv-firmware/commit/c6e62c7dec883904f78a643d5f39608a0603f3b6))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.4](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.3...v1.14.0-preview-sdi12-pwm-groundwater.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* allow sensor update payloads without sensor type key ([7db5d4f](https://github.com/rrivirr/rriv-firmware/commit/7db5d4f0103615a019ef0a4a9b9fa728c2993e7e))
+* correct id for ring mux ([c160127](https://github.com/rrivirr/rriv-firmware/commit/c16012794f769b7af36d0f9eef6a833796e780d1))
+* increase buffer size for longer rrivctl payloads ([c4ba7b0](https://github.com/rrivirr/rriv-firmware/commit/c4ba7b0eb012b11878435f595249dd69e497f04d))
+* remove that white space ([fd1226b](https://github.com/rrivirr/rriv-firmware/commit/fd1226bf3e84d91fa7b1e1d4ca24cf7eaa4ad8a9))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.3](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.2...v1.14.0-preview-sdi12-pwm-groundwater.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* add watch mode data for sdi12 ([fd13486](https://github.com/rrivirr/rriv-firmware/commit/fd13486bfbf1e66444e8ede29fe444b724f68ef7))
+* clear data received each time we query ([5a0390d](https://github.com/rrivirr/rriv-firmware/commit/5a0390d9684f4d539b563d3f38f4e72878b8cfe5))
+* commented usb serial send ([118a6d0](https://github.com/rrivirr/rriv-firmware/commit/118a6d0e038a3cd12525feff4f4c94ac9d3faab6))
+* get rid of rtt ([ed5daa0](https://github.com/rrivirr/rriv-firmware/commit/ed5daa041622820c0fb96b69503a5e807c72adae))
+* go back to sdi12 sleep after timeout ([fb0ebb8](https://github.com/rrivirr/rriv-firmware/commit/fb0ebb808c1f5ccca49c498c6454ba2c2ea65549))
+* handle garbled out of range data requests without crashing ([7da189c](https://github.com/rrivirr/rriv-firmware/commit/7da189c7c3fc562c802d047cd62e8809f19110d9))
+* handle hung SDI12, timeout and restart command mode ([4a0e857](https://github.com/rrivirr/rriv-firmware/commit/4a0e85718641efe984da3333c3e61f4c62ceb6b6))
+* remove dead code ([4b586cb](https://github.com/rrivirr/rriv-firmware/commit/4b586cbbf9e654bb61059b36e80e1825b2ddd942))
+* remove spamming dfmt message ([740d6a6](https://github.com/rrivirr/rriv-firmware/commit/740d6a697bde83b1b47aacb500a0983115812d52))
+* rename pwm_type to hardware_pwm for clarity ([3829e63](https://github.com/rrivirr/rriv-firmware/commit/3829e63739540852f42dfbef7e73f4f6db0e49a0))
+* rendering order of digits ([8ee73f3](https://github.com/rrivirr/rriv-firmware/commit/8ee73f319daa1a1b05549cb991d8f4745784f208))
+* send a decimal thats only 2 long and format it correctly ([065fc82](https://github.com/rrivirr/rriv-firmware/commit/065fc824444bf6180ae44569b0555425d1b5f281))
+* shorten var names so we dont use up the buffer ([5694fa9](https://github.com/rrivirr/rriv-firmware/commit/5694fa90eab4249a641e569a8ac3f041e5f9df93))
+* uid in usb identity ([289e360](https://github.com/rrivirr/rriv-firmware/commit/289e360869359b30e0aa44dbba4b225dbb7b8750))
+* watch and driver fixes ([33de368](https://github.com/rrivirr/rriv-firmware/commit/33de368f76cddc8f2ce3b3aa52708586645aed63))
+
+
+### Features
+
+* allow selection of output parameters in ring mux driver ([efd491d](https://github.com/rrivirr/rriv-firmware/commit/efd491d4e1368b678bc72312ea7e5f3cc3cb0032))
+* implement mode locking ([28b0308](https://github.com/rrivirr/rriv-firmware/commit/28b03085901103a35a5e314b4c75e05eb896f9e3))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.2](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.1...v1.14.0-preview-sdi12-pwm-groundwater.2) (2026-04-17)
+
+
+### Bug Fixes
+
+* use the true parameter count ([73174dd](https://github.com/rrivirr/rriv-firmware/commit/73174dd6e91b08823af42e08bcaf8d35336cf8a2))
+
+# [1.14.0-preview-sdi12-pwm-groundwater.1](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0...v1.14.0-preview-sdi12-pwm-groundwater.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* added pwm_type in update_from_values fn ([58d7c92](https://github.com/rrivirr/rriv-firmware/commit/58d7c92e0210cd4bcb6489d11ee9db9b78e2d8db))
+* calcuate hardware pwm bool as separate variable ([0dfa725](https://github.com/rrivirr/rriv-firmware/commit/0dfa725624e5b189a4091f5ff6da8314a7974bfe))
+* cargo setup for sdi12 ([d034752](https://github.com/rrivirr/rriv-firmware/commit/d034752e726e9d78360f4a254f3700d97025961d))
+* comment old pwm code ([97ff42d](https://github.com/rrivirr/rriv-firmware/commit/97ff42d2cd00ccfdc3ad00c42a672a3347d93888))
+* Comment out the incomplete uart5 serial for now ([4008de6](https://github.com/rrivirr/rriv-firmware/commit/4008de6713ff69c13c4390de18479b33202923e3))
+* correct order of pin stealing ([2cffc5a](https://github.com/rrivirr/rriv-firmware/commit/2cffc5aca36e276e0e3af2761e27d016c6ed062b))
+* disable pin 1 normal operation ([eee2d00](https://github.com/rrivirr/rriv-firmware/commit/eee2d00e7ba83f859c9400810018d1464e2f8f17))
+* for some reason need to reference boolean to get it to evaluate in if statement ([a9f501f](https://github.com/rrivirr/rriv-firmware/commit/a9f501f63dc1d551e6793fa1cfff59919a998af7))
+* imports ([8f683d6](https://github.com/rrivirr/rriv-firmware/commit/8f683d628aed50f8a35bc861334295e268aa1e96))
+* initial_state code is enabled ([594f8ac](https://github.com/rrivirr/rriv-firmware/commit/594f8ac7b351b57f20f735ce8ad7be4d40444cff))
+* initialize pwm ([caa0d20](https://github.com/rrivirr/rriv-firmware/commit/caa0d20a74f204e219cbf198e315581af012919d))
+* keep clocks object around for later use ([bd5fdd0](https://github.com/rrivirr/rriv-firmware/commit/bd5fdd0bfcc661a83204021f0293046ee5305e35))
+* missing comma ([1a2a92f](https://github.com/rrivirr/rriv-firmware/commit/1a2a92f89e02e187030a2318465646b5ecc021ad))
+* move pwm setup earlier to address hard fault ([af5b1f1](https://github.com/rrivirr/rriv-firmware/commit/af5b1f12627e1862da3e6e16e5de4a57ce1bcbbc))
+* properly unwrap the gpio object ([57b3351](https://github.com/rrivirr/rriv-firmware/commit/57b33513ab0f17e151eec1d3bd3aeac7ed1797ce))
+* remove extra output ([3790569](https://github.com/rrivirr/rriv-firmware/commit/37905690fe983d6a7ad7cf378e2e924426c6c7c5))
+* remove unnecessary gpio6 hard coded setup ([19df4c1](https://github.com/rrivirr/rriv-firmware/commit/19df4c170a1a7621bbdd22277e9cf031ac135049))
+* remove unused column headers code ([2fa0b57](https://github.com/rrivirr/rriv-firmware/commit/2fa0b57d9c5fe7ecda2e02dc53498678ac5cb876))
+* Update ring_w_mux.rs addresses ([fc35a63](https://github.com/rrivirr/rriv-firmware/commit/fc35a63e361e5f0aabf9b35f1f4fcda10435bc1f))
+* Update ring_w_mux.rs final addres fix ([acf0928](https://github.com/rrivirr/rriv-firmware/commit/acf0928e2b838cb59ce9963257a1f4dd035bc781))
+* use PushPull mode ([aa7d70e](https://github.com/rrivirr/rriv-firmware/commit/aa7d70eb5224e51dacb3e7ffecea321ea880fb41))
+* used TIM5 for millis counter ([6756d68](https://github.com/rrivirr/rriv-firmware/commit/6756d68dbca119922fe877f7db01618c258b565b))
+
+
+### Features
+
+* added delay_us fn in rriv board ([027581d](https://github.com/rrivirr/rriv-firmware/commit/027581dd0cbc364b69b47ba24a1b61b9881b801b))
+* added pwm_set_period fn ([28c7b82](https://github.com/rrivirr/rriv-firmware/commit/28c7b82a42054c92b8719be1045808730213778b))
+* applied period fn in timed switch ([8af5cca](https://github.com/rrivirr/rriv-firmware/commit/8af5cca01533848e3f99fa05677ab89485845798))
+* apply pwm in timed_switch ([d8b2187](https://github.com/rrivirr/rriv-firmware/commit/d8b2187eae97e8ecdcc6bac01faeb0baa014f161))
+* define properties and functions for pwm ([0908c72](https://github.com/rrivirr/rriv-firmware/commit/0908c72263994c438dd689500c8b3bc9cea68504))
+* implement the pwm pin ([dfe2501](https://github.com/rrivirr/rriv-firmware/commit/dfe2501f4864bcbf8830d45f23869cc1fa4cb8ee))
+* made sw pwm as additonal configuration ([5c69baa](https://github.com/rrivirr/rriv-firmware/commit/5c69baae60c706cdc91381ea37362daabf508ffe))
+* sdi-12 services ([744d5ac](https://github.com/rrivirr/rriv-firmware/commit/744d5ac7e53867cf2bf5ffa7791526602907905d))
+
 # [1.13.0](https://github.com/rrivirr/rriv-firmware/compare/v1.12.6...v1.13.0) (2026-04-11)
 
 
