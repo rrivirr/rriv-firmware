@@ -296,6 +296,20 @@ impl TimedSwitch2 {
             duty_cycle_off_time: 0,
         }
     }
+
+    fn apply_hardware_pwm(&self, board: &mut dyn rriv_board::RRIVBoard){
+        let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
+
+        if hardware_pwm {
+            if self.state == 0 {
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty(0);        
+            } else if self.state == 1 {
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
+            }
+        }
+    }
 }
 
 impl SensorDriver for TimedSwitch2 {
@@ -363,13 +377,10 @@ impl SensorDriver for TimedSwitch2 {
 
         let mut gpio_state = false;
         let mut toggle_state = false;
+        self.apply_hardware_pwm(board);
         if self.state == 0 {
             // heater is off
             // defmt::println!("{}", hardware_pwm);
-            if hardware_pwm == true {
-                // chip produces pwm on pin 1 only
-                board.write_pwm_pin_duty(0);
-            }
 
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
                 defmt::println!("state is 0, toggle triggered");
@@ -379,14 +390,13 @@ impl SensorDriver for TimedSwitch2 {
                 self.last_duty_cycle_update = millis;
                 self.duty_cycle_state = true;
                 self.last_state_updated_at = timestamp;
+                self.apply_hardware_pwm(board);
             }
         } else if self.state == 1 {
             // heater is on
-            if hardware_pwm {
-                // chip produces pwm on pin 1 only
-                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
-            } 
-            else if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
+
+            //software pwm
+            if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
             // duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
@@ -414,6 +424,7 @@ impl SensorDriver for TimedSwitch2 {
                 gpio_state = false;
                 self.state = 0;
                 self.last_state_updated_at = timestamp;
+                self.apply_hardware_pwm(board);
             }
 
         }
