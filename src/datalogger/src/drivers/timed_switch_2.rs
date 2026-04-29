@@ -3,8 +3,6 @@ use serde_json::json;
 
 use crate::sensor_name_from_type_id;
 
-
-
 use super::types::*;
 
 const MAX_MILLIS: u32 = 65535;
@@ -76,6 +74,7 @@ impl TimedSwitch2SpecialConfiguration {
                     _ => return Err("invalid initial state"),
                 };
                 self.initial_state = initial_state;
+                return Ok(());
             },
             _ => {}
         };
@@ -98,6 +97,7 @@ impl TimedSwitch2SpecialConfiguration {
                     _ => true,
                 };
                 self.hardware_pwm = hardware_pwm;
+                return Ok(());
             },
             _ => {}
         }
@@ -296,11 +296,6 @@ impl TimedSwitch2 {
             duty_cycle_off_time: 0,
         }
     }
-
-    /// Helper: true when this driver is configured to drive hardware PWM on the pin.
-    fn is_hardware_pwm(&self) -> bool {
-        self.special_config.pwm_enable && self.special_config.hardware_pwm
-    }
 }
 
 impl SensorDriver for TimedSwitch2 {
@@ -309,30 +304,18 @@ impl SensorDriver for TimedSwitch2 {
             true => 1,
             false => 0,
         };
-
         if !self.special_config.hardware_pwm {
-            // Software-driven GPIO (with or without sw PWM): set pin mode and write initial level.
             board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
             board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
-        } else if self.is_hardware_pwm() {
-            // Hardware PWM path. Configure period, then force a known duty so we don't
-            // emit an undefined PWM signal between boot and the first update_actuators call.
+        }
+        else if self.special_config.pwm_enable && self.special_config.hardware_pwm {
             let mut period_ms = (self.special_config.period * 1000.0) as u32;
             if period_ms > 1000 {
                 period_ms = 1000;
             }
             defmt::println!("Setting PWM period to {} ms", period_ms);
             board.write_pwm_pin_period(period_ms);
-
-            // Initialize duty based on initial state so the pin doesn't pulse before
-            // update_actuators runs for the first time.
-            if self.state == 1 {
-                board.write_pwm_pin_duty((255_f32 * self.special_config.ratio) as u8);
-            } else {
-                board.write_pwm_pin_duty(0);
-            }
         }
-
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
         self.duty_cycle_state = self.state == 1;
@@ -376,87 +359,69 @@ impl SensorDriver for TimedSwitch2 {
     fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
         let timestamp = board.timestamp();
         let millis = board.millis();
-        let hardware_pwm = self.is_hardware_pwm();
+        let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
 
         let mut gpio_state = false;
         let mut toggle_state = false;
-
         if self.state == 0 {
-            // Off phase. Make sure PWM duty is 0 every pass while we're off, so
-            // we never silently leak a pulse if duty was set elsewhere.
-            if hardware_pwm {
+            // heater is off
+            // defmt::println!("{}", hardware_pwm);
+            if hardware_pwm == true {
+                // chip produces pwm on pin 1 only
                 board.write_pwm_pin_duty(0);
             }
 
             if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
-                defmt::println!("state is 0, toggle triggered (off -> on)");
+                defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
                 gpio_state = true;
                 self.state = 1;
                 self.last_duty_cycle_update = millis;
                 self.duty_cycle_state = true;
                 self.last_state_updated_at = timestamp;
-
-                // Engage PWM immediately on the off->on transition so we don't wait
-                // a full update cycle to start driving the heater.
-                if hardware_pwm {
-                    board.write_pwm_pin_duty((255_f32 * self.special_config.ratio) as u8);
-                }
             }
         } else if self.state == 1 {
-            // On phase.
+            // heater is on
             if hardware_pwm {
-                // Hardware PWM: keep the duty commanded high while we're in the on phase.
-                board.write_pwm_pin_duty((255_f32 * self.special_config.ratio) as u8);
-            } else if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
-                // Software duty-cycle implementation on a regular GPIO.
+                // chip produces pwm on pin 1 only
+                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
+            } 
+            else if self.special_config.pwm_enable && !self.special_config.hardware_pwm {
+            // duty cycle implementation
                 let elapsed: i32 = millis as i32 - self.last_duty_cycle_update as i32;
                 let mut new_elapsed: u32 = elapsed as u32;
                 if elapsed < 0 {
                     // millis overflowed
                     new_elapsed = MAX_MILLIS - self.last_duty_cycle_update + millis;
                 }
-
+                
                 if self.duty_cycle_state == true && new_elapsed > self.duty_cycle_on_time {
                     toggle_state = true;
                     gpio_state = false;
                     self.last_duty_cycle_update = millis;
-                    self.duty_cycle_state = false;
+                    self.duty_cycle_state  = false;
                 } else if self.duty_cycle_state == false && new_elapsed > self.duty_cycle_off_time {
                     toggle_state = true;
                     gpio_state = true;
                     self.last_duty_cycle_update = millis;
-                    self.duty_cycle_state = true;
-                }
+                    self.duty_cycle_state  = true;
+                } 
             }
-
-            // End of on_time (outer cycle): transition on -> off.
+            // end of on_time (outer cycle)
             if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
-                defmt::println!("state is 1, toggle triggered (on -> off)");
+                defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
                 gpio_state = false;
                 self.state = 0;
                 self.last_state_updated_at = timestamp;
-
-                // CRITICAL: kill the PWM duty in the same call that flips the state
-                // to 0. Otherwise the duty stays high until the next update_actuators
-                // pass, which is what was causing PWM to keep firing while the data
-                // log already read 0.
-                if hardware_pwm {
-                    board.write_pwm_pin_duty(0);
-                }
             }
+
         }
 
-        // Only write to the GPIO directly when we are NOT using hardware PWM on this pin.
-        // For hardware PWM the pin is owned by the timer peripheral; writing it as a
-        // GPIO either fights the peripheral or is silently dropped, and either way it
-        // doesn't actually stop the PWM signal.
-        if toggle_state && !hardware_pwm {
-            defmt::println!("toggled gpio to {}", gpio_state);
+        if toggle_state && !hardware_pwm { 
+            defmt::println!("toggled to {}", gpio_state);
+            // rprintln!("on_time: {}, ratio: {}, period: {}\nduty cycle on time: {}, off time: {}", self.special_config.on_time_s, self.special_config.ratio, self.special_config.period, self.duty_cycle_on_time, self.duty_cycle_off_time);
             board.write_gpio_pin(self.special_config.gpio_pin, gpio_state);
-        } else if toggle_state {
-            defmt::println!("toggled (hw pwm) state -> {}", self.state);
         }
     }
     
