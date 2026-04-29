@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.7](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.6...v1.14.0-preview-sdi12-pwm-groundwater.7) (2026-04-29)
+
+
+### Bug Fixes
+
+* error out if we end up without any more bits ([754c6ae](https://github.com/rrivirr/rriv-firmware/commit/754c6ae301a8a252fbbf4e41fd35f5e3dbf7daf5))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.6](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.5...v1.14.0-preview-sdi12-pwm-groundwater.6) (2026-04-27)
 
 
