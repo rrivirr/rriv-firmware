@@ -545,6 +545,12 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
             rx_mask <<= 1;   // for the current bit which is HIGH is stored as 0
         }
         else {
+            if bits_to_process == 0 {
+                // this is an error condition, since the next step will crash
+                defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
+                unsafe{ RX_STATE = WAITING_FOR_START_BIT};
+                return;
+            }
             rx_mask <<= bits_to_process - 1;   // if the bit is LOW, just move the mask
             rx_value |= rx_mask;  // store the LOW bit as 1
         }
@@ -651,6 +657,12 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
                 rx_mask <<= 1;   // for the current bit which is HIGH is stored as 0
             }
             else {
+                if bits_to_process == 0 {
+                    // this is an error condition, since the next step will crash
+                defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
+                    unsafe{ RX_STATE = WAITING_FOR_BREAK };
+                    return;
+                }
                 rx_mask <<= bits_to_process - 1;   // if the bit is LOW, just move the mask
                 rx_value |= rx_mask;  // store the LOW bit as 1
             }
