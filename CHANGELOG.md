@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.8](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.7...v1.14.0-preview-sdi12-pwm-groundwater.8) (2026-04-29)
+
+
+### Bug Fixes
+
+* attempt at pwm fix ([2acc85f](https://github.com/rrivirr/rriv-firmware/commit/2acc85f2754fa3bdb12d573e61ad12a54db651e8))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.7](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.6...v1.14.0-preview-sdi12-pwm-groundwater.7) (2026-04-29)
 
 
