@@ -17,7 +17,7 @@ pub struct TimedSwitch2SpecialConfiguration {
     hardware_pwm: bool,
     period: f32,
     ratio: f32,
-    // _empty: [u8; 13],
+    _empty: [u8; 12],
 }
 
 impl TimedSwitch2SpecialConfiguration {
@@ -256,7 +256,7 @@ impl TimedSwitch2SpecialConfiguration {
             hardware_pwm,
             period,
             ratio,
-            // _empty: [b'\0'; 13],
+            _empty: [b'\0'; 12],
         } )
     }
 
