@@ -1,3 +1,12 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.14](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.13...v1.14.0-preview-sdi12-pwm-groundwater.14) (2026-04-30)
+
+
+### Bug Fixes
+
+* add some improved notification led behavior for boot ([da0dde8](https://github.com/rrivirr/rriv-firmware/commit/da0dde86a92aa4fbc28ab6faf66fbc86b4386390))
+* add some improved notification led behavior for boot ([457e401](https://github.com/rrivirr/rriv-firmware/commit/457e401fad16f14692ffc7146869bf39ccab06fb))
+* correct size of bytes in the special config struct ([e1a90e2](https://github.com/rrivirr/rriv-firmware/commit/e1a90e2b9f01c2ee0b828f6dbba3e2ac14704f86))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.13](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.12...v1.14.0-preview-sdi12-pwm-groundwater.13) (2026-04-30)
 
 
