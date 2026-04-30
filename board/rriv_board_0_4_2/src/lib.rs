@@ -939,7 +939,7 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    defmt::println!("serial rx byte: {}", c);
+                    // defmt::println!("serial rx byte: {}", c);
 
                     let r = USART2_RX_PROCESSOR.borrow(cs);
 
