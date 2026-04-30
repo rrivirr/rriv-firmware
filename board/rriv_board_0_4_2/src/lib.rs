@@ -1391,10 +1391,12 @@ impl BoardBuilder {
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut cs = cs.into_push_pull_output(&mut gpio_cr.gpioc_crh);
-        cs.set_high();
-        delay.delay_ms(500_u32);
-        cs.set_low();
-        delay.delay_ms(500_u32);
+        for i in 0..1 {
+            cs.set_high();
+            delay.delay_ms(500_u32);
+            cs.set_low();
+            delay.delay_ms(500_u32);
+        }
         cs.set_high();
 
         let tim4 = device_peripherals.TIM4;
@@ -1600,16 +1602,12 @@ impl BoardBuilder {
         defmt::println!("scan is done");
 
         watchdog.feed();
-        cs.set_low();
-        delay.delay_ms(200_u32);
-        cs.set_high();
-        delay.delay_ms(200_u32);
-        cs.set_low();
-        delay.delay_ms(200_u32);
-        cs.set_high();
-        delay.delay_ms(200_u32);
-        cs.set_low();
-        delay.delay_ms(200_u32);
+        for i in 0..2 {
+            cs.set_high();
+            delay.delay_ms(500_u32);
+            cs.set_low();
+            delay.delay_ms(500_u32);
+        }
         cs.set_high();
         watchdog.feed();
         
@@ -1666,7 +1664,6 @@ impl BoardBuilder {
 
         self.storage = storage;
 
-        self.delay = Some(delay);
         self.precise_delay = Some(precise_delay);
 
         // the millis counter
@@ -1679,7 +1676,6 @@ impl BoardBuilder {
 
         watchdog.feed();
 
-        self.watchdog = Some(watchdog);
 
         // defmt::println!("setting up RS485 serial b");
         // setup_serialb(device_peripherals.UART5, &clocks);
@@ -1687,7 +1683,19 @@ impl BoardBuilder {
         self.clocks = Some(clocks);
         // setup GPIO5 as EXTI2 interrupt PD2
 
-      
+        watchdog.feed();
+        for i in 0..3 {
+            cs.set_high();
+            delay.delay_ms(500_u32);
+            cs.set_low();
+            delay.delay_ms(500_u32);
+        }
+        cs.set_high();
+        watchdog.feed();
+
+        self.watchdog = Some(watchdog);
+        self.delay = Some(delay);
+
 
         defmt::println!("done with setup");
 
