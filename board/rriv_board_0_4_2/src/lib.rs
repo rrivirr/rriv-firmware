@@ -1349,14 +1349,15 @@ impl BoardBuilder {
         // get an unsafe handle on our CS pin so we can flash it
         // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let (mut cs, pwm_pin) = unsafe {
+        let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
             let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
             let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
             let cs = cs.into_push_pull_output(&mut gpioc.crh);
             let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
             let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
-            (cs, pwm_pin)
+            let sclk_led_enable = gpiob.pb13.into_push_pull_output_with_state(&mut gpiob.crh, gpio::PinState::Low);
+            (cs, sclk_led_enable, pwm_pin)
         };
 
         // get an unsafe handle on our pwm pin
@@ -1366,7 +1367,6 @@ impl BoardBuilder {
         // let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
 
         
-
 
         // Prepare the GPIO
         let gpioa: gpio::gpioa::Parts = device_peripherals.GPIOA.split();
@@ -1405,12 +1405,14 @@ impl BoardBuilder {
         
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
-        let mut cs = cs.into_push_pull_output(&mut gpio_cr.gpioc_crh);
-        for i in 0..1 {
+        let mut sclk_led_enable: Pin<'B', 13, Output> = sclk_led_enable.into_floating_input(&mut gpio_cr.gpiob_crh).into_push_pull_output(&mut gpio_cr.gpiob_crh);
+        sclk_led_enable.set_high();
+        let notify_time = 125_u32;
+        for _i in 0..1 {
             cs.set_high();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
             cs.set_low();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
         }
         cs.set_high();
 
@@ -1504,15 +1506,17 @@ impl BoardBuilder {
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
 
+        
         watchdog.feed();
-        cs.set_low();
-        delay.delay_ms(200_u32);
-        cs.set_high();
-        delay.delay_ms(200_u32);
-        cs.set_low();
-        delay.delay_ms(200_u32);
+        for _i in 0..2 {
+            cs.set_high();
+            delay.delay_ms(notify_time);
+            cs.set_low();
+            delay.delay_ms(notify_time);
+        }
         cs.set_high();
         watchdog.feed();
+        
 
         defmt::println!("unhang I2C1 if hung");
 
@@ -1607,11 +1611,11 @@ impl BoardBuilder {
         defmt::println!("scan is done");
 
         watchdog.feed();
-        for i in 0..2 {
+        for _i in 0..3 {
             cs.set_high();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
             cs.set_low();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
         }
         cs.set_high();
         watchdog.feed();
@@ -1689,11 +1693,11 @@ impl BoardBuilder {
         // setup GPIO5 as EXTI2 interrupt PD2
 
         watchdog.feed();
-        for i in 0..3 {
+        for _i in 0..4 {
             cs.set_high();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
             cs.set_low();
-            delay.delay_ms(500_u32);
+            delay.delay_ms(notify_time);
         }
         cs.set_high();
         watchdog.feed();
