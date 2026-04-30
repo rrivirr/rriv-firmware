@@ -74,7 +74,7 @@ impl TimedSwitch2SpecialConfiguration {
                     _ => return Err("invalid initial state"),
                 };
                 self.initial_state = initial_state;
-                return Ok(());
+                return Ok(()); // TODO: remove this, apperas to be an error
             },
             _ => {}
         };
@@ -97,7 +97,7 @@ impl TimedSwitch2SpecialConfiguration {
                     _ => true,
                 };
                 self.hardware_pwm = hardware_pwm;
-                return Ok(());
+                return Ok(());  // TODO: remove this, apperas to be an error
             },
             _ => {}
         }
