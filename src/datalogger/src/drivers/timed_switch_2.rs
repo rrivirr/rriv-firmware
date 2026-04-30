@@ -278,6 +278,7 @@ pub struct TimedSwitch2 {
     last_duty_cycle_update: u32,
     duty_cycle_on_time: u32,
     duty_cycle_off_time: u32,
+    last_pwm: u8
 }
 
 impl TimedSwitch2 {
@@ -294,24 +295,29 @@ impl TimedSwitch2 {
             last_duty_cycle_update: 0,
             duty_cycle_on_time: 0,
             duty_cycle_off_time: 0,
+            last_pwm: u8::MAX
         }
     }
 
-    fn apply_hardware_pwm(&self, board: &mut dyn rriv_board::RRIVBoard){
-        let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
+    fn apply_hardware_pwm(&mut self, board: &mut dyn rriv_board::RRIVBoard){
+        // let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
+        // defmt::println!("pwm config {} {}", self.special_config.pwm_enable, self.special_config.hardware_pwm);
+        let hardware_pwm = true;  //TODO something is wrong here.  dfmt line above shows false false, why?  debugger shows true
 
-        defmt::println!("applying hardware pwm");
+        // chip produces pwm on pin 1 only
         if hardware_pwm {
-            defmt::println!("really applying hardware pwm");
+            let mut pwm = 0;
             if self.state == 0 {
-                // chip produces pwm on pin 1 only
-                board.write_pwm_pin_duty(0);
-                defmt::println!("applied hardware pwm 0");
+                pwm = 0;
             } else if self.state == 1 {
-                // chip produces pwm on pin 1 only
-                board.write_pwm_pin_duty( (255_f32 * self.special_config.ratio) as u8);
-                defmt::println!("applied hardware pwm {}", (255_f32 * self.special_config.ratio) as u8);
+                pwm = (255_f32 * self.special_config.ratio) as u8;
             }
+            if pwm != self.last_pwm {
+                board.write_pwm_pin_duty(pwm);
+                self.last_pwm = pwm;
+                defmt::println!("applied hardware pwm {}", self.last_pwm);
+            }
+           
         }
     }
 }
