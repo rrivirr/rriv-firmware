@@ -1475,11 +1475,11 @@ impl BoardBuilder {
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
-            for _i in 1..10 {
+            for _i in 1..20 {
                 cs.set_high();
-                delay.delay_ms(100_u32);
+                delay.delay_ms(50_u32);
                 cs.set_low();
-                delay.delay_ms(100_u32);
+                delay.delay_ms(50_u32);
             }
             cs.set_high();
             
