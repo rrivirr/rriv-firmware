@@ -328,18 +328,18 @@ impl SensorDriver for TimedSwitch2 {
             true => 1,
             false => 0,
         };
-        if !self.special_config.hardware_pwm {
-            board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
-            board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
-        }
-        else if self.special_config.pwm_enable && self.special_config.hardware_pwm {
+        // if !self.special_config.hardware_pwm {
+        //     board.set_gpio_pin_mode(self.special_config.gpio_pin, GpioMode::PushPullOutput);
+        //     board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
+        // }
+        // else if self.special_config.pwm_enable && self.special_config.hardware_pwm {
             let mut period_ms = (self.special_config.period * 1000.0) as u32;
             if period_ms > 1000 {
                 period_ms = 1000;
             }
             defmt::println!("Setting PWM period to {} ms", period_ms);
             board.write_pwm_pin_period(period_ms);
-        }
+        // }
         let timestamp = board.timestamp();
         self.last_state_updated_at = timestamp;
         self.duty_cycle_state = self.state == 1;
