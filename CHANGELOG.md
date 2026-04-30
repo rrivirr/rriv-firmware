@@ -1,3 +1,15 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.12](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.11...v1.14.0-preview-sdi12-pwm-groundwater.12) (2026-04-30)
+
+
+### Bug Fixes
+
+* add a little delay on timeout ([0659a48](https://github.com/rrivirr/rriv-firmware/commit/0659a4829e7e1c0576b9a0eb449a5837e38e4dde))
+* add some led indications ([2b03ec9](https://github.com/rrivirr/rriv-firmware/commit/2b03ec99e9c991e72438ec8a8f7e7d33f47e673f))
+* dont defmt print the serialrx bytes ([8d7b65c](https://github.com/rrivirr/rriv-firmware/commit/8d7b65cb7cb5198caac34d430c62676ef1665000))
+* dont need empty space in structs anymore ([7532bee](https://github.com/rrivirr/rriv-firmware/commit/7532beed7dce0f408e42078fe24a041865fa4f39))
+* improve debug message ([cc4ed9a](https://github.com/rrivirr/rriv-firmware/commit/cc4ed9a0b7f43b5912b85b1eab3aeec73cc9c12d))
+* improve logic for hardware pwm on/off ([a0e4ca5](https://github.com/rrivirr/rriv-firmware/commit/a0e4ca5e9998a8f0eadeee66d2e3d67da0a64a11))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.11](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.10...v1.14.0-preview-sdi12-pwm-groundwater.11) (2026-04-29)
 
 
