@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.13](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.12...v1.14.0-preview-sdi12-pwm-groundwater.13) (2026-04-30)
+
+
+### Bug Fixes
+
+* hard code hardware pwm mode ([1e26934](https://github.com/rrivirr/rriv-firmware/commit/1e26934ae6e65b2c0a7edb91f67d68cc817c98ea))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.12](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.11...v1.14.0-preview-sdi12-pwm-groundwater.12) (2026-04-30)
 
 
