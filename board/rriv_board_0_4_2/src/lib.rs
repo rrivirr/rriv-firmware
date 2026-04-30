@@ -1387,20 +1387,36 @@ impl BoardBuilder {
 
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
+        
+        let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
+        let mut cs = cs.into_push_pull_output(&mut gpio_cr.gpioc_crh);
+        cs.set_high();
+        delay.delay_ms(500_u32);
+        cs.set_low();
+        delay.delay_ms(500_u32);
+        cs.set_high();
 
         let tim4 = device_peripherals.TIM4;
         let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
             tim4.pwm_hz::<Tim4NoRemap, _, _>(pwm_pin, &mut afio.mapr, 1.kHz(), &clocks);
         pwm.enable(Channel::C3);
         pwm.set_period(ms(10).into_rate());
+        
+        // show that pwm is alive
+        pwm.set_duty(Channel::C3, pwm.get_max_duty() / 2);
+        delay.delay_ms(150_u32);
         pwm.set_duty(Channel::C3, 0);
+        delay.delay_ms(150_u32);
+        pwm.set_duty(Channel::C3, pwm.get_max_duty() / 2);
+        delay.delay_ms(150_u32);
+        pwm.set_duty(Channel::C3, 0);
+
         self.pwm = Some(pwm);
 
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
 
-        let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
@@ -1481,6 +1497,15 @@ impl BoardBuilder {
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
 
+        watchdog.feed();
+        cs.set_low();
+        delay.delay_ms(200_u32);
+        cs.set_high();
+        delay.delay_ms(200_u32);
+        cs.set_low();
+        delay.delay_ms(200_u32);
+        cs.set_high();
+        watchdog.feed();
 
         defmt::println!("unhang I2C1 if hung");
 
@@ -1575,6 +1600,19 @@ impl BoardBuilder {
         defmt::println!("scan is done");
 
         watchdog.feed();
+        cs.set_low();
+        delay.delay_ms(200_u32);
+        cs.set_high();
+        delay.delay_ms(200_u32);
+        cs.set_low();
+        delay.delay_ms(200_u32);
+        cs.set_high();
+        delay.delay_ms(200_u32);
+        cs.set_low();
+        delay.delay_ms(200_u32);
+        cs.set_high();
+        watchdog.feed();
+        
 
         defmt::println!("i2c2 scanning...");
         for addr in 0x00_u8..0x7F {
