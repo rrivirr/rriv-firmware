@@ -1322,6 +1322,14 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
+        power_pins.enable_3v.set_high();
+        // delay.delay_ms(500_u32);
+        // power_pins.enable_3v.set_low();
+        // delay.delay_ms(500_u32);
+        // power_pins.enable_3v.set_high();
+        // delay.delay_ms(1000_u32);
+
+
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
@@ -1373,13 +1381,6 @@ impl BoardBuilder {
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
-
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_low();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
 
         // external adc and i2c stability require these steps
         power_pins.enable_5v.set_high();
