@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.15](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.14...v1.14.0-preview-sdi12-pwm-groundwater.15) (2026-05-21)
+
+
+### Features
+
+* move the watchdog earlier ([1e5d4cc](https://github.com/rrivirr/rriv-firmware/commit/1e5d4ccbf41073c9a0b44212c247eff03f9e7ad4))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.14](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.13...v1.14.0-preview-sdi12-pwm-groundwater.14) (2026-04-30)
 
 
