@@ -1436,7 +1436,6 @@ impl BoardBuilder {
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
 
-
         watchdog.feed();
     
 
