@@ -1266,9 +1266,11 @@ impl BoardBuilder {
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
-        let uid = Uid::fetch();
-        defmt::println!("uid: {:X}", uid.bytes());
-        self.uid = Some(uid.bytes());
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(6));
+        watchdog.feed();
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1278,7 +1280,15 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // get an unsafe handle on our the CS pin so we can flash it
+
+        let uid = Uid::fetch();
+        defmt::println!("uid: {:X}", uid.bytes());
+        self.uid = Some(uid.bytes());
+
+        watchdog.feed();
+
+        // get an unsafe handle on our CS pin so we can flash it
+        // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
         let mut cs = unsafe {
             let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
@@ -1321,11 +1331,8 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
+    
 
         BoardBuilder::setup_serial(
             serial_pins,
