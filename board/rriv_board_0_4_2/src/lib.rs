@@ -429,13 +429,13 @@ impl RRIVBoard for Board {
         return self.get_millis();
     }
 
-    fn get_battery_level(&mut self) -> i16 {
+    fn get_battery_level(&mut self) -> f32 {
         match self
             .battery_level
             .measure_battery_level(&mut self.internal_adc, &mut self.delay)
         {
-            Ok(value) => return value as i16,
-            Err(_err) => return -1,
+            Ok(value) => return value as f32,
+            Err(_err) => return -1.0,
         }
     }
 
