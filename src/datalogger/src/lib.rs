@@ -518,7 +518,7 @@ impl DataLogger {
         }
         
         if modbus_rtu_ready {
-            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
+            // self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
         }
 
 
@@ -1310,14 +1310,14 @@ impl DataLogger {
             }
         }
 
-        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
-            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
-               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
-                    Ok(_) => {},
-                    Err(error) => {return Err(error);}, 
-                }
-            }
-        }
+        // if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
+        //     if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
+        //        match self.set_up_modbus_rtu(*enable_modbus_rtu) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
 
         if let Some(enable_interactive_logging) = &values.interactive_logging {
             if *enable_interactive_logging {
