@@ -78,6 +78,7 @@ type RedLed = gpio::Pin<'A', 9, Output<OpenDrain>>;
 pub const HSE_MHZ: u32 = 8;
 pub const SYSCLK_MHZ: u32 = 48;
 pub const PCLK_MHZ: u32 = 24;
+pub const WATCHDOG_TIMEOUT: u32 = 6;
 
 #[allow(dead_code)]
 static WAKE_LED: Mutex<RefCell<Option<RedLed>>> = Mutex::new(RefCell::new(None));
@@ -1269,7 +1270,7 @@ impl BoardBuilder {
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
+        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
         watchdog.feed();
 
         // mcu device registers
@@ -1358,7 +1359,7 @@ impl BoardBuilder {
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
         watchdog.start(MilliSeconds::secs(24));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        watchdog.start(MilliSeconds::secs(6));
+        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
         let storage = match storage {
             Ok(storage) => Some(storage),
             Err(hardware_error) => {
