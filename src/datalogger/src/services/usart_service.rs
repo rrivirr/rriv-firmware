@@ -12,7 +12,7 @@ static mut COMMAND: [u8; USART_BUFFER_SIZE] = [0u8; USART_BUFFER_SIZE];
 static mut MESSAGE_DATA: MessageData = MessageData::default();  // TODO: This can be owned by USARTCharacterProcessor, doesn't need to be static
 
 pub struct MessageData {
-    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],  // The buffer can just be contiguous memory, we can raise command avialable by detected \r
+    buffer: [[u8; USART_BUFFER_SIZE]; USART_BUFFER_NUM],  // TODO: The buffer can just be contiguous memory, we can raise command avialable by detected \r
     cur: usize,
     end: usize,
     command_pos: usize,

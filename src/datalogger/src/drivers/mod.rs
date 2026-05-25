@@ -17,4 +17,5 @@ pub mod adc_temperature;
 pub mod resources;
 pub mod modbus;
 pub mod mhz9041a;
+pub mod battery_level;
 

@@ -429,13 +429,13 @@ impl RRIVBoard for Board {
         return self.get_millis();
     }
 
-    fn get_battery_level(&mut self) -> i16 {
+    fn get_battery_level(&mut self) -> f32 {
         match self
             .battery_level
             .measure_battery_level(&mut self.internal_adc, &mut self.delay)
         {
-            Ok(value) => return value as i16,
-            Err(_err) => return -1,
+            Ok(value) => return value as f32,
+            Err(_err) => return -1.0,
         }
     }
 
@@ -1266,9 +1266,11 @@ impl BoardBuilder {
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
-        let uid = Uid::fetch();
-        defmt::println!("uid: {:X}", uid.bytes());
-        self.uid = Some(uid.bytes());
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(6));
+        watchdog.feed();
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1278,7 +1280,15 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // get an unsafe handle on our the CS pin so we can flash it
+
+        let uid = Uid::fetch();
+        defmt::println!("uid: {:X}", uid.bytes());
+        self.uid = Some(uid.bytes());
+
+        watchdog.feed();
+
+        // get an unsafe handle on our CS pin so we can flash it
+        // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
         let mut cs = unsafe {
             let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
@@ -1312,6 +1322,14 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
+        power_pins.enable_3v.set_high();
+        // delay.delay_ms(500_u32);
+        // power_pins.enable_3v.set_low();
+        // delay.delay_ms(500_u32);
+        // power_pins.enable_3v.set_high();
+        // delay.delay_ms(1000_u32);
+
+
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
@@ -1321,11 +1339,8 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
+    
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1366,13 +1381,6 @@ impl BoardBuilder {
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
-
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_low();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
 
         // external adc and i2c stability require these steps
         power_pins.enable_5v.set_high();

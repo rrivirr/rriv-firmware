@@ -20,6 +20,20 @@ pub struct SensorDriverGeneralConfiguration {
 #[allow(dead_code)]
 pub struct EmptySpecialConfiguration {}
 
+impl EmptySpecialConfiguration {
+    pub fn parse_from_values(_value: serde_json::Value) -> Result<EmptySpecialConfiguration, &'static str> {
+        Ok(Self {})
+    }
+
+    pub fn new_from_bytes(
+        bytes: [u8; SENSOR_SETTINGS_PARTITION_SIZE],
+    ) -> EmptySpecialConfiguration {
+        EmptySpecialConfiguration {}
+    }
+}
+
+
+
 impl SensorDriverGeneralConfiguration {
     pub fn new(id: [u8; 6], sensor_type_id: u16) -> SensorDriverGeneralConfiguration {
         Self {

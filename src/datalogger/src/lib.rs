@@ -360,23 +360,28 @@ impl DataLogger {
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
+                    defmt::trace!("interactive measurement");
 
                     self.process_errors(board);
-
+                    defmt::trace!("measure sensor values");
                     self.measure_sensor_values(board); // measureSensorValues(false);
+                    defmt::trace!("got sensor values");
 
                     self.relay_modbus_message(board);
 
-
+                    defmt::trace!("try to write to storage");
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
                                                                   // fileSystemWriteCache->flushCache();
+                    defmt::trace!("wrote to storage");
                     if self.settings.toggles.enable_interactive_logging() {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
                     self.last_interactive_log_time = board.timestamp();
+                    defmt::trace!("interactive measurement completed");
+
                 }
                 
                 self.process_telemetry(board);
@@ -485,7 +490,11 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count(){
                         match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            values[k] = (value * 100_f64) as i16;
+                            if value < 100_f64 {
+                                values[k] = (value * 100_f64) as i16;
+                            } else {
+                                values[k] = value as i16;
+                            }
                             k = k + 1;
                         }
                         Err(_) => defmt::println!("error reading value"),
@@ -514,7 +523,7 @@ impl DataLogger {
         }
         
         if modbus_rtu_ready {
-            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
+            // self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
         }
 
 
@@ -537,7 +546,9 @@ impl DataLogger {
     }
 
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
+        defmt::trace!("msv");
         for i in 0..self.sensor_drivers.len() {
+            defmt::trace!("{}", i);
             if let Some(ref mut driver) = self.sensor_drivers[i] {
                 driver.take_measurement(board);
             }
@@ -1306,14 +1317,14 @@ impl DataLogger {
             }
         }
 
-        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
-            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
-               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
-                    Ok(_) => {},
-                    Err(error) => {return Err(error);}, 
-                }
-            }
-        }
+        // if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
+        //     if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
+        //        match self.set_up_modbus_rtu(*enable_modbus_rtu) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
 
         if let Some(enable_interactive_logging) = &values.interactive_logging {
             if *enable_interactive_logging {

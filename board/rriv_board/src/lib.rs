@@ -70,7 +70,7 @@ pub trait RRIVBoard: Send {
     fn millis(&mut self) -> u32;
 
 
-    fn get_battery_level(&mut self) -> i16;
+    fn get_battery_level(&mut self) -> f32;
 
     fn sleep(&mut self);
 
