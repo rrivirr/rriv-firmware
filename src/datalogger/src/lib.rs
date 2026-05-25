@@ -360,23 +360,28 @@ impl DataLogger {
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
+                    defmt::trace!("interactive measurement");
 
                     self.process_errors(board);
-
+                    defmt::trace!("measure sensor values");
                     self.measure_sensor_values(board); // measureSensorValues(false);
+                    defmt::trace!("got sensor values");
 
                     self.relay_modbus_message(board);
 
-
+                    defmt::trace!("try to write to storage");
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
                                                                   // fileSystemWriteCache->flushCache();
+                    defmt::trace!("wrote to storage");
                     if self.settings.toggles.enable_interactive_logging() {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
                     self.last_interactive_log_time = board.timestamp();
+                    defmt::trace!("interactive measurement completed");
+
                 }
                 
                 self.process_telemetry(board);
@@ -541,7 +546,9 @@ impl DataLogger {
     }
 
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
+        defmt::trace!("msv");
         for i in 0..self.sensor_drivers.len() {
+            defmt::trace!("{}", i);
             if let Some(ref mut driver) = self.sensor_drivers[i] {
                 driver.take_measurement(board);
             }

@@ -24,7 +24,7 @@ pub fn encode( timestamp: i64,
       // rprintln!("{:?}", (i * 4 + 8)..(i * 4 + 12));
       let byte_position = 8 + i * BYTES_PER_VALUE;
       bytes[(byte_position)..(byte_position + BYTES_PER_VALUE)].copy_from_slice(&value_bytes);
-      defmt::println!("{:X}", value_bytes);
+      defmt::debug!("{} {:X}", values[i], value_bytes);
     }
     
     defmt::println!("{:X}", bytes);
