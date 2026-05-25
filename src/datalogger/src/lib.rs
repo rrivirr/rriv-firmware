@@ -485,7 +485,11 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count(){
                         match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            values[k] = (value * 100_f64) as i16;
+                            if value < 100_f64 {
+                                values[k] = (value * 100_f64) as i16;
+                            } else {
+                                values[k] = value as i16;
+                            }
                             k = k + 1;
                         }
                         Err(_) => defmt::println!("error reading value"),
