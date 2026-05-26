@@ -205,20 +205,24 @@ impl Board {
             let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
             let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
             let sclk_led_enable = gpiob.pb13.into_push_pull_output_with_state(&mut gpiob.crh, gpio::PinState::Low);
+            let mut sclk_led_enable: Pin<'B', 13, Output> = sclk_led_enable.into_floating_input(&mut gpiob.crh).into_push_pull_output(&mut gpiob.crh);
+            sclk_led_enable.set_high();
             (cs, sclk_led_enable, pwm_pin)
         };
+
+    
         cs.set_high();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
         cs.set_low();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
         cs.set_high();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
         cs.set_low();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
         cs.set_high();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
         cs.set_low();
-        cortex_m::asm::delay(5000);
+        cortex_m::asm::delay(555000);
 
         defmt::println!("try stdby"); defmt::flush();
 
@@ -251,7 +255,7 @@ impl Board {
 
         let alarm_time = start_sleep + seconds; // test with 2 sec
         rtc.set_alarm(alarm_time); 
-       
+
         // Go into standby
         defmt::println!("go into stdby");
 
@@ -1187,7 +1191,7 @@ fn usb_interrupt(cs: &CriticalSection) {
 }
 
 pub fn build() -> Board {
-    Board::check_entry_standby();
+    // Board::check_entry_standby();
     let mut board_builder = BoardBuilder::new();
     board_builder.setup();
     let board = board_builder.build();
@@ -1493,10 +1497,8 @@ impl BoardBuilder {
     fn setup(&mut self) {
         defmt::println!("board builder setup");
 
-        let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
-        let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
-
-     
+        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
