@@ -7,8 +7,8 @@ use cortex_m::peripheral::syst;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use rriv_board::hardware_error::{HardwareError};
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+use stm32f1xx_hal::time::{Hertz, MilliSeconds};
+use stm32f1xx_hal::timer::{CounterHz, CounterUs};
 
 use core::fmt::{self};
 use core::mem;
@@ -29,7 +29,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM6, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -278,7 +278,7 @@ impl RRIVBoard for Board {
         ) {
             Ok(message) => {
                 usb_serial_send(message, &mut self.delay);
-                defmt::println!("{}", message); // TODO: this uses format!
+                defmt::println!("{}", message); 
             }
             Err(e) => {
                 defmt::println!("format error {}", defmt::Debug2Format(&e));
@@ -382,15 +382,14 @@ impl RRIVBoard for Board {
         }
     }
 
-    // also crystal time, systick?
-
-    fn timestamp(&mut self) -> i64 {
-        return self.internal_rtc.current_time().into(); // internal RTC
+    // todo: different name.  this isn't a timestamp, it's just a seconds counter
+    fn seconds(&mut self) -> u32 {
+        return (self.get_millis() / 1000).into();
     }
 
     fn get_millis(&mut self) -> u32 {
         let millis = self.counter.now();
-        let millis = millis.ticks();  
+        let millis = millis.ticks() / 1000;   // this is natively a micros counter
         millis
     }
 
@@ -869,9 +868,9 @@ impl RRIVBoard for Board {
         exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
         exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
 
-        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work
-        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user
-        NVIC::mask(pac::Interrupt::USART2);
+        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work?
+        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user?
+        // NVIC::mask(pac::Interrupt::USART2); // ok to wake up
         unsafe {
             NVIC::unmask(pac::Interrupt::RTCALARM);
         }
@@ -879,46 +878,73 @@ impl RRIVBoard for Board {
         // To detect if a debugger is attached to an STM32F103RB, you can check the DBGMCU_CR control register within the microcontroller.  Specifically, reading the bottom 3 bits of this register will indicate an active debug session, as these bits are set to 1 when a debugger attaches and default to 0 after a power-on reset.
 
         // if we are debugging, we need this.  but this interferes with actual low power modes
+        // actually but debugger itself is supposed to set these??
         // #[cfg(debug_assertions)]
         // {
-            let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
-            dbgmcu.cr.modify(|_, w| w.dbg_sleep().set_bit());  // Enable debug in sleep
+            // let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
+            // dbgmcu.cr.modify(|_, w| w.dbg_sleep().set_bit());  // Enable debug in sleep
         // }
 
-        let mut remainder: u32 = milliseconds;
+        let mut remainder: u64 = milliseconds;
         
         defmt::println!("try sleep {}", milliseconds);
+            usb_serial_send("try sleep\n", &mut self.delay);
 
-        let macrosleep_interval_s = WATCHDOG_TIMEOUT - 2;
-        while remainder > macrosleep_interval_s * 1000 {
+        self.internal_rtc.select_frequency(Hertz::Hz(1000));  // the crystal is 32kHZ, so setting this to 32 gives millisecond behavior
+        let macrosleep_interval_ms: u32 = (WATCHDOG_TIMEOUT - 2) * 1000;
+        while remainder > 0{
             self.watchdog.feed(); 
-            
-            // self.internal_rtc.set_time(0);
-            // cortex_m::asm::delay(100);  // RTC sync
+            self.internal_rtc.set_time(0);
+            cortex_m::asm::delay(100);  // RTC sync
+            let start_sleep = self.internal_rtc.current_time();
+
             pac::NVIC::unpend(pac::Interrupt::RTCALARM);
             exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
-            self.internal_rtc.set_alarm(self.internal_rtc.current_time() + macrosleep_interval_s); // sleep in units of WATCHDOG_TIMEOUT - 2, triggers on the actual time
-            defmt::println!("will sleep {}", self.internal_rtc.current_time() );  
+
+            let interval = if remainder > macrosleep_interval_ms.into() {
+                macrosleep_interval_ms
+            } else {
+                remainder as u32
+            };
+
+            let alarm_time = start_sleep + interval;
+            self.internal_rtc.set_alarm(alarm_time); // sleep in units of WATCHDOG_TIMEOUT - 2, triggers on the actual time
+            defmt::println!("will sleep {} {}, {}", remainder, alarm_time, self.internal_rtc.current_time() );  
+            usb_serial_send("will sleep\n", &mut self.delay);
+            // self.usb_serial_send(format_args!("{}\n", interval));
 
             cortex_m::asm::dsb();
 
             let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
             core_peripherals.SYST.disable_interrupt();
 
-            cortex_m::asm::wfi();
+            while self.internal_rtc.current_time() < alarm_time { // loop handles wakes from USB
+                defmt::println!("{}", self.internal_rtc.current_time());
+                cortex_m::asm::wfi();
+                // self.error_alarm();
+            }
 
             core_peripherals.SYST.enable_interrupt();
 
-            // self.internal_rtc.clear_alarm_flag();
+            cortex_m::asm::isb();
+
+            self.internal_rtc.clear_alarm_flag();
             defmt::println!("did sleep {}", self.internal_rtc.current_time() );  defmt::flush();
-            usb_serial_send("sleeping", &mut self.delay);
-            remainder = remainder - macrosleep_interval_s * 1000;
+            usb_serial_send("did sleep\n", &mut self.delay);
+            let slept = (self.internal_rtc.current_time() - start_sleep) as u64;
+            remainder = if slept < remainder {
+                remainder - slept
+            } else {
+                0
+            }
 
         }
         self.watchdog.feed(); 
-        defmt::println!("woke from sleep");
-        // handle the rest of the sleep, the remaining milliseconds
+        defmt::println!("woke from sleep"); defmt::flush();
+
         unsafe {
+            NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX);  
+            NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0);
             NVIC::unmask(pac::Interrupt::USART2);
         }
         NVIC::mask(pac::Interrupt::RTCALARM);
@@ -1589,7 +1615,7 @@ impl BoardBuilder {
         self.delay = Some(delay);
         self.precise_delay = Some(precise_delay);
 
-        // the millis counter
+        // the millis counter, has to be a micros and then scale down
         let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),

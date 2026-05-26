@@ -59,8 +59,8 @@ impl RakWireless3172Step {
 
 pub struct RakWireless3172 {
     telemetry_step: RakWireless3172Step,
-    usart_send_time: i64,
-    last_transmission: i64,
+    usart_send_time: u32,
+    last_transmission: u32,
     watch: bool,
 }
 
@@ -85,7 +85,7 @@ impl RakWireless3172 {
     fn send_and_increment_step(&mut self, board: &mut dyn RRIVBoard, message: &str) {
         let prepared_message = format_args!("{}\r\n", message);
         usart_service::format_and_send(board, prepared_message);        
-        self.usart_send_time = board.timestamp();
+        self.usart_send_time = board.seconds();
         self.telemetry_step = self.telemetry_step.next();
         defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
     }
@@ -128,7 +128,7 @@ impl RakWireless3172 {
 
         // need to check for a timeout here
         // defmt::println!("no message, checking timeout");
-        if board.timestamp() - self.usart_send_time > 2 {
+        if board.seconds() - self.usart_send_time > 2 {
             defmt::println!("timed out, going to step 0");
             self.telemetry_step = RakWireless3172Step::Begin;
         }
@@ -167,7 +167,7 @@ impl RakWireless3172 {
         } {}
 
         // checking timeout if we didn't return above
-        if board.timestamp() - self.usart_send_time > 120 {
+        if board.seconds() - self.usart_send_time > 120 {
             // could power cycle here, but consider effect on intADC
             self.telemetry_step = RakWireless3172Step::Begin;
         }
@@ -312,7 +312,7 @@ impl Telemeter for RakWireless3172 {
 
         let args = format_args!("AT+SEND={}:{}\r\n", size, s.as_str()); 
         usart_service::format_and_send(board, args);
-        self.last_transmission = board.timestamp();
+        self.last_transmission = board.seconds();
     }
 
     fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
@@ -320,7 +320,7 @@ impl Telemeter for RakWireless3172 {
             return false;
         }
 
-        if board.timestamp() < self.last_transmission + 10 {
+        if board.seconds() < self.last_transmission + 10 {
             false
         } else {
             true

@@ -66,7 +66,7 @@ pub trait RRIVBoard: Send {
     fn rs485_send(&mut self, message : &[u8]);
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
-    fn timestamp(&mut self) -> i64;
+    fn seconds(&mut self) -> u32;
     fn millis(&mut self) -> u32;
 
 

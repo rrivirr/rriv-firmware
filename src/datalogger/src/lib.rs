@@ -355,7 +355,7 @@ impl DataLogger {
                 // process telemetry
                 // process actuators
 
-                if board.timestamp()
+                if board.epoch_timestamp()
                     >= self.last_interactive_log_time
                         + self.settings.interactive_logging_interval as i64
                 {
@@ -380,7 +380,7 @@ impl DataLogger {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
-                    self.last_interactive_log_time = board.timestamp();
+                    self.last_interactive_log_time = board.epoch_timestamp();
                     defmt::trace!("interactive measurement completed");
 
                 }
