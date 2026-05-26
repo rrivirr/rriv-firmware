@@ -288,6 +288,7 @@ impl DataLogger {
     }
 
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
+
         //
         // Process incoming commands
         //
@@ -401,14 +402,9 @@ impl DataLogger {
                     self.process_telemetry(board);
 
                     //     // go to sleep until the next in interval (in minutes)
-                    let mut slept = 0u64;
-                    while slept < (self.settings.sleep_interval as u64) * 1000u64 * 60u64 {
-                        // TODO: allow using interactive_logging_interval here for testing
-                        board.delay_ms(2000);
-                        board.sleep(); // TODO: this just feeds the watchdog for now
-                        slept = slept + 2000;
-                    }
-
+                    let milliseconds = (self.settings.sleep_interval as u64) * 60u64 * 1000u64;
+                    board.sleep(milliseconds);
+                  
                     //     // start the next measurement cycle
                     self.initialize_measurement_cycle();
                 }

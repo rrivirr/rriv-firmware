@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use cortex_m::peripheral::syst;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use rriv_board::hardware_error::{HardwareError};
@@ -150,40 +151,7 @@ impl Board {
 
     }
 
-    pub fn sleep_mcu(&mut self) {
-        // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
-        // EDIT: there is not alternative source for indep watchdog, it's always HSI
-        // EDIT: therefore field mode must restart with indep watchdog disabled
-
-        self.internal_rtc.set_alarm(5000); // 5 seconds?
-        self.internal_rtc.listen_alarm();
-        defmt::println!("will sleep");
-
-        // disable interrupts
-        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
-        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
-        NVIC::mask(pac::Interrupt::USART2);
-
-        unsafe { NVIC::unmask(pac::Interrupt::RTCALARM) };
-        cortex_m::asm::dsb();
-
-        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
-        core_peripherals.SYST.disable_interrupt();
-
-        cortex_m::asm::wfi();
-
-        core_peripherals.SYST.enable_interrupt();
-
-        cortex_m::asm::isb();
-
-        // re-enable interrupts
-        unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
-        unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
-        unsafe { NVIC::unmask(pac::Interrupt::USART2) };
-
-        defmt::println!("woke from sleep");
-    }
-
+   
     pub fn enter_stop_mode(&mut self) {
         //           debug("setting up EXTI");
         //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
@@ -422,7 +390,7 @@ impl RRIVBoard for Board {
 
     fn get_millis(&mut self) -> u32 {
         let millis = self.counter.now();
-        let millis = millis.ticks();
+        let millis = millis.ticks();  
         millis
     }
 
@@ -438,12 +406,6 @@ impl RRIVBoard for Board {
             Ok(value) => return value as f32,
             Err(_err) => return -1.0,
         }
-    }
-
-    fn sleep(&mut self) {
-        // need to extend IndependentWatchdog to sleep the watch dog
-        // self.watchdog.acc
-        self.watchdog.feed();
     }
 
     fn set_debug(&mut self, debug: bool) {
@@ -890,8 +852,97 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn sleep(&mut self, milliseconds: u64) {
+        // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
+        // EDIT: there is not alternative source for indep watchdog, it's always HSI
+        // EDIT: therefore field mode must restart with indep watchdog disabled
+        // sleeping just needs to happen in units less that indep watchdog, but stop mode need restart and disable
+        // if we wake from sleep should we go ahead and reset again to enable the watchdog during processing?
+
+        // This connects the RTC alarm event to the NVIC for wake-up
+        let exti = unsafe { &(*pac::EXTI::ptr()) };
+        // exti.pr.modify(|_, w| w.pr17().set_bit());
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+        // Enable interrupt on EXTI line 17
+        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
+        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
+        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
+
+        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work
+        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user
+        NVIC::mask(pac::Interrupt::USART2);
+        unsafe {
+            NVIC::unmask(pac::Interrupt::RTCALARM);
+        }
+
+        // To detect if a debugger is attached to an STM32F103RB, you can check the DBGMCU_CR control register within the microcontroller.  Specifically, reading the bottom 3 bits of this register will indicate an active debug session, as these bits are set to 1 when a debugger attaches and default to 0 after a power-on reset.
+
+        // if we are debugging, we need this.  but this interferes with actual low power modes
+        // #[cfg(debug_assertions)]
+        // {
+            let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
+            dbgmcu.cr.modify(|_, w| w.dbg_sleep().set_bit());  // Enable debug in sleep
+        // }
+
+        let mut remainder: u32 = milliseconds;
+        
+        defmt::println!("try sleep {}", milliseconds);
+
+        let macrosleep_interval_s = WATCHDOG_TIMEOUT - 2;
+        while remainder > macrosleep_interval_s * 1000 {
+            self.watchdog.feed(); 
+            
+            // self.internal_rtc.set_time(0);
+            // cortex_m::asm::delay(100);  // RTC sync
+            pac::NVIC::unpend(pac::Interrupt::RTCALARM);
+            exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+            self.internal_rtc.set_alarm(self.internal_rtc.current_time() + macrosleep_interval_s); // sleep in units of WATCHDOG_TIMEOUT - 2, triggers on the actual time
+            defmt::println!("will sleep {}", self.internal_rtc.current_time() );  
+
+            cortex_m::asm::dsb();
+
+            let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+            core_peripherals.SYST.disable_interrupt();
+
+            cortex_m::asm::wfi();
+
+            core_peripherals.SYST.enable_interrupt();
+
+            // self.internal_rtc.clear_alarm_flag();
+            defmt::println!("did sleep {}", self.internal_rtc.current_time() );  defmt::flush();
+            usb_serial_send("sleeping", &mut self.delay);
+            remainder = remainder - macrosleep_interval_s * 1000;
+
+        }
+        self.watchdog.feed(); 
+        defmt::println!("woke from sleep");
+        // handle the rest of the sleep, the remaining milliseconds
+        unsafe {
+            NVIC::unmask(pac::Interrupt::USART2);
+        }
+        NVIC::mask(pac::Interrupt::RTCALARM);
+        
+    }
+
 }
 
+
+#[interrupt]
+unsafe fn RTCALARM() {
+    defmt::println!("got RTCALARM interrupt"); defmt::flush();
+    // The `rtc.listen_alarm()` call has already configured the EXTI line.
+    // This function will be called when the alarm triggers.
+    // Usually, we just clear the pending flag here. The main loop will handle the event.
+    // NOTE: Be careful with shared state if you do more complex operations.
+    
+    let exti = unsafe { &(*pac::EXTI::ptr()) };
+    exti.pr.modify(|_, w| w.pr17().set_bit());
+
+    cortex_m::peripheral::NVIC::unpend(pac::Interrupt::RTCALARM);
+    // The clearing of the alarm flag in the main loop is preferred to avoid
+    // potential lock contention.
+}
 
 
 
