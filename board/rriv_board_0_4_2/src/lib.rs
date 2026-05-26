@@ -29,7 +29,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM6, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, SCB, TIM2, TIM4, TIM6, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -151,6 +151,90 @@ impl Board {
 
     }
 
+    pub fn check_entry_standby(){
+        defmt::println!("check entry standby");
+        let core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+
+        // need to flash some LED or something
+       
+        
+        // mcu device registers
+        let rcc = device_peripherals.RCC.constrain();
+     
+        let mut pwr = device_peripherals.PWR;
+        let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
+
+        let enter_standby =  1; // 0b1 & backup_domain.read_data_register_low(2);
+        if enter_standby == 1 {
+            // do not disable the watchdog
+            // and enter standby mode
+
+            // we don't need to do any clock stuff, we have just reset
+            // we don't need GPIO setup
+            // but we do need the internal RTC
+            // get the standby time from backup domain??
+            // it will need to be standby seconds, to account for seconds we are off
+            // calculated before going into standby using the exRTC
+            // clear enter_standby, so that the measurement loop will run on restart
+            let rtc = Rtc::new(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
+            Board::standby(10, rtc, core_peripherals);
+        } 
+        // otherwise do nothing
+
+    }
+
+     fn standby(seconds: u32, mut rtc: Rtc, mut core_peripherals: pac::CorePeripherals){
+         // Try Standby
+
+        defmt::println!("try stdby"); defmt::flush();
+
+        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  
+        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); 
+        NVIC::mask(pac::Interrupt::USART2); 
+       
+        // This connects the RTC alarm event to the NVIC for wake-up
+        let exti = unsafe { &(*pac::EXTI::ptr()) };
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+        // Enable interrupt on EXTI line 17
+        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
+        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
+        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
+
+        unsafe {
+            NVIC::unmask(pac::Interrupt::RTCALARM);
+        }
+       
+        // set up wakeup
+        rtc.set_time(0);
+        cortex_m::asm::delay(100);  // RTC sync
+        let start_sleep = rtc.current_time();
+
+        // clear any pending
+        pac::NVIC::unpend(pac::Interrupt::RTCALARM);
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+
+        let alarm_time = start_sleep + seconds; // test with 2 sec
+        rtc.set_alarm(alarm_time); 
+       
+        // Go into standby
+        defmt::println!("go into stdby");
+
+        let pwr = unsafe { &(*pac::PWR::ptr()) };
+        pwr.cr.modify(|_,w| w.pdds().set_bit());
+        pwr.cr.modify(|_,w| w.cwuf().set_bit());
+
+        core_peripherals.SCB.set_sleepdeep();
+
+        cortex_m::asm::dsb();
+        core_peripherals.SYST.disable_interrupt();
+        cortex_m::asm::wfi();
+
+        // should be in standby
+        defmt::println!("should not reach here");
+    }
    
     pub fn enter_stop_mode(&mut self) {
         //           debug("setting up EXTI");
@@ -851,6 +935,61 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn standby(&mut self, minutes: u32){
+         // Try Standby
+        defmt::println!("try stdby"); defmt::flush();
+        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+
+        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  
+        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); 
+        NVIC::mask(pac::Interrupt::USART2); 
+       
+        // This connects the RTC alarm event to the NVIC for wake-up
+        let exti = unsafe { &(*pac::EXTI::ptr()) };
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+        // Enable interrupt on EXTI line 17
+        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
+        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
+        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
+
+        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work?
+        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user?
+        // NVIC::mask(pac::Interrupt::USART2); // ok to wake up
+        unsafe {
+            NVIC::unmask(pac::Interrupt::RTCALARM);
+        }
+       
+        // set up wakeup
+        self.internal_rtc.set_time(0);
+        cortex_m::asm::delay(100);  // RTC sync
+        let start_sleep = self.internal_rtc.current_time();
+
+        // clear any pending
+        pac::NVIC::unpend(pac::Interrupt::RTCALARM);
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+
+        let alarm_time = start_sleep + 10; // test with 2 sec
+        self.internal_rtc.set_alarm(alarm_time); 
+       
+        // Go into standby
+        defmt::println!("go into stdby");
+
+        let pwr = unsafe { &(*pac::PWR::ptr()) };
+        pwr.cr.modify(|_,w| w.pdds().set_bit());
+        pwr.cr.modify(|_,w| w.cwuf().set_bit());
+
+        core_peripherals.SCB.set_sleepdeep();
+
+        cortex_m::asm::dsb();
+        core_peripherals.SYST.disable_interrupt();
+        cortex_m::asm::wfi();
+
+        // should be in standby
+        defmt::println!("should not reach here");
+    }
+
     fn sleep(&mut self, milliseconds: u64) {
         // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
         // EDIT: there is not alternative source for indep watchdog, it's always HSI
@@ -858,9 +997,13 @@ impl RRIVBoard for Board {
         // sleeping just needs to happen in units less that indep watchdog, but stop mode need restart and disable
         // if we wake from sleep should we go ahead and reset again to enable the watchdog during processing?
 
+
+       
+
+
+        // Sleep Mode
         // This connects the RTC alarm event to the NVIC for wake-up
         let exti = unsafe { &(*pac::EXTI::ptr()) };
-        // exti.pr.modify(|_, w| w.pr17().set_bit());
         exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
 
         // Enable interrupt on EXTI line 17
@@ -1036,6 +1179,7 @@ fn usb_interrupt(cs: &CriticalSection) {
 }
 
 pub fn build() -> Board {
+    Board::check_entry_standby();
     let mut board_builder = BoardBuilder::new();
     board_builder.setup();
     let board = board_builder.build();
@@ -1344,11 +1488,7 @@ impl BoardBuilder {
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
         let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
-        watchdog.feed();
+     
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1358,6 +1498,11 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
+        watchdog.feed();
 
         let uid = Uid::fetch();
         defmt::println!("uid: {:X}", uid.bytes());
@@ -1400,8 +1545,7 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
-        power_pins.enable_3v.set_high();
-        // delay.delay_ms(500_u32);
+        power_pins.enable_3v.set_high();        
         // power_pins.enable_3v.set_low();
         // delay.delay_ms(500_u32);
         // power_pins.enable_3v.set_high();
