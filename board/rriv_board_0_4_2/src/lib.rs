@@ -177,6 +177,16 @@ impl Board {
             // it will need to be standby seconds, to account for seconds we are off
             // calculated before going into standby using the exRTC
             // clear enter_standby, so that the measurement loop will run on restart
+
+            let mut flash = device_peripherals.FLASH.constrain();
+
+            let clocks = rcc.cfgr
+            .sysclk(SYSCLK_MHZ.MHz())
+            .pclk1(PCLK_MHZ.MHz())
+            // .adcclk(14.MHz())
+            .freeze(&mut flash.acr);
+
+
             let rtc = Rtc::new(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
             Board::standby(10, rtc, core_peripherals);
         } 
@@ -186,6 +196,29 @@ impl Board {
 
      fn standby(seconds: u32, mut rtc: Rtc, mut core_peripherals: pac::CorePeripherals){
          // Try Standby
+
+          let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
+            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals_steal.GPIOC.split();
+            let cs = gpioc.pc8;
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+            let sclk_led_enable = gpiob.pb13.into_push_pull_output_with_state(&mut gpiob.crh, gpio::PinState::Low);
+            (cs, sclk_led_enable, pwm_pin)
+        };
+        cs.set_high();
+        cortex_m::asm::delay(5000);
+        cs.set_low();
+        cortex_m::asm::delay(5000);
+        cs.set_high();
+        cortex_m::asm::delay(5000);
+        cs.set_low();
+        cortex_m::asm::delay(5000);
+        cs.set_high();
+        cortex_m::asm::delay(5000);
+        cs.set_low();
+        cortex_m::asm::delay(5000);
 
         defmt::println!("try stdby"); defmt::flush();
 
@@ -236,31 +269,6 @@ impl Board {
         defmt::println!("should not reach here");
     }
    
-    pub fn enter_stop_mode(&mut self) {
-        //           debug("setting up EXTI");
-        //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
-        // 	*bb_perip(&EXTI_BASE->RTSR, EXTI_RTC_ALARM_BIT) = 1;
-
-        // in addition to the RTCALARM interrupt, the rtc must route through EXTI to wake the MCU up from stop mode.
-        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        device_peripherals.EXTI.imr.write(
-            |w| w.mr17().set_bit(), // interrupt mask bit 17 enables RTC EXTI
-        );
-        device_peripherals.EXTI.rtsr.write(
-            |w| w.tr17().set_bit(), // rising trigger bit 17 enables RTC EXTI
-        );
-
-        // clocks
-        // steal and use raw the same function sin cfgr to switch to hsi and wait for stabilization
-        // and the same thing to switch back.
-        // let clocks = cfgr
-        //     .use_hse(8.MHz())
-        //     .sysclk(48.MHz())
-        //     .pclk1(24.MHz())
-        //     .adcclk(14.MHz())
-        //     .freeze(flash_acr);
-    }
-
     fn disable_interrupts(&self) {
         // disable interrupts
         cortex_m::interrupt::disable();
