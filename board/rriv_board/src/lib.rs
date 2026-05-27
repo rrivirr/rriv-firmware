@@ -73,7 +73,7 @@ pub trait RRIVBoard: Send {
     fn get_battery_level(&mut self) -> f32;
 
     fn sleep(&mut self, milliseconds: u64);
-    fn standby(&mut self, minutes: u32);
+    fn standby(&mut self, interval: u32);
 
 
     // low level board functionality

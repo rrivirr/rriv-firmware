@@ -7,6 +7,7 @@ use cortex_m::peripheral::syst;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use rriv_board::hardware_error::{HardwareError};
+use stm32f1xx_hal::backup_domain::BackupDomain;
 use stm32f1xx_hal::time::{Hertz, MilliSeconds};
 use stm32f1xx_hal::timer::{CounterHz, CounterUs};
 
@@ -59,7 +60,7 @@ use rriv_board::{
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
-use stm32f1xx_hal::rtc::Rtc;
+use stm32f1xx_hal::rtc::{Rtc, RtcClkLse, RtcClkLsi};
 
 use one_wire_bus::{Address, OneWire, SearchState};
 
@@ -128,6 +129,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
+    pub backup_domain: BackupDomain,
     pub hardware_errors: [HardwareError; 5]
 }
 
@@ -165,8 +167,14 @@ impl Board {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        let enter_standby =  1; // 0b1 & backup_domain.read_data_register_low(2);
+        let enter_standby = 0b1 & backup_domain.read_data_register_low(2);
         if enter_standby == 1 {
+            // clear the standby entry flag
+            backup_domain.write_data_register_low(2, 0b0);
+            
+            // get the seconds
+            let seconds = backup_domain.read_data_register_high(2);
+
             // do not disable the watchdog
             // and enter standby mode
 
@@ -187,14 +195,14 @@ impl Board {
             .freeze(&mut flash.acr);
 
 
-            let rtc = Rtc::new(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
-            Board::standby(10, rtc, core_peripherals);
+            let rtc = Rtc::new_lsi(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
+            Board::standby(seconds, rtc, core_peripherals);
         } 
         // otherwise do nothing
 
     }
 
-     fn standby(seconds: u32, mut rtc: Rtc, mut core_peripherals: pac::CorePeripherals){
+     fn standby(seconds: u16, mut rtc: Rtc<RtcClkLsi>, mut core_peripherals: pac::CorePeripherals){
          // Try Standby
 
           let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
@@ -253,8 +261,96 @@ impl Board {
         exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
 
 
-        let alarm_time = start_sleep + seconds; // test with 2 sec
+        let alarm_time = start_sleep + seconds as u32; // test with 2 sec
         rtc.set_alarm(alarm_time); 
+
+        // turn off all the GPIO
+        // Get GPIO peripherals
+        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+
+        let mut gpioa = device_peripherals_steal.GPIOA.split();
+        let mut gpiob = device_peripherals_steal.GPIOB.split();
+        let mut gpioc = device_peripherals_steal.GPIOC.split();
+        let mut gpiod = device_peripherals_steal.GPIOD.split();
+
+    // === Configure ALL GPIO pins to ANALOG mode ===
+    // This is critical for low power consumption in Standby mode
+    
+    // enable_3v: Pin<'C', 5>,
+    //   enable_5v: Pin<'B', 12>,
+
+    device_peripherals_steal.ADC1.cr2.modify(|_, w| w.adon().clear_bit());
+    device_peripherals_steal.RCC.apb2enr.modify(|_, w| w.adc1en().clear_bit());
+
+
+    // GPIOA (Pins 0-15)
+    let _pa0 = gpioa.pa0.into_analog(&mut gpioa.crl); // internal_adc1
+    let _pa1 = gpioa.pa1.into_push_pull_output(&mut gpioa.crl).set_high(); // enable_avdd
+    let _pa2 = gpioa.pa2.into_push_pull_output(&mut gpioa.crl).set_high(); // tx
+    let _pa3 = gpioa.pa3.into_pull_up_input(&mut gpioa.crl); // rx
+    let _pa4 = gpioa.pa4.into_push_pull_output(&mut gpioa.crl).set_high(); // external_adc_reset
+    let _pa5 = gpioa.pa5.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_sck
+    let _pa6 = gpioa.pa6.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_miso
+    let _pa7 = gpioa.pa7.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_mosi
+    let _pa8 = gpioa.pa8.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_red_and_wake_button
+    let _pa9 = gpioa.pa9.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_green_and_spi2_chip_select
+    let _pa10 = gpioa.pa10.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_blue
+    let _pa11 = gpioa.pa11.into_push_pull_output(&mut gpioa.crh).set_low(); // usb_n
+    let _pa12 = gpioa.pa12.into_push_pull_output(&mut gpioa.crh).set_low(); // usb_p
+    // let _pa13 = gpioa.pa13.into_analog(&mut gpioa.crh);  // SWDIO
+    // let _pa14 = gpioa.pa14.into_analog(&mut gpioa.crh);  // SWCLK
+    // let _pa15 = gpioa.pa15.into_analog(&mut gpioa.crh);
+    
+    // GPIOB (Pins 0-15)
+    let _pb0 = gpiob.pb0.into_analog(&mut gpiob.crl); // vin_measure
+    let _pb1 = gpiob.pb1.into_push_pull_output(&mut gpiob.crl).set_high(); // battery level mosfet
+    let _pb2 = gpiob.pb2.into_analog(&mut gpiob.crl); // boot pin
+    // let _pb3 = gpiob.pb3.into_analog(&mut gpiob.crl);
+    // let _pb4 = gpiob.pb4.into_analog(&mut gpiob.crl);
+    let _pb5 = gpiob.pb5.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio2
+    let _pb6 = gpiob.pb6.into_pull_down_input(&mut gpiob.crl); // i2c1_scl
+    let _pb7 = gpiob.pb7.into_pull_down_input(&mut gpiob.crl); // i2c1_sda
+    let _pb8 = gpiob.pb8.into_push_pull_output(&mut gpiob.crh).set_low(); // gpio1
+    let _pb9 = gpiob.pb9.into_analog(&mut gpiob.crh); // unused
+    let _pb10 = gpiob.pb10.into_pull_down_input(&mut gpiob.crh); // i2c2_scl
+    let _pb11 = gpiob.pb11.into_pull_down_input(&mut gpiob.crh); // i2c2_sda
+    let _pb12 = gpiob.pb12.into_push_pull_output(&mut gpiob.crh).set_low(); // enable_5v
+    let _pb13 = gpiob.pb13.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_sck
+    let _pb14 = gpiob.pb14.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_miso
+    let _pb15 = gpiob.pb15.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_mosi
+    
+    // GPIOC (Pins 0-15) - Note: PC14/PC15 are typically LSE pins
+    let _pc0 = gpioc.pc0.into_analog(&mut gpioc.crl); // internal_adc5
+    let _pc1 = gpioc.pc1.into_analog(&mut gpioc.crl); // internal_adc4
+    let _pc2 = gpioc.pc2.into_analog(&mut gpioc.crl); // internal_adc3
+    let _pc3 = gpioc.pc3.into_analog(&mut gpioc.crl); // internal_adc2
+    let _pc4 = gpioc.pc4.into_analog(&mut gpioc.crl); // unused
+    let _pc5 = gpioc.pc5.into_push_pull_output(&mut gpioc.crl).set_low(); // enable_3v
+    let _pc6 = gpioc.pc6.into_push_pull_output(&mut gpioc.crl).set_high(); // exADC mosfet
+    let _pc7 = gpioc.pc7.into_push_pull_output(&mut gpioc.crl).set_low(); // duplicated? // unused
+    let _pc8 = gpioc.pc8.into_push_pull_output(&mut gpioc.crh).set_low(); // SD Card CS
+    let _pc9 = gpioc.pc9.into_analog(&mut gpioc.crh); // unused
+    let _pc10 = gpioc.pc10.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio 8
+    let _pc11 = gpioc.pc11.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio7
+    let _pc12 = gpioc.pc12.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio6
+    // PC13, PC14, PC15 are special pins - usually reserved for LSE/RTC
+    // If you need to configure them as analog, do so carefully
+    let _pc13 = gpioc.pc13.into_push_pull_output(&mut gpioc.crh).set_low(); //enable HSE
+    // For PC14 and PC15 (LSE pins), DO NOT configure as analog if using LSE
+    let _pc14 = gpioc.pc14.into_push_pull_output(&mut gpioc.crh).set_low(); // Skip if using LSE
+    let _pc15 = gpioc.pc15.into_push_pull_output(&mut gpioc.crh).set_low();  // Skip if using LSE
+    
+    // Optional: Disable JTAG to free PA15, PB3, PB4 pins
+    // Use an AFIO instance to disable JTAG
+    let mut afio = device_peripherals_steal.AFIO.constrain();
+    let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
+    let _pb3 = pb3.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio4
+    let _pb4 = pb4.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio3
+    let _pa15 = pa15.into_analog(&mut gpioa.crh);
+
+    let _pd0 = gpiod.pd0.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
+    let _pd1 = gpiod.pd1.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
+    let _pd2 = gpiod.pd2.into_push_pull_output(&mut gpiod.crl).set_low(); 
 
         // Go into standby
         defmt::println!("go into stdby");
@@ -947,59 +1043,15 @@ impl RRIVBoard for Board {
         }
     }
 
-    fn standby(&mut self, minutes: u32){
-         // Try Standby
-        defmt::println!("try stdby"); defmt::flush();
-        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+    fn standby(&mut self, interval: u32){
+        // minutes doesn't mean anything here yet.
+        // this is really about 'interval' and calculating the seconds until the next wake
+        // and then put them into the backup register and reset
+        let seconds = 20;
+        self.backup_domain.write_data_register_high(2, seconds);
+        self.backup_domain.write_data_register_low(2, 0b1);
+        SCB::sys_reset(); // reset so we can standby without the watchdog enabled.
 
-        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  
-        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); 
-        NVIC::mask(pac::Interrupt::USART2); 
-       
-        // This connects the RTC alarm event to the NVIC for wake-up
-        let exti = unsafe { &(*pac::EXTI::ptr()) };
-        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
-
-        // Enable interrupt on EXTI line 17
-        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
-        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
-        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
-
-        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work?
-        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user?
-        // NVIC::mask(pac::Interrupt::USART2); // ok to wake up
-        unsafe {
-            NVIC::unmask(pac::Interrupt::RTCALARM);
-        }
-       
-        // set up wakeup
-        self.internal_rtc.set_time(0);
-        cortex_m::asm::delay(100);  // RTC sync
-        let start_sleep = self.internal_rtc.current_time();
-
-        // clear any pending
-        pac::NVIC::unpend(pac::Interrupt::RTCALARM);
-        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
-
-
-        let alarm_time = start_sleep + 10; // test with 2 sec
-        self.internal_rtc.set_alarm(alarm_time); 
-       
-        // Go into standby
-        defmt::println!("go into stdby");
-
-        let pwr = unsafe { &(*pac::PWR::ptr()) };
-        pwr.cr.modify(|_,w| w.pdds().set_bit());
-        pwr.cr.modify(|_,w| w.cwuf().set_bit());
-
-        core_peripherals.SCB.set_sleepdeep();
-
-        cortex_m::asm::dsb();
-        core_peripherals.SYST.disable_interrupt();
-        cortex_m::asm::wfi();
-
-        // should be in standby
-        defmt::println!("should not reach here");
     }
 
     fn sleep(&mut self, milliseconds: u64) {
@@ -1191,7 +1243,7 @@ fn usb_interrupt(cs: &CriticalSection) {
 }
 
 pub fn build() -> Board {
-    // Board::check_entry_standby();
+    Board::check_entry_standby();
     let mut board_builder = BoardBuilder::new();
     board_builder.setup();
     let board = board_builder.build();
@@ -1204,6 +1256,7 @@ pub struct BoardBuilder {
     // chip features
     pub delay: Option<DelayUs<TIM3>>,
     pub precise_delay: Option<PreciseDelayUs>,
+    pub backup_domain: Option<BackupDomain>,
 
     // pins groups
     pub gpio: Option<DynamicGpioPins>,
@@ -1245,6 +1298,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            backup_domain: None,
             hardware_errors: [HardwareError::None; 5]
         }
     }
@@ -1297,6 +1351,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            backup_domain: self.backup_domain.unwrap(),
             hardware_errors: self.hardware_errors
         }
     }
@@ -1779,6 +1834,7 @@ impl BoardBuilder {
 
         watchdog.feed();
 
+        self.backup_domain = Some(backup_domain);
         self.watchdog = Some(watchdog);
 
         defmt::println!("setting up RS485 serial b");

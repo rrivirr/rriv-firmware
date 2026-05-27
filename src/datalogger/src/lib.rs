@@ -383,6 +383,8 @@ impl DataLogger {
                     self.last_interactive_log_time = board.epoch_timestamp();
                     defmt::trace!("interactive measurement completed");
 
+                    board.standby(15); // enter into standby mode to wake on the next quarter hour
+
                 }
                 
                 self.process_telemetry(board);
