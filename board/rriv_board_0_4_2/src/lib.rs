@@ -279,8 +279,26 @@ impl Board {
     // enable_3v: Pin<'C', 5>,
     //   enable_5v: Pin<'B', 12>,
 
+    // these didn't make a different
     device_peripherals_steal.ADC1.cr2.modify(|_, w| w.adon().clear_bit());
     device_peripherals_steal.RCC.apb2enr.modify(|_, w| w.adc1en().clear_bit());
+
+    // Enable backup domain write access (clears DBP bit in PWR_CR)
+    // rcc_cfgr.bkp.enable(&mut rcc.apb1, &mut bkp);
+
+    // Now we can modify the backup domain registers
+    // Use the RTC's handle to get to the BDCR register
+    // let mut rtc_handle = rtc.constrain(&mut rcc_cfgr.bkp, &mut pwr);
+    // rtc_handle.free(); // Release the handle to access BDCR directly
+
+    // Clear LSEON bit
+    device_peripherals_steal.RCC.bdcr.modify(|_, w| w.lseon().clear_bit());
+
+    // Wait for LSE to fully shut down (LSERDY will clear after ~6 LSE cycles)
+    while device_peripherals_steal.RCC.bdcr.read().lserdy().bit_is_set() {}
+
+    // Optionally disable backup domain write access to save additional power
+    // rcc_cfgr.bkp.disable(&mut rcc.apb1);
 
 
     // GPIOA (Pins 0-15)
@@ -299,7 +317,7 @@ impl Board {
     let _pa12 = gpioa.pa12.into_push_pull_output(&mut gpioa.crh).set_low(); // usb_p
     // let _pa13 = gpioa.pa13.into_analog(&mut gpioa.crh);  // SWDIO
     // let _pa14 = gpioa.pa14.into_analog(&mut gpioa.crh);  // SWCLK
-    // let _pa15 = gpioa.pa15.into_analog(&mut gpioa.crh);
+    // let _pa15 = gpioa.pa15.into_analog(&mut gpioa.crh); // JTDI, handled below
     
     // GPIOB (Pins 0-15)
     let _pb0 = gpiob.pb0.into_analog(&mut gpiob.crl); // vin_measure
@@ -326,7 +344,7 @@ impl Board {
     let _pc3 = gpioc.pc3.into_analog(&mut gpioc.crl); // internal_adc2
     let _pc4 = gpioc.pc4.into_analog(&mut gpioc.crl); // unused
     let _pc5 = gpioc.pc5.into_push_pull_output(&mut gpioc.crl).set_low(); // enable_3v
-    let _pc6 = gpioc.pc6.into_push_pull_output(&mut gpioc.crl).set_high(); // exADC mosfet
+    let _pc6 = gpioc.pc6.into_push_pull_output(&mut gpioc.crl).set_high(); // exADC enable mosfet, high is off
     let _pc7 = gpioc.pc7.into_push_pull_output(&mut gpioc.crl).set_low(); // duplicated? // unused
     let _pc8 = gpioc.pc8.into_push_pull_output(&mut gpioc.crh).set_low(); // SD Card CS
     let _pc9 = gpioc.pc9.into_analog(&mut gpioc.crh); // unused
@@ -335,7 +353,7 @@ impl Board {
     let _pc12 = gpioc.pc12.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio6
     // PC13, PC14, PC15 are special pins - usually reserved for LSE/RTC
     // If you need to configure them as analog, do so carefully
-    let _pc13 = gpioc.pc13.into_push_pull_output(&mut gpioc.crh).set_low(); //enable HSE
+    let _pc13 = gpioc.pc13.into_push_pull_output(&mut gpioc.crh).set_low(); //enable HSE set low to disabl
     // For PC14 and PC15 (LSE pins), DO NOT configure as analog if using LSE
     let _pc14 = gpioc.pc14.into_push_pull_output(&mut gpioc.crh).set_low(); // Skip if using LSE
     let _pc15 = gpioc.pc15.into_push_pull_output(&mut gpioc.crh).set_low();  // Skip if using LSE
@@ -1047,7 +1065,7 @@ impl RRIVBoard for Board {
         // minutes doesn't mean anything here yet.
         // this is really about 'interval' and calculating the seconds until the next wake
         // and then put them into the backup register and reset
-        let seconds = 20;
+        let seconds = 500;
         self.backup_domain.write_data_register_high(2, seconds);
         self.backup_domain.write_data_register_low(2, 0b1);
         SCB::sys_reset(); // reset so we can standby without the watchdog enabled.
