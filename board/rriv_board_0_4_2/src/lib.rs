@@ -326,12 +326,12 @@ impl Board {
     // let _pb3 = gpiob.pb3.into_analog(&mut gpiob.crl);
     // let _pb4 = gpiob.pb4.into_analog(&mut gpiob.crl);
     let _pb5 = gpiob.pb5.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio2
-    let _pb6 = gpiob.pb6.into_pull_down_input(&mut gpiob.crl); // i2c1_scl
-    let _pb7 = gpiob.pb7.into_pull_down_input(&mut gpiob.crl); // i2c1_sda
+    let _pb6 = gpiob.pb6.into_pull_up_input(&mut gpiob.crl); // i2c1_scl
+    let _pb7 = gpiob.pb7.into_pull_up_input(&mut gpiob.crl); // i2c1_sda
     let _pb8 = gpiob.pb8.into_push_pull_output(&mut gpiob.crh).set_low(); // gpio1
     let _pb9 = gpiob.pb9.into_analog(&mut gpiob.crh); // unused
-    let _pb10 = gpiob.pb10.into_pull_down_input(&mut gpiob.crh); // i2c2_scl
-    let _pb11 = gpiob.pb11.into_pull_down_input(&mut gpiob.crh); // i2c2_sda
+    let _pb10 = gpiob.pb10.into_pull_up_input(&mut gpiob.crh); // i2c2_scl
+    let _pb11 = gpiob.pb11.into_pull_up_input(&mut gpiob.crh); // i2c2_sda
     let _pb12 = gpiob.pb12.into_push_pull_output(&mut gpiob.crh).set_low(); // enable_5v
     let _pb13 = gpiob.pb13.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_sck
     let _pb14 = gpiob.pb14.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_miso
@@ -369,6 +369,10 @@ impl Board {
     let _pd0 = gpiod.pd0.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
     let _pd1 = gpiod.pd1.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
     let _pd2 = gpiod.pd2.into_push_pull_output(&mut gpiod.crl).set_low(); 
+
+
+    // Disable both JTAG and SWD debug interface before Standby
+    afio.mapr.modify_mapr(|_, w| unsafe { w.swj_cfg().bits(0b010) }); // 0b010 = full disable
 
         // Go into standby
         defmt::println!("go into stdby");
