@@ -3,11 +3,13 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use cortex_m::peripheral::syst;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 use rriv_board::hardware_error::{HardwareError};
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+use stm32f1xx_hal::backup_domain::BackupDomain;
+use stm32f1xx_hal::time::{Hertz, MilliSeconds};
+use stm32f1xx_hal::timer::{CounterHz, CounterUs};
 
 use core::fmt::{self};
 use core::mem;
@@ -28,7 +30,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, SCB, TIM2, TIM4, TIM6, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -58,7 +60,7 @@ use rriv_board::{
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
-use stm32f1xx_hal::rtc::Rtc;
+use stm32f1xx_hal::rtc::{Rtc, RtcClkLse, RtcClkLsi};
 
 use one_wire_bus::{Address, OneWire, SearchState};
 
@@ -78,6 +80,7 @@ type RedLed = gpio::Pin<'A', 9, Output<OpenDrain>>;
 pub const HSE_MHZ: u32 = 8;
 pub const SYSCLK_MHZ: u32 = 48;
 pub const PCLK_MHZ: u32 = 24;
+pub const WATCHDOG_TIMEOUT: u32 = 6;
 
 #[allow(dead_code)]
 static WAKE_LED: Mutex<RefCell<Option<RedLed>>> = Mutex::new(RefCell::new(None));
@@ -126,6 +129,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM4>,
+    pub backup_domain: BackupDomain,
     pub hardware_errors: [HardwareError; 5]
 }
 
@@ -149,65 +153,284 @@ impl Board {
 
     }
 
-    pub fn sleep_mcu(&mut self) {
-        // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
-        // EDIT: there is not alternative source for indep watchdog, it's always HSI
-        // EDIT: therefore field mode must restart with indep watchdog disabled
+    pub fn check_entry_standby(){
+        defmt::println!("check entry standby");
+        let core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
 
-        self.internal_rtc.set_alarm(5000); // 5 seconds?
-        self.internal_rtc.listen_alarm();
-        defmt::println!("will sleep");
+        // need to flash some LED or something
+       
+        
+        // mcu device registers
+        let rcc = device_peripherals.RCC.constrain();
+     
+        let mut pwr = device_peripherals.PWR;
+        let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // disable interrupts
-        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);
-        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0);
-        NVIC::mask(pac::Interrupt::USART2);
+        let enter_standby = 0b1 & backup_domain.read_data_register_low(2);
+        if enter_standby == 1 {
+            // clear the standby entry flag
+            backup_domain.write_data_register_low(2, 0b0);
+            
+            // get the seconds
+            let seconds = backup_domain.read_data_register_high(2);
 
-        unsafe { NVIC::unmask(pac::Interrupt::RTCALARM) };
+            // do not disable the watchdog
+            // and enter standby mode
+
+            // we don't need to do any clock stuff, we have just reset
+            // we don't need GPIO setup
+            // but we do need the internal RTC
+            // get the standby time from backup domain??
+            // it will need to be standby seconds, to account for seconds we are off
+            // calculated before going into standby using the exRTC
+            // clear enter_standby, so that the measurement loop will run on restart
+
+            let mut flash = device_peripherals.FLASH.constrain();
+
+            let clocks = rcc.cfgr
+            .sysclk(SYSCLK_MHZ.MHz())
+            .pclk1(PCLK_MHZ.MHz())
+            // .adcclk(14.MHz())
+            .freeze(&mut flash.acr);
+
+
+            let rtc = Rtc::new_lsi(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
+            Board::standby(seconds, rtc, core_peripherals);
+        } 
+        // otherwise do nothing
+
+    }
+
+     fn standby(seconds: u16, mut rtc: Rtc<RtcClkLsi>, mut core_peripherals: pac::CorePeripherals){
+         // Try Standby
+
+          let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
+            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals_steal.GPIOC.split();
+            let cs = gpioc.pc8;
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+            let sclk_led_enable = gpiob.pb13.into_push_pull_output_with_state(&mut gpiob.crh, gpio::PinState::Low);
+            let mut sclk_led_enable: Pin<'B', 13, Output> = sclk_led_enable.into_floating_input(&mut gpiob.crh).into_push_pull_output(&mut gpiob.crh);
+            sclk_led_enable.set_high();
+            (cs, sclk_led_enable, pwm_pin)
+        };
+
+    
+        cs.set_high();
+        cortex_m::asm::delay(555000);
+        cs.set_low();
+        cortex_m::asm::delay(555000);
+        cs.set_high();
+        cortex_m::asm::delay(555000);
+        cs.set_low();
+        cortex_m::asm::delay(555000);
+        cs.set_high();
+        cortex_m::asm::delay(555000);
+        cs.set_low();
+        cortex_m::asm::delay(555000);
+
+        defmt::println!("try stdby"); defmt::flush();
+
+        NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  
+        NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); 
+        NVIC::mask(pac::Interrupt::USART2); 
+       
+        // This connects the RTC alarm event to the NVIC for wake-up
+        let exti = unsafe { &(*pac::EXTI::ptr()) };
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+        // Enable interrupt on EXTI line 17
+        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
+        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
+        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
+
+        unsafe {
+            NVIC::unmask(pac::Interrupt::RTCALARM);
+        }
+       
+        // set up wakeup
+        rtc.set_time(0);
+        cortex_m::asm::delay(100);  // RTC sync
+        let start_sleep = rtc.current_time();
+
+        // clear any pending
+        pac::NVIC::unpend(pac::Interrupt::RTCALARM);
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+
+        let alarm_time = start_sleep + seconds as u32; // test with 2 sec
+        rtc.set_alarm(alarm_time); 
+
+        // turn off all the GPIO
+        // Get GPIO peripherals
+        let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+
+        let mut gpioa = device_peripherals_steal.GPIOA.split();
+        let mut gpiob = device_peripherals_steal.GPIOB.split();
+        let mut gpioc = device_peripherals_steal.GPIOC.split();
+        let mut gpiod = device_peripherals_steal.GPIOD.split();
+
+    // === Configure ALL GPIO pins to ANALOG mode ===
+    // This is critical for low power consumption in Standby mode
+    
+    // enable_3v: Pin<'C', 5>,
+    //   enable_5v: Pin<'B', 12>,
+
+  
+    // Enable backup domain write access (clears DBP bit in PWR_CR)
+    // rcc_cfgr.bkp.enable(&mut rcc.apb1, &mut bkp);
+
+    // Now we can modify the backup domain registers
+    // Use the RTC's handle to get to the BDCR register
+    // let mut rtc_handle = rtc.constrain(&mut rcc_cfgr.bkp, &mut pwr);
+    // rtc_handle.free(); // Release the handle to access BDCR directly
+
+    // Clear LSEON bit
+    device_peripherals_steal.RCC.bdcr.modify(|_, w| w.lseon().clear_bit());
+
+    // Wait for LSE to fully shut down (LSERDY will clear after ~6 LSE cycles)
+    while device_peripherals_steal.RCC.bdcr.read().lserdy().bit_is_set() {}
+
+    // Optionally disable backup domain write access to save additional power
+    // rcc_cfgr.bkp.disable(&mut rcc.apb1);
+
+
+    // GPIOA (Pins 0-15)
+    let _pa0 = gpioa.pa0.into_analog(&mut gpioa.crl); // internal_adc1
+    let _pa1 = gpioa.pa1.into_push_pull_output(&mut gpioa.crl).set_high(); // enable_avdd
+    let _pa2 = gpioa.pa2.into_push_pull_output(&mut gpioa.crl).set_high(); // tx
+    let _pa3 = gpioa.pa3.into_pull_up_input(&mut gpioa.crl); // rx
+    let _pa4 = gpioa.pa4.into_push_pull_output(&mut gpioa.crl).set_high(); // external_adc_reset
+    let _pa5 = gpioa.pa5.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_sck
+    let _pa6 = gpioa.pa6.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_miso
+    let _pa7 = gpioa.pa7.into_push_pull_output(&mut gpioa.crl).set_low(); // spi1_mosi
+    let _pa8 = gpioa.pa8.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_red_and_wake_button
+    let _pa9 = gpioa.pa9.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_green_and_spi2_chip_select
+    let _pa10 = gpioa.pa10.into_push_pull_output(&mut gpioa.crh).set_low(); // rgb_blue
+    let _pa11 = gpioa.pa11.into_push_pull_output(&mut gpioa.crh).set_low(); // usb_n
+    let _pa12 = gpioa.pa12.into_push_pull_output(&mut gpioa.crh).set_low(); // usb_p
+    // let _pa13 = gpioa.pa13.into_analog(&mut gpioa.crh);  // SWDIO
+    // let _pa14 = gpioa.pa14.into_analog(&mut gpioa.crh);  // SWCLK
+    // let _pa15 = gpioa.pa15.into_analog(&mut gpioa.crh); // JTDI, handled below
+    
+    // GPIOB (Pins 0-15)
+    let _pb0 = gpiob.pb0.into_analog(&mut gpiob.crl); // vin_measure
+    let _pb1 = gpiob.pb1.into_push_pull_output(&mut gpiob.crl).set_high(); // battery level mosfet
+    let _pb2 = gpiob.pb2.into_analog(&mut gpiob.crl); // boot pin
+    // let _pb3 = gpiob.pb3.into_analog(&mut gpiob.crl);
+    // let _pb4 = gpiob.pb4.into_analog(&mut gpiob.crl);
+    let _pb5 = gpiob.pb5.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio2
+    let _pb6 = gpiob.pb6.into_pull_up_input(&mut gpiob.crl); // i2c1_scl
+    let _pb7 = gpiob.pb7.into_pull_up_input(&mut gpiob.crl); // i2c1_sda
+    let _pb8 = gpiob.pb8.into_push_pull_output(&mut gpiob.crh).set_low(); // gpio1
+    let _pb9 = gpiob.pb9.into_analog(&mut gpiob.crh); // unused
+    let _pb10 = gpiob.pb10.into_pull_up_input(&mut gpiob.crh); // i2c2_scl
+    let _pb11 = gpiob.pb11.into_pull_up_input(&mut gpiob.crh); // i2c2_sda
+    let _pb12 = gpiob.pb12.into_push_pull_output(&mut gpiob.crh).set_low(); // enable_5v
+    let _pb13 = gpiob.pb13.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_sck
+    let _pb14 = gpiob.pb14.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_miso
+    let _pb15 = gpiob.pb15.into_push_pull_output(&mut gpiob.crh).set_low(); // spi2_mosi
+    
+    // GPIOC (Pins 0-15) - Note: PC14/PC15 are typically LSE pins
+    let _pc0 = gpioc.pc0.into_analog(&mut gpioc.crl); // internal_adc5
+    let _pc1 = gpioc.pc1.into_analog(&mut gpioc.crl); // internal_adc4
+    let _pc2 = gpioc.pc2.into_analog(&mut gpioc.crl); // internal_adc3
+    let _pc3 = gpioc.pc3.into_analog(&mut gpioc.crl); // internal_adc2
+    let _pc4 = gpioc.pc4.into_analog(&mut gpioc.crl); // unused
+    let _pc5 = gpioc.pc5.into_push_pull_output(&mut gpioc.crl).set_low(); // enable_3v
+    let _pc6 = gpioc.pc6.into_push_pull_output(&mut gpioc.crl).set_high(); // exADC enable mosfet, high is off
+    let _pc7 = gpioc.pc7.into_push_pull_output(&mut gpioc.crl).set_low(); // duplicated? // unused
+    let _pc8 = gpioc.pc8.into_push_pull_output(&mut gpioc.crh).set_low(); // SD Card CS
+    let _pc9 = gpioc.pc9.into_analog(&mut gpioc.crh); // unused
+    let _pc10 = gpioc.pc10.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio 8
+    let _pc11 = gpioc.pc11.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio7
+    let _pc12 = gpioc.pc12.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio6
+    // PC13, PC14, PC15 are special pins - usually reserved for LSE/RTC
+    // If you need to configure them as analog, do so carefully
+    let _pc13 = gpioc.pc13.into_push_pull_output(&mut gpioc.crh).set_low(); //enable HSE set low to disabl
+    // For PC14 and PC15 (LSE pins), DO NOT configure as analog if using LSE
+    let _pc14 = gpioc.pc14.into_push_pull_output(&mut gpioc.crh).set_low(); // Skip if using LSE
+    let _pc15 = gpioc.pc15.into_push_pull_output(&mut gpioc.crh).set_low();  // Skip if using LSE
+    
+    // Optional: Disable JTAG to free PA15, PB3, PB4 pins
+    // Use an AFIO instance to disable JTAG
+    let mut afio = device_peripherals_steal.AFIO.constrain();
+    let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
+    let _pb3 = pb3.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio4
+    let _pb4 = pb4.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio3
+    let _pa15 = pa15.into_analog(&mut gpioa.crh);
+
+    let _pd0 = gpiod.pd0.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
+    let _pd1 = gpiod.pd1.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
+    let _pd2 = gpiod.pd2.into_push_pull_output(&mut gpiod.crl).set_low(); 
+
+
+    // these didn't make a difference
+    device_peripherals_steal.ADC1.cr2.modify(|_, w| w.adon().clear_bit());
+    device_peripherals_steal.RCC.apb2enr.modify(|_, w| w.adc1en().clear_bit());
+
+
+    // Disable both JTAG and SWD debug interface before Standby
+    afio.mapr.modify_mapr(|_, w| unsafe { w.swj_cfg().bits(0b100) }); // 0b100 = full disable
+
+    let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
+    // Disable debug clocks in all low-power modes
+    dbgmcu.cr.modify(|_, w| {
+        unsafe { w.dbg_sleep().clear_bit()      // Disable debug in Sleep mode
+        .dbg_stop().clear_bit()       // Disable debug in Stop mode
+        .dbg_standby().clear_bit()    // Disable debug in Standby mode
+        .trace_mode().bits(0b00) }      // Disable trace pin assignment
+    });
+
+
+// 1. Disable all APB2 peripherals (GPIO, SPI1, ADC1, USART1, TIM1, etc.)
+device_peripherals_steal.RCC.apb2enr.modify(|_, w| w
+    .afioen().clear_bit()
+    .spi1en().clear_bit()
+    .usart1en().clear_bit()
+    .adc1en().clear_bit()
+    .tim1en().clear_bit()
+    // .gpioaen().clear_bit()
+    // .gpioben().clear_bit()
+    // .gpiocen().clear_bit()
+    // .gpioden().clear_bit()
+);
+
+// 2. Disable all APB1 peripherals (I2C, USART2/3, SPI2, TIM2-4, WWDG, PWR, BKP)
+device_peripherals_steal.RCC.apb1enr.modify(|_, w| w
+    .tim2en().clear_bit()
+    .tim3en().clear_bit()
+    .tim4en().clear_bit()
+    .wwdgen().clear_bit()
+    .usart2en().clear_bit()
+    .usart3en().clear_bit()
+    .i2c1en().clear_bit()
+    .i2c2en().clear_bit()
+    .spi2en().clear_bit()
+    // .pwren().clear_bit()   // Keep PWR enabled to enter standby
+    // .bkpcn().clear_bit()   // Backup interface clock
+);
+
+        // Go into standby
+        defmt::println!("go into stdby");
+
+        let pwr = unsafe { &(*pac::PWR::ptr()) };
+        pwr.cr.modify(|_,w| w.pdds().set_bit());
+        pwr.cr.modify(|_,w| w.cwuf().set_bit());
+
+        core_peripherals.SCB.set_sleepdeep();
+
         cortex_m::asm::dsb();
-
-        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
         core_peripherals.SYST.disable_interrupt();
-
         cortex_m::asm::wfi();
 
-        core_peripherals.SYST.enable_interrupt();
-
-        cortex_m::asm::isb();
-
-        // re-enable interrupts
-        unsafe { NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX) };
-        unsafe { NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0) };
-        unsafe { NVIC::unmask(pac::Interrupt::USART2) };
-
-        defmt::println!("woke from sleep");
+        // should be in standby
+        defmt::println!("should not reach here");
     }
-
-    pub fn enter_stop_mode(&mut self) {
-        //           debug("setting up EXTI");
-        //   *bb_perip(&EXTI_BASE->IMR, EXTI_RTC_ALARM_BIT) = 1;
-        // 	*bb_perip(&EXTI_BASE->RTSR, EXTI_RTC_ALARM_BIT) = 1;
-
-        // in addition to the RTCALARM interrupt, the rtc must route through EXTI to wake the MCU up from stop mode.
-        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
-        device_peripherals.EXTI.imr.write(
-            |w| w.mr17().set_bit(), // interrupt mask bit 17 enables RTC EXTI
-        );
-        device_peripherals.EXTI.rtsr.write(
-            |w| w.tr17().set_bit(), // rising trigger bit 17 enables RTC EXTI
-        );
-
-        // clocks
-        // steal and use raw the same function sin cfgr to switch to hsi and wait for stabilization
-        // and the same thing to switch back.
-        // let clocks = cfgr
-        //     .use_hse(8.MHz())
-        //     .sysclk(48.MHz())
-        //     .pclk1(24.MHz())
-        //     .adcclk(14.MHz())
-        //     .freeze(flash_acr);
-    }
-
+   
     fn disable_interrupts(&self) {
         // disable interrupts
         cortex_m::interrupt::disable();
@@ -309,7 +532,7 @@ impl RRIVBoard for Board {
         ) {
             Ok(message) => {
                 usb_serial_send(message, &mut self.delay);
-                defmt::println!("{}", message); // TODO: this uses format!
+                defmt::println!("{}", message); 
             }
             Err(e) => {
                 defmt::println!("format error {}", defmt::Debug2Format(&e));
@@ -413,15 +636,14 @@ impl RRIVBoard for Board {
         }
     }
 
-    // also crystal time, systick?
-
-    fn timestamp(&mut self) -> i64 {
-        return self.internal_rtc.current_time().into(); // internal RTC
+    // todo: different name.  this isn't a timestamp, it's just a seconds counter
+    fn seconds(&mut self) -> u32 {
+        return (self.get_millis() / 1000).into();
     }
 
     fn get_millis(&mut self) -> u32 {
         let millis = self.counter.now();
-        let millis = millis.ticks();
+        let millis = millis.ticks() / 1000;   // this is natively a micros counter
         millis
     }
 
@@ -429,20 +651,14 @@ impl RRIVBoard for Board {
         return self.get_millis();
     }
 
-    fn get_battery_level(&mut self) -> i16 {
+    fn get_battery_level(&mut self) -> f32 {
         match self
             .battery_level
             .measure_battery_level(&mut self.internal_adc, &mut self.delay)
         {
-            Ok(value) => return value as i16,
-            Err(_err) => return -1,
+            Ok(value) => return value as f32,
+            Err(_err) => return -1.0,
         }
-    }
-
-    fn sleep(&mut self) {
-        // need to extend IndependentWatchdog to sleep the watch dog
-        // self.watchdog.acc
-        self.watchdog.feed();
     }
 
     fn set_debug(&mut self, debug: bool) {
@@ -889,8 +1105,140 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn standby(&mut self, interval: u16){
+        // minutes doesn't mean anything here yet.
+        // this is really about 'interval' and calculating the seconds until the next wake
+        // and then put them into the backup register and reset
+        let seconds = interval * 60;
+        // TODO: convert this into standard segemented hourly times using the exRTC
+        self.backup_domain.write_data_register_high(2, seconds as u16);
+        self.backup_domain.write_data_register_low(2, 0b1);
+        SCB::sys_reset(); // reset so we can standby without the watchdog enabled.
+
+    }
+
+    fn sleep(&mut self, milliseconds: u64) {
+        // TODO: sleep mode won't work with independent watch dog, unless we can stop it.
+        // EDIT: there is not alternative source for indep watchdog, it's always HSI
+        // EDIT: therefore field mode must restart with indep watchdog disabled
+        // sleeping just needs to happen in units less that indep watchdog, but stop mode need restart and disable
+        // if we wake from sleep should we go ahead and reset again to enable the watchdog during processing?
+
+
+       
+
+
+        // Sleep Mode
+        // This connects the RTC alarm event to the NVIC for wake-up
+        let exti = unsafe { &(*pac::EXTI::ptr()) };
+        exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+        // Enable interrupt on EXTI line 17
+        exti.imr.modify(|_, w| w.mr17().set_bit());     // Unmask interrupt
+        exti.emr.modify(|_, w| w.mr17().set_bit());     // Enable event (for wake from sleep)
+        exti.rtsr.modify(|_, w| w.tr17().set_bit());     // Rising edge trigger
+
+        // NVIC::mask(pac::Interrupt::USB_HP_CAN_TX);  // it's OK to wake up and do work?
+        // NVIC::mask(pac::Interrupt::USB_LP_CAN_RX0); // to keep interacting with the user?
+        // NVIC::mask(pac::Interrupt::USART2); // ok to wake up
+        unsafe {
+            NVIC::unmask(pac::Interrupt::RTCALARM);
+        }
+
+        // To detect if a debugger is attached to an STM32F103RB, you can check the DBGMCU_CR control register within the microcontroller.  Specifically, reading the bottom 3 bits of this register will indicate an active debug session, as these bits are set to 1 when a debugger attaches and default to 0 after a power-on reset.
+
+        // if we are debugging, we need this.  but this interferes with actual low power modes
+        // actually but debugger itself is supposed to set these??
+        // #[cfg(debug_assertions)]
+        // {
+            // let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
+            // dbgmcu.cr.modify(|_, w| w.dbg_sleep().set_bit());  // Enable debug in sleep
+        // }
+
+        let mut remainder: u64 = milliseconds;
+        
+        defmt::println!("try sleep {}", milliseconds);
+            usb_serial_send("try sleep\n", &mut self.delay);
+
+        self.internal_rtc.select_frequency(Hertz::Hz(1000));  // the crystal is 32kHZ, so setting this to 32 gives millisecond behavior
+        let macrosleep_interval_ms: u32 = (WATCHDOG_TIMEOUT - 2) * 1000;
+        while remainder > 0{
+            self.watchdog.feed(); 
+            self.internal_rtc.set_time(0);
+            cortex_m::asm::delay(100);  // RTC sync
+            let start_sleep = self.internal_rtc.current_time();
+
+            pac::NVIC::unpend(pac::Interrupt::RTCALARM);
+            exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
+
+            let interval = if remainder > macrosleep_interval_ms.into() {
+                macrosleep_interval_ms
+            } else {
+                remainder as u32
+            };
+
+            let alarm_time = start_sleep + interval;
+            self.internal_rtc.set_alarm(alarm_time); // sleep in units of WATCHDOG_TIMEOUT - 2, triggers on the actual time
+            defmt::println!("will sleep {} {}, {}", remainder, alarm_time, self.internal_rtc.current_time() );  
+            usb_serial_send("will sleep\n", &mut self.delay);
+            // self.usb_serial_send(format_args!("{}\n", interval));
+
+            cortex_m::asm::dsb();
+
+            let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+            core_peripherals.SYST.disable_interrupt();
+
+            while self.internal_rtc.current_time() < alarm_time { // loop handles wakes from USB
+                defmt::println!("{}", self.internal_rtc.current_time());
+                cortex_m::asm::wfi();
+                // self.error_alarm();
+            }
+
+            core_peripherals.SYST.enable_interrupt();
+
+            cortex_m::asm::isb();
+
+            self.internal_rtc.clear_alarm_flag();
+            defmt::println!("did sleep {}", self.internal_rtc.current_time() );  defmt::flush();
+            usb_serial_send("did sleep\n", &mut self.delay);
+            let slept = (self.internal_rtc.current_time() - start_sleep) as u64;
+            remainder = if slept < remainder {
+                remainder - slept
+            } else {
+                0
+            }
+
+        }
+        self.watchdog.feed(); 
+        defmt::println!("woke from sleep"); defmt::flush();
+
+        unsafe {
+            NVIC::unmask(pac::Interrupt::USB_HP_CAN_TX);  
+            NVIC::unmask(pac::Interrupt::USB_LP_CAN_RX0);
+            NVIC::unmask(pac::Interrupt::USART2);
+        }
+        NVIC::mask(pac::Interrupt::RTCALARM);
+        
+    }
+
 }
 
+
+#[interrupt]
+unsafe fn RTCALARM() {
+    defmt::println!("got RTCALARM interrupt"); defmt::flush();
+    // The `rtc.listen_alarm()` call has already configured the EXTI line.
+    // This function will be called when the alarm triggers.
+    // Usually, we just clear the pending flag here. The main loop will handle the event.
+    // NOTE: Be careful with shared state if you do more complex operations.
+    
+    let exti = unsafe { &(*pac::EXTI::ptr()) };
+    exti.pr.modify(|_, w| w.pr17().set_bit());
+
+    cortex_m::peripheral::NVIC::unpend(pac::Interrupt::RTCALARM);
+    // The clearing of the alarm flag in the main loop is preferred to avoid
+    // potential lock contention.
+}
 
 
 
@@ -958,6 +1306,7 @@ fn usb_interrupt(cs: &CriticalSection) {
 }
 
 pub fn build() -> Board {
+    Board::check_entry_standby();
     let mut board_builder = BoardBuilder::new();
     board_builder.setup();
     let board = board_builder.build();
@@ -970,6 +1319,7 @@ pub struct BoardBuilder {
     // chip features
     pub delay: Option<DelayUs<TIM3>>,
     pub precise_delay: Option<PreciseDelayUs>,
+    pub backup_domain: Option<BackupDomain>,
 
     // pins groups
     pub gpio: Option<DynamicGpioPins>,
@@ -1011,6 +1361,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            backup_domain: None,
             hardware_errors: [HardwareError::None; 5]
         }
     }
@@ -1063,6 +1414,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            backup_domain: self.backup_domain.unwrap(),
             hardware_errors: self.hardware_errors
         }
     }
@@ -1263,12 +1615,8 @@ impl BoardBuilder {
     fn setup(&mut self) {
         defmt::println!("board builder setup");
 
-        let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
-        let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
-
-        let uid = Uid::fetch();
-        defmt::println!("uid: {:X}", uid.bytes());
-        self.uid = Some(uid.bytes());
+        let mut core_peripherals: pac::CorePeripherals = unsafe { cortex_m::Peripherals::steal() };
+        let device_peripherals: pac::Peripherals = unsafe { pac::Peripherals::steal() };
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1278,7 +1626,20 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // get an unsafe handle on our the CS pin so we can flash it
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
+        watchdog.feed();
+
+        let uid = Uid::fetch();
+        defmt::println!("uid: {:X}", uid.bytes());
+        self.uid = Some(uid.bytes());
+
+        watchdog.feed();
+
+        // get an unsafe handle on our CS pin so we can flash it
+        // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
         let mut cs = unsafe {
             let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
@@ -1312,6 +1673,13 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
+        power_pins.enable_3v.set_high();        
+        // power_pins.enable_3v.set_low();
+        // delay.delay_ms(500_u32);
+        // power_pins.enable_3v.set_high();
+        // delay.delay_ms(1000_u32);
+
+
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
 
@@ -1321,11 +1689,8 @@ impl BoardBuilder {
 
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
+    
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1343,7 +1708,7 @@ impl BoardBuilder {
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
         watchdog.start(MilliSeconds::secs(24));
         let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        watchdog.start(MilliSeconds::secs(6));
+        watchdog.start(MilliSeconds::secs(WATCHDOG_TIMEOUT));
         let storage = match storage {
             Ok(storage) => Some(storage),
             Err(hardware_error) => {
@@ -1366,13 +1731,6 @@ impl BoardBuilder {
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
-
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_low();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
 
         // external adc and i2c stability require these steps
         power_pins.enable_5v.set_high();
@@ -1529,7 +1887,7 @@ impl BoardBuilder {
         self.delay = Some(delay);
         self.precise_delay = Some(precise_delay);
 
-        // the millis counter
+        // the millis counter, has to be a micros and then scale down
         let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),
@@ -1539,6 +1897,7 @@ impl BoardBuilder {
 
         watchdog.feed();
 
+        self.backup_domain = Some(backup_domain);
         self.watchdog = Some(watchdog);
 
         defmt::println!("setting up RS485 serial b");

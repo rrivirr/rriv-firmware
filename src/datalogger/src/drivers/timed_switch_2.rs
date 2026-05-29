@@ -247,7 +247,7 @@ pub struct TimedSwitch2 {
     general_config: SensorDriverGeneralConfiguration,
     special_config: TimedSwitch2SpecialConfiguration,
     state: u8, // 0: off, 1: on, other: invalid for now
-    last_state_updated_at: i64,
+    last_state_updated_at: u32,
     duty_cycle_state: bool,
     last_duty_cycle_update: u32,
     duty_cycle_on_time: u32,
@@ -280,7 +280,7 @@ impl SensorDriver for TimedSwitch2 {
             false => 0,
         };
         board.write_gpio_pin(self.special_config.gpio_pin, self.state == 1);
-        let timestamp = board.timestamp();
+        let timestamp = board.seconds();
         self.last_state_updated_at = timestamp;
         self.duty_cycle_state = self.state == 1;
         let millis = board.millis();
@@ -321,14 +321,14 @@ impl SensorDriver for TimedSwitch2 {
     }
 
     fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        let timestamp = board.timestamp();
+        let timestamp = board.seconds();
         let millis = board.millis();
 
         let mut gpio_state = false;
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
-            if timestamp - self.special_config.off_time_s as i64 > self.last_state_updated_at {
+            if timestamp - self.special_config.off_time_s as u32 > self.last_state_updated_at {
                 defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
                 gpio_state = true;
@@ -362,7 +362,7 @@ impl SensorDriver for TimedSwitch2 {
                 } 
             }
             // end of on_time (outer cycle)
-            if timestamp - self.special_config.on_time_s as i64 > self.last_state_updated_at {
+            if timestamp > self.last_state_updated_at + self.special_config.on_time_s as u32 {
                 defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
                 gpio_state = false;

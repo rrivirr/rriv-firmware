@@ -66,13 +66,15 @@ pub trait RRIVBoard: Send {
     fn rs485_send(&mut self, message : &[u8]);
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
-    fn timestamp(&mut self) -> i64;
+    fn seconds(&mut self) -> u32;
     fn millis(&mut self) -> u32;
 
 
-    fn get_battery_level(&mut self) -> i16;
+    fn get_battery_level(&mut self) -> f32;
 
-    fn sleep(&mut self);
+    fn sleep(&mut self, milliseconds: u64);
+    fn standby(&mut self, interval: u16);
+
 
     // low level board functionality
     // for debugging and basic operation
@@ -116,6 +118,8 @@ pub trait RRIVBoard: Send {
 
     fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
     fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
+
+
     
 }
 
