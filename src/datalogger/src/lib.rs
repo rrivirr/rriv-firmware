@@ -383,8 +383,6 @@ impl DataLogger {
                     self.last_interactive_log_time = board.epoch_timestamp();
                     defmt::trace!("interactive measurement completed");
 
-                    board.standby(15); // enter into standby mode to wake on the next quarter hour
-
                 }
                 
                 self.process_telemetry(board);
@@ -403,12 +401,10 @@ impl DataLogger {
 
                     self.process_telemetry(board);
 
-                    //     // go to sleep until the next in interval (in minutes)
-                    let milliseconds = (self.settings.sleep_interval as u64) * 60u64 * 1000u64;
-                    board.sleep(milliseconds);
-                  
-                    //     // start the next measurement cycle
-                    self.initialize_measurement_cycle();
+                    // go into standby until the next interval (in minutes)
+                    board.standby(self.settings.sleep_interval);
+                    panic!("unreachable: after standby");
+
                 }
             }
             DataLoggerMode::HibernateUntil => {

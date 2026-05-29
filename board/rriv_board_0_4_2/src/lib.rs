@@ -1105,12 +1105,13 @@ impl RRIVBoard for Board {
         }
     }
 
-    fn standby(&mut self, interval: u32){
+    fn standby(&mut self, interval: u16){
         // minutes doesn't mean anything here yet.
         // this is really about 'interval' and calculating the seconds until the next wake
         // and then put them into the backup register and reset
-        let seconds = 500;
-        self.backup_domain.write_data_register_high(2, seconds);
+        let seconds = interval * 60;
+        // TODO: convert this into standard segemented hourly times using the exRTC
+        self.backup_domain.write_data_register_high(2, seconds as u16);
         self.backup_domain.write_data_register_low(2, 0b1);
         SCB::sys_reset(); // reset so we can standby without the watchdog enabled.
 
