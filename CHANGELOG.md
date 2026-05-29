@@ -1,3 +1,27 @@
+# [1.14.0-preview-low-power-modes.1](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0...v1.14.0-preview-low-power-modes.1) (2026-05-29)
+
+
+### Bug Fixes
+
+* add some filtered logs ([17de076](https://github.com/rrivirr/rriv-firmware/commit/17de076928ab7d491afad24c9d01913660e6b00d))
+* comment out incomplete modbus implementation ([7b8b533](https://github.com/rrivirr/rriv-firmware/commit/7b8b533964ec54b7493d59e75e938d3367414e4e))
+* factor a const for watchdog timout ([4832986](https://github.com/rrivirr/rriv-firmware/commit/483298640aad0c31097937d2645d20cdf865e0a9))
+* implement the empty special settings partition ([8267597](https://github.com/rrivirr/rriv-firmware/commit/8267597a53e1561bc9ee7739505c267298308ab2))
+* improve battery level aquisition ([ff850b5](https://github.com/rrivirr/rriv-firmware/commit/ff850b5e1045666cc56d6c1bc094e74a122f3499))
+* move the enable 3v so we dont crash stuff ([f6257be](https://github.com/rrivirr/rriv-firmware/commit/f6257be5c83b8a11951f87e7c6fddb2b4be2cc4e))
+
+
+### Features
+
+* add battery level sensor driver ([9692b2d](https://github.com/rrivirr/rriv-firmware/commit/9692b2d457e13fcd8e8ca3617d33bf664c52a53b))
+* allow selection of output parameters in ring mux driver ([98f43d4](https://github.com/rrivirr/rriv-firmware/commit/98f43d44d2319356726181147cb30504b3fd4ee2))
+* implement sleep as milliseconds ([9cd1f0b](https://github.com/rrivirr/rriv-firmware/commit/9cd1f0b69e026938cfab48fdf820529c13f905f6))
+* low power sleep in field mode ([7b24b88](https://github.com/rrivirr/rriv-firmware/commit/7b24b88a76ab08d4c036a583d12cf38883380daa))
+* modify telemetry to transmit values 100-9999 correctly ([70f486e](https://github.com/rrivirr/rriv-firmware/commit/70f486ed06b8b886896f06464e2ed3c347690ec7))
+* move the watchdog earlier ([da29810](https://github.com/rrivirr/rriv-firmware/commit/da2981096da92811473f497f2b43a682a873f4d2))
+* standby works ([3080d62](https://github.com/rrivirr/rriv-firmware/commit/3080d62dc1908d440d8e18e865b0ce3f97670841))
+* working low power wfi sleep ([f2a630d](https://github.com/rrivirr/rriv-firmware/commit/f2a630dcebae3ceb658e2b8ecc5077704f0a36d8))
+
 # [1.13.0](https://github.com/rrivirr/rriv-firmware/compare/v1.12.6...v1.13.0) (2026-04-11)
 
 
