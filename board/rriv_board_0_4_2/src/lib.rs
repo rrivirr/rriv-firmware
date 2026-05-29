@@ -279,10 +279,7 @@ impl Board {
     // enable_3v: Pin<'C', 5>,
     //   enable_5v: Pin<'B', 12>,
 
-    // these didn't make a different
-    device_peripherals_steal.ADC1.cr2.modify(|_, w| w.adon().clear_bit());
-    device_peripherals_steal.RCC.apb2enr.modify(|_, w| w.adc1en().clear_bit());
-
+  
     // Enable backup domain write access (clears DBP bit in PWR_CR)
     // rcc_cfgr.bkp.enable(&mut rcc.apb1, &mut bkp);
 
@@ -371,8 +368,51 @@ impl Board {
     let _pd2 = gpiod.pd2.into_push_pull_output(&mut gpiod.crl).set_low(); 
 
 
+    // these didn't make a difference
+    device_peripherals_steal.ADC1.cr2.modify(|_, w| w.adon().clear_bit());
+    device_peripherals_steal.RCC.apb2enr.modify(|_, w| w.adc1en().clear_bit());
+
+
     // Disable both JTAG and SWD debug interface before Standby
-    afio.mapr.modify_mapr(|_, w| unsafe { w.swj_cfg().bits(0b010) }); // 0b010 = full disable
+    afio.mapr.modify_mapr(|_, w| unsafe { w.swj_cfg().bits(0b100) }); // 0b100 = full disable
+
+    let dbgmcu = unsafe { &(*pac::DBGMCU::ptr()) };
+    // Disable debug clocks in all low-power modes
+    dbgmcu.cr.modify(|_, w| {
+        unsafe { w.dbg_sleep().clear_bit()      // Disable debug in Sleep mode
+        .dbg_stop().clear_bit()       // Disable debug in Stop mode
+        .dbg_standby().clear_bit()    // Disable debug in Standby mode
+        .trace_mode().bits(0b00) }      // Disable trace pin assignment
+    });
+
+
+// 1. Disable all APB2 peripherals (GPIO, SPI1, ADC1, USART1, TIM1, etc.)
+device_peripherals_steal.RCC.apb2enr.modify(|_, w| w
+    .afioen().clear_bit()
+    .spi1en().clear_bit()
+    .usart1en().clear_bit()
+    .adc1en().clear_bit()
+    .tim1en().clear_bit()
+    // .gpioaen().clear_bit()
+    // .gpioben().clear_bit()
+    // .gpiocen().clear_bit()
+    // .gpioden().clear_bit()
+);
+
+// 2. Disable all APB1 peripherals (I2C, USART2/3, SPI2, TIM2-4, WWDG, PWR, BKP)
+device_peripherals_steal.RCC.apb1enr.modify(|_, w| w
+    .tim2en().clear_bit()
+    .tim3en().clear_bit()
+    .tim4en().clear_bit()
+    .wwdgen().clear_bit()
+    .usart2en().clear_bit()
+    .usart3en().clear_bit()
+    .i2c1en().clear_bit()
+    .i2c2en().clear_bit()
+    .spi2en().clear_bit()
+    // .pwren().clear_bit()   // Keep PWR enabled to enter standby
+    // .bkpcn().clear_bit()   // Backup interface clock
+);
 
         // Go into standby
         defmt::println!("go into stdby");

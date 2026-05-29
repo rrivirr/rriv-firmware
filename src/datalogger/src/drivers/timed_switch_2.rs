@@ -362,7 +362,7 @@ impl SensorDriver for TimedSwitch2 {
                 } 
             }
             // end of on_time (outer cycle)
-            if timestamp - self.special_config.on_time_s as u32 > self.last_state_updated_at {
+            if timestamp > self.last_state_updated_at + self.special_config.on_time_s as u32 {
                 defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
                 gpio_state = false;
