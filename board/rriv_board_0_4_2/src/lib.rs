@@ -194,15 +194,18 @@ impl Board {
             // .adcclk(14.MHz())
             .freeze(&mut flash.acr);
 
+            // we need to completely reset the backup domain in order to the LSI RTC instead of the LSE
+            // is it worth it?
 
-            let rtc = Rtc::new_lsi(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
-            Board::standby(seconds, rtc, core_peripherals);
+
+            let rtc: Rtc<RtcClkLse> = Rtc::new(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
+            Board::standby(5, rtc, core_peripherals);
         } 
         // otherwise do nothing
 
     }
 
-     fn standby(seconds: u16, mut rtc: Rtc<RtcClkLsi>, mut core_peripherals: pac::CorePeripherals){
+     fn standby(seconds: u16, mut rtc: Rtc<RtcClkLse>, mut core_peripherals: pac::CorePeripherals){
          // Try Standby
 
           let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
@@ -272,31 +275,14 @@ impl Board {
         let mut gpiob = device_peripherals_steal.GPIOB.split();
         let mut gpioc = device_peripherals_steal.GPIOC.split();
         let mut gpiod = device_peripherals_steal.GPIOD.split();
-
-    // === Configure ALL GPIO pins to ANALOG mode ===
-    // This is critical for low power consumption in Standby mode
-    
-    // enable_3v: Pin<'C', 5>,
-    //   enable_5v: Pin<'B', 12>,
-
   
-    // Enable backup domain write access (clears DBP bit in PWR_CR)
-    // rcc_cfgr.bkp.enable(&mut rcc.apb1, &mut bkp);
 
-    // Now we can modify the backup domain registers
-    // Use the RTC's handle to get to the BDCR register
-    // let mut rtc_handle = rtc.constrain(&mut rcc_cfgr.bkp, &mut pwr);
-    // rtc_handle.free(); // Release the handle to access BDCR directly
-
-    // Clear LSEON bit
-    device_peripherals_steal.RCC.bdcr.modify(|_, w| w.lseon().clear_bit());
-
-    // Wait for LSE to fully shut down (LSERDY will clear after ~6 LSE cycles)
-    while device_peripherals_steal.RCC.bdcr.read().lserdy().bit_is_set() {}
 
     // Optionally disable backup domain write access to save additional power
     // rcc_cfgr.bkp.disable(&mut rcc.apb1);
 
+    // === Configure ALL GPIO pins to ANALOG mode ===
+    // This is critical for low power consumption in Standby mode
 
     // GPIOA (Pins 0-15)
     let _pa0 = gpioa.pa0.into_analog(&mut gpioa.crl); // internal_adc1
@@ -322,10 +308,10 @@ impl Board {
     let _pb2 = gpiob.pb2.into_analog(&mut gpiob.crl); // boot pin
     // let _pb3 = gpiob.pb3.into_analog(&mut gpiob.crl);
     // let _pb4 = gpiob.pb4.into_analog(&mut gpiob.crl);
-    let _pb5 = gpiob.pb5.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio2
+    let _pb5 = gpiob.pb5.into_analog(&mut gpiob.crl); // gpio2
     let _pb6 = gpiob.pb6.into_pull_up_input(&mut gpiob.crl); // i2c1_scl
     let _pb7 = gpiob.pb7.into_pull_up_input(&mut gpiob.crl); // i2c1_sda
-    let _pb8 = gpiob.pb8.into_push_pull_output(&mut gpiob.crh).set_low(); // gpio1
+    let _pb8 = gpiob.pb8.into_analog(&mut gpiob.crh); // gpio1
     let _pb9 = gpiob.pb9.into_analog(&mut gpiob.crh); // unused
     let _pb10 = gpiob.pb10.into_pull_up_input(&mut gpiob.crh); // i2c2_scl
     let _pb11 = gpiob.pb11.into_pull_up_input(&mut gpiob.crh); // i2c2_sda
@@ -345,9 +331,9 @@ impl Board {
     let _pc7 = gpioc.pc7.into_push_pull_output(&mut gpioc.crl).set_low(); // duplicated? // unused
     let _pc8 = gpioc.pc8.into_push_pull_output(&mut gpioc.crh).set_low(); // SD Card CS
     let _pc9 = gpioc.pc9.into_analog(&mut gpioc.crh); // unused
-    let _pc10 = gpioc.pc10.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio 8
-    let _pc11 = gpioc.pc11.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio7
-    let _pc12 = gpioc.pc12.into_push_pull_output(&mut gpioc.crh).set_low(); // gpio6
+    let _pc10 = gpioc.pc10.into_analog(&mut gpioc.crh); // gpio 8
+    let _pc11 = gpioc.pc11.into_analog(&mut gpioc.crh); // gpio7
+    let _pc12 = gpioc.pc12.into_analog(&mut gpioc.crh); // gpio6
     // PC13, PC14, PC15 are special pins - usually reserved for LSE/RTC
     // If you need to configure them as analog, do so carefully
     let _pc13 = gpioc.pc13.into_push_pull_output(&mut gpioc.crh).set_low(); //enable HSE set low to disabl
@@ -359,8 +345,8 @@ impl Board {
     // Use an AFIO instance to disable JTAG
     let mut afio = device_peripherals_steal.AFIO.constrain();
     let (pa15, pb3, pb4) = afio.mapr.disable_jtag(gpioa.pa15, gpiob.pb3, gpiob.pb4);
-    let _pb3 = pb3.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio4
-    let _pb4 = pb4.into_push_pull_output(&mut gpiob.crl).set_low(); // gpio3
+    let _pb3 = pb3.into_analog(&mut gpiob.crl); // gpio4
+    let _pb4 = pb4.into_analog(&mut gpiob.crl); // gpio3
     let _pa15 = pa15.into_analog(&mut gpioa.crh);
 
     let _pd0 = gpiod.pd0.into_push_pull_output(&mut gpiod.crl).set_low(); // Skip if using LSE
@@ -413,6 +399,7 @@ device_peripherals_steal.RCC.apb1enr.modify(|_, w| w
     // .pwren().clear_bit()   // Keep PWR enabled to enter standby
     // .bkpcn().clear_bit()   // Backup interface clock
 );
+
 
         // Go into standby
         defmt::println!("go into stdby");
