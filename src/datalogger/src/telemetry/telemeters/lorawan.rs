@@ -21,6 +21,8 @@ enum RakWireless3172Step {
     StartJoinConfirm = 7,
     CheckJoined = 8,
     Joined = 9,
+    QueryResumableJoin = 10,
+    CheckResumableJoin = 11,
     Undefined = 255,
 }
 
@@ -37,6 +39,8 @@ impl RakWireless3172Step {
             7 => Self::StartJoinConfirm,
             8 => Self::CheckJoined,
             9 => Self::Joined,
+            10 => Self::QueryResumableJoin,
+            11 => Self::CheckResumableJoin,
             _ => Self::Undefined,
         }
     }
@@ -72,6 +76,15 @@ impl RakWireless3172 {
             last_transmission: 0,
             watch: false,
         };
+    }
+    
+    pub fn resume() -> RakWireless3172 {
+       return Self {
+            telemetry_step: RakWireless3172Step::QueryResumableJoin,
+            usart_send_time: 0,
+            last_transmission: 0,
+            watch: false,
+        }; 
     }
 
     pub fn status(&self) -> String {
@@ -128,7 +141,51 @@ impl RakWireless3172 {
 
         // need to check for a timeout here
         // defmt::println!("no message, checking timeout");
-        if board.seconds() - self.usart_send_time > 2 {
+        if (board.seconds() as i32  - self.usart_send_time as i32).rem_euclid(60) > 2 {
+            defmt::println!("timed out, going to step 0");
+            self.telemetry_step = RakWireless3172Step::Begin;
+        }
+    }
+
+   fn join_status_good_or_restart(&mut self, board: &mut dyn RRIVBoard) {
+        match usart_service::take_command(board) {
+            Ok(message) => {
+                let mut message = message;
+                let message = util::str_from_utf8(&mut message);
+                match message {
+                    Ok(message) => match message.find("AT+NJS=1") {
+                        Some(index) => {
+                            if index == 0 {
+                                defmt::println!("already joined!");
+                                self.telemetry_step = RakWireless3172Step::Joined;
+                                return;
+                            } else {
+                                // board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                                defmt::println!("telem not ok: {}", message);
+                                self.telemetry_step = RakWireless3172Step::Begin;
+                                return;
+                            }
+                        }
+                        None => {
+                            // board.usb_serial_send(format_args!("LoRaWAN: {}\n", message));
+                            defmt::println!("not joined: {}", message);
+                            self.telemetry_step = RakWireless3172Step::Begin;
+                            return;
+                        }
+                    },
+                    Err(e) => {
+                        defmt::println!("telem message not ok: {:?}", defmt::Debug2Format(&e));
+                        self.telemetry_step = RakWireless3172Step::Begin; // bad message
+                        return;
+                    }
+                }
+            }
+            Err(_) => {} // no command ready, check timeout
+        }
+
+        // need to check for a timeout here
+        // defmt::println!("no message, checking timeout");
+        if (board.seconds() as i32  - self.usart_send_time as i32).rem_euclid(60) > 2 {
             defmt::println!("timed out, going to step 0");
             self.telemetry_step = RakWireless3172Step::Begin;
         }
@@ -167,7 +224,7 @@ impl RakWireless3172 {
         } {}
 
         // checking timeout if we didn't return above
-        if board.seconds() - self.usart_send_time > 120 {
+        if (board.seconds() as i32 - self.usart_send_time as i32).rem_euclid(60) > 120 {
             // could power cycle here, but consider effect on intADC
             self.telemetry_step = RakWireless3172Step::Begin;
         }
@@ -288,11 +345,21 @@ impl Telemeter for RakWireless3172 {
             RakWireless3172Step::CheckJoined => {
                 self.check_joined(board);
             }
+            RakWireless3172Step::Joined => {
+                // do nothing
+            },
+            RakWireless3172Step::QueryResumableJoin => {
+                self.send_and_increment_step(board, "AT+NJS=?");
+            },
+            RakWireless3172Step::CheckResumableJoin => {
+                self.join_status_good_or_restart(board);
+            }
             _ => {}
         }
 
         // defmt::println!("done setting up lorawan")
     }
+
 
     fn transmit(&mut self, board: &mut dyn RRIVBoard, values: &[i16]) {
         // AT+SEND=14:696E746572727570743
@@ -320,7 +387,7 @@ impl Telemeter for RakWireless3172 {
             return false;
         }
 
-        if board.seconds() < self.last_transmission + 10 {
+        if (board.seconds() as i32 - self.last_transmission as i32).rem_euclid(60) < 10 {
             false
         } else {
             true

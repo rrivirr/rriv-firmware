@@ -328,7 +328,7 @@ impl SensorDriver for TimedSwitch2 {
         let mut toggle_state = false;
         if self.state == 0 {
             // heater is off
-            if timestamp - self.special_config.off_time_s as u32 > self.last_state_updated_at {
+            if (timestamp as i32 - self.special_config.off_time_s as i32).rem_euclid(60) > self.last_state_updated_at as i32 {
                 defmt::println!("state is 0, toggle triggered");
                 toggle_state = true;
                 gpio_state = true;
@@ -362,7 +362,7 @@ impl SensorDriver for TimedSwitch2 {
                 } 
             }
             // end of on_time (outer cycle)
-            if timestamp > self.last_state_updated_at + self.special_config.on_time_s as u32 {
+            if (timestamp as i32 - self.special_config.on_time_s as i32).rem_euclid(60) > self.last_state_updated_at as i32 {
                 defmt::println!("state is 1, toggle triggered");
                 toggle_state = true;
                 gpio_state = false;
