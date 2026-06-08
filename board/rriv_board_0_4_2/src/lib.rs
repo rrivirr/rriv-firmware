@@ -137,6 +137,17 @@ pub struct Board {
 impl Board {
     pub fn start(&mut self) {
         defmt::println!("starting board");
+
+        // check the battery power
+        let bat = self.get_battery_level();
+        if bat < 2.0 {
+            // battery is too low, enter standby immediately
+            self.error_alarm();
+            self.error_alarm();
+            self.error_alarm();
+            self.standby(u16::MAX); // try not to use any power at all.
+        }
+
         // self.power_control.cycle_3v(&mut self.delay);
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
