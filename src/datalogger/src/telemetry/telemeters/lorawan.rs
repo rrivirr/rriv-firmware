@@ -5,9 +5,13 @@ use serde_json::json;
 use util::str_from_utf8;
 
 use crate::telemetry::codecs::naive_codec;
+use crate::telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::Joined;
 use crate::{drivers::resources::gpio::GpioRequest, telemetry::telemeters::Telemeter};
 use crate::services::usart_service;
 use alloc::string::{String,ToString};
+
+const JOIN_TIMEOUT:i64 = 30; // if we don't join within 30s, give up
+const JOIN_BACKOFF:i64 = 60*60; // if we time out, wait for 1 hour before trying again
 
 #[derive(Clone, Copy)]
 enum RakWireless3172Step {
@@ -24,6 +28,12 @@ enum RakWireless3172Step {
     QueryResumableJoin = 10,
     CheckResumableJoin = 11,
     Undefined = 255,
+}
+
+pub enum LoRaWANTelemetryStatus {
+    Joined,
+    NotJoined,
+    TimedOut
 }
 
 impl RakWireless3172Step {
@@ -49,13 +59,13 @@ impl RakWireless3172Step {
         Self::from_integer((self as u8) + 1)
     }
 
-    fn status(&self) -> String {
+    fn status(&self) -> LoRaWANTelemetryStatus {
         match self {
             RakWireless3172Step::Joined => {
-                return String::from("Joined");
+                return LoRaWANTelemetryStatus::Joined;
             }
             _ => {
-                return String::from("Not Joined");
+                return LoRaWANTelemetryStatus::NotJoined;
             }
         }
     }
@@ -66,6 +76,8 @@ pub struct RakWireless3172 {
     usart_send_time: u32,
     last_transmission: u32,
     watch: bool,
+    started_at: i64,
+    timed_out_at: i64,
 }
 
 impl RakWireless3172 {
@@ -75,6 +87,8 @@ impl RakWireless3172 {
             usart_send_time: 0,
             last_transmission: 0,
             watch: false,
+            started_at: 0,
+            timed_out_at: -1
         };
     }
     
@@ -84,11 +98,29 @@ impl RakWireless3172 {
             usart_send_time: 0,
             last_transmission: 0,
             watch: false,
+            started_at: 0,
+            timed_out_at: -1
         }; 
     }
 
-    pub fn status(&self) -> String {
-        self.telemetry_step.status()
+    pub fn start(&mut self, board: &mut dyn RRIVBoard) {
+        self.started_at = board.epoch_timestamp();
+        // TODO: we need to get the last time out so we can span standby/restart
+    }
+
+    pub fn status(&self) -> LoRaWANTelemetryStatus {
+        return match self.telemetry_step.status() {
+            LoRaWANTelemetryStatus::Joined => {
+                LoRaWANTelemetryStatus::Joined
+            },
+            _ => {
+                if self.timed_out_at != -1 {
+                    LoRaWANTelemetryStatus::TimedOut
+                } else {
+                    LoRaWANTelemetryStatus::NotJoined
+                }
+            }
+        }
     }
 
     pub fn set_watch(&mut self, watch: bool) {
@@ -309,6 +341,37 @@ impl RakWireless3172 {
 
 impl Telemeter for RakWireless3172 {
     fn run_loop_iteration(&mut self, board: &mut dyn RRIVBoard) {
+
+        // check if we are timed out, and do not run loop logic if so
+
+        match self.telemetry_step {
+            RakWireless3172Step::Joined => {
+                // ok
+            },
+            _ => {
+                let now = board.epoch_timestamp();
+                if self.timed_out_at == -1_i64 { // we are not timed out yet
+                    // check for timeout
+                    if now - self.started_at > JOIN_TIMEOUT { // try to join for 30s, then time out
+                        self.timed_out_at = now;
+                        // TODO: need to perist this so we can get it post-reset
+                    }
+                    // else no timeout, still good to keep trying join
+
+                } else { // we are timed out
+                    // check if backoff is elapsed
+                    if now - self.timed_out_at > JOIN_BACKOFF { // time out for an hour before retry join
+                        self.timed_out_at = -1;
+                        self.started_at = now;
+                    } else {
+                        return; // skip the iteration, we are timed out
+                    }
+                }
+
+            }
+        }
+
+
         match self.telemetry_step {
             RakWireless3172Step::Begin => {
                 defmt::println!("trying telemetry step {}", self.telemetry_step as u8);
@@ -383,7 +446,8 @@ impl Telemeter for RakWireless3172 {
     }
 
     fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
-        if self.status() != "Joined" {
+
+        if let Joined = self.status() {
             return false;
         }
 

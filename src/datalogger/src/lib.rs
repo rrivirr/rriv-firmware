@@ -413,19 +413,24 @@ impl DataLogger {
                     if !ready_to_standby {
                         // do telemetry stuff until we are done or we time out 
                         if let Some(telemeter) = &mut self.lorawan_telemeter {
-                            
-                            if telemeter.status() == "Joined" {
-                                self.send_telemetry(board);
-                                ready_to_standby = true;
-                            }  else {
-                                // do nothing
-                                // main run loop will cycle the lorawan telemetry until we are joined and ready
-                                // or we time out
-                            }
 
+                            match telemeter.status() {
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::Joined => {
+                                    self.send_telemetry(board);
+                                    ready_to_standby = true;
+                                }
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::NotJoined => {
+                                    // still trying to join
+                                    ready_to_standby = false;
+                                }
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::TimedOut => {
+                                    ready_to_standby = true;
+                                }
+                            }
+ 
                         } else {
                             ready_to_standby = true;
-                        } 
+                        }
                     }
 
                     if ready_to_standby {
@@ -527,8 +532,10 @@ impl DataLogger {
         // WORK HERE!!
         // TODO: this codec stuff needs to move into the lorawan.transmit
         
-        self.lorawan_telemeter.as_mut().unwrap().transmit(board, &values);
-        
+        if let Some(lorawan_telemeter) = &mut self.lorawan_telemeter {
+                lorawan_telemeter.transmit(board, &values);
+        }
+       
         
         // if modbus_rtu_ready {
         //     // self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);

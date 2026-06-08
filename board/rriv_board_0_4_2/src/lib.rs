@@ -201,7 +201,7 @@ impl Board {
 
 
             let rtc: Rtc<RtcClkLse> = Rtc::new(device_peripherals.RTC, &mut backup_domain); // TODO: make sure LSE on and running?
-            Board::standby(10, rtc, core_peripherals);
+            Board::standby(seconds, rtc, core_peripherals);
         } 
         // otherwise do nothing
 
@@ -629,6 +629,7 @@ impl RRIVBoard for Board {
     }
 
     // this isn't a timestamp, it's just a seconds counter within the current counter miniute
+    // TO DO: this should be iterated by interrupt, not by calling each time
     fn seconds(&mut self) -> u32 {
         return (self.get_millis() / 1000).into();
     }
