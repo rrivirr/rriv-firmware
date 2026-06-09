@@ -1,3 +1,12 @@
+# [1.14.0-preview-low-power-modes.2](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-low-power-modes.1...v1.14.0-preview-low-power-modes.2) (2026-06-09)
+
+
+### Features
+
+* detect depleted battery and go into long standby to protect battery ([8b13d92](https://github.com/rrivirr/rriv-firmware/commit/8b13d92d92d9cd252e5702a769218cb08a3f974a))
+* join timeout and backoff ([ac2db0c](https://github.com/rrivirr/rriv-firmware/commit/ac2db0cd4af0b37bfc63f055a995ac1a87a2c6b0))
+* resuming lorawan after standby ([1ecf251](https://github.com/rrivirr/rriv-firmware/commit/1ecf251bf387b004ecc4c7624fadfcd34f540bf5))
+
 # [1.14.0-preview-low-power-modes.1](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0...v1.14.0-preview-low-power-modes.1) (2026-05-29)
 
 
