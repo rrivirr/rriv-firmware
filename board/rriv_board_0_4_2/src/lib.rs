@@ -349,7 +349,7 @@ impl Board {
 
         // GPIOA (Pins 0-15)
         let _pa0 = gpioa.pa0.into_analog(&mut gpioa.crl); // internal_adc1
-        let _pa1 = gpioa.pa1.into_pull_down_input(&mut gpioa.crl); // enable_avdd. low is on, leave this to keep lorawan powered.
+        let _pa1 = gpioa.pa1.into_pull_down_input(&mut gpioa.crl); // enable_avdd. low is on, leave this to keep lorawan powered (doesn't stay on b.c voltage too low)
         // let _pa2 = gpioa.pa2.into_push_pull_output(&mut gpioa.crl).set_high(); // tx
         // let _pa3 = gpioa.pa3.into_pull_up_input(&mut gpioa.crl); // rx
         let _pa4 = gpioa.pa4.into_push_pull_output(&mut gpioa.crl).set_high(); // external_adc_reset

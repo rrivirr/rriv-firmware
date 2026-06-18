@@ -185,7 +185,7 @@ impl DataLogger {
         defmt::println!("done loading sensors");
 
         let resuming = board.resuming();
-        match self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry(), resuming){
+        match self.set_up_lorawan_telemetry( board, self.settings.toggles.enable_lorawan_telemetry(), resuming){
             Ok(_) => {},
             Err(err) => defmt::println!("{}", err),
         }
@@ -240,15 +240,16 @@ impl DataLogger {
 
     }
 
-    pub fn set_up_lorawan_telemetry(&mut self, enable: bool, resuming: bool) -> Result<(), &'static str>{
+    pub fn set_up_lorawan_telemetry(&mut self, board: &mut impl RRIVBoard, enable: bool, resuming: bool) -> Result<(), &'static str>{
 
         if enable {
-            let telemeter = if resuming { 
+            let mut telemeter = if resuming { 
                 defmt::println!("resuming lorawan");
                 telemetry::telemeters::lorawan::RakWireless3172::resume()
             } else {
                 telemetry::telemeters::lorawan::RakWireless3172::new()
             };
+            telemeter.start(board);
 
             let requested_gpios = telemeter.get_requested_gpios();
             match self.assigned_gpios.update_or_conflict(requested_gpios) {
@@ -417,6 +418,7 @@ impl DataLogger {
                             match telemeter.status() {
                                 telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::Joined => {
                                     self.send_telemetry(board);
+                                    board.delay_ms(1000); // this is necessary rn since my pcb doesn't keep the lorawan radio powered in standby.
                                     ready_to_standby = true;
                                 }
                                 telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::NotJoined => {
@@ -1346,7 +1348,7 @@ impl DataLogger {
 
         if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
             if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
-                match self.set_up_lorawan_telemetry(*enable_lorawan_telemetry, false) {
+                match self.set_up_lorawan_telemetry(board, *enable_lorawan_telemetry, false) {
                     Ok(_) => {},
                     Err(error) => {return Err(error);}, 
                 }

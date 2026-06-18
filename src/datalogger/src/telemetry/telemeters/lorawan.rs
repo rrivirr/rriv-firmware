@@ -262,7 +262,7 @@ impl RakWireless3172 {
         }
     }
 
-     pub fn get_identity(&mut self, board: &mut dyn RRIVBoard) -> Result<String,()>{
+     pub fn get_identity<'a>(&mut self, board: &'a mut dyn RRIVBoard) -> Result<String,()>{
         // get Dev EUI and Join EUI sychronously from the board
 
         let mut dev_eui: String = String::new(); // TODO: consider handling this in more pure no_std
@@ -447,8 +447,13 @@ impl Telemeter for RakWireless3172 {
 
     fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
 
-        if let Joined = self.status() {
-            return false;
+        match self.status() {
+            Joined => {
+                // continue
+            },
+            _ => {
+                return false;
+            }
         }
 
         if (board.seconds() as i32 - self.last_transmission as i32).rem_euclid(60) < 10 {
