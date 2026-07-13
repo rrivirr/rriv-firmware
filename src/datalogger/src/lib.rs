@@ -184,7 +184,8 @@ impl DataLogger {
         }
         defmt::println!("done loading sensors");
 
-        match self.set_up_lorawan_telemetry(self.settings.toggles.enable_lorawan_telemetry()){
+        let resuming = board.resuming();
+        match self.set_up_lorawan_telemetry( board, self.settings.toggles.enable_lorawan_telemetry(), resuming){
             Ok(_) => {},
             Err(err) => defmt::println!("{}", err),
         }
@@ -239,10 +240,16 @@ impl DataLogger {
 
     }
 
-    pub fn set_up_lorawan_telemetry(&mut self, enable: bool) -> Result<(), &'static str>{
+    pub fn set_up_lorawan_telemetry(&mut self, board: &mut impl RRIVBoard, enable: bool, resuming: bool) -> Result<(), &'static str>{
 
         if enable {
-            let telemeter = telemetry::telemeters::lorawan::RakWireless3172::new();
+            let mut telemeter = if resuming { 
+                defmt::println!("resuming lorawan");
+                telemetry::telemeters::lorawan::RakWireless3172::resume()
+            } else {
+                telemetry::telemeters::lorawan::RakWireless3172::new()
+            };
+            telemeter.start(board);
 
             let requested_gpios = telemeter.get_requested_gpios();
             match self.assigned_gpios.update_or_conflict(requested_gpios) {
@@ -288,6 +295,7 @@ impl DataLogger {
     }
 
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
+
         //
         // Process incoming commands
         //
@@ -354,29 +362,34 @@ impl DataLogger {
                 // process telemetry
                 // process actuators
 
-                if board.timestamp()
+                if board.epoch_timestamp()
                     >= self.last_interactive_log_time
                         + self.settings.interactive_logging_interval as i64
                 {
                     // process a single measurement
                     // is this called a 'single measurement cycle' ?
+                    defmt::trace!("interactive measurement");
 
                     self.process_errors(board);
-
+                    defmt::trace!("measure sensor values");
                     self.measure_sensor_values(board); // measureSensorValues(false);
+                    defmt::trace!("got sensor values");
 
                     self.relay_modbus_message(board);
 
-
+                    defmt::trace!("try to write to storage");
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
                                                                   // Serial2.print(F("CMD >> "));
                                                                   // writeRawMeasurementToLogFile();
                                                                   // fileSystemWriteCache->flushCache();
+                    defmt::trace!("wrote to storage");
                     if self.settings.toggles.enable_interactive_logging() {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
-                    self.last_interactive_log_time = board.timestamp();
+                    self.last_interactive_log_time = board.epoch_timestamp();
+                    defmt::trace!("interactive measurement completed");
+
                 }
                 
                 self.process_telemetry(board);
@@ -387,25 +400,49 @@ impl DataLogger {
                 // run measurement cycle
                 // maybe we have sleep_interval (minutes) and interactive_logged_interval (seconds)
 
+                if !self.measurement_cycle_completed() {
+                    self.process_errors(board);
+                    self.run_measurement_cycle(board);
+                    defmt::println!("ran measurement cycle");
+                } else {
+                    let mut ready_to_standby = false;
 
-                self.process_errors(board);
-                self.run_measurement_cycle(board);
-                if self.measurement_cycle_completed() {
-                    defmt::println!("Measurement cycle completed");
-
-                    self.process_telemetry(board);
-
-                    //     // go to sleep until the next in interval (in minutes)
-                    let mut slept = 0u64;
-                    while slept < (self.settings.sleep_interval as u64) * 1000u64 * 60u64 {
-                        // TODO: allow using interactive_logging_interval here for testing
-                        board.delay_ms(2000);
-                        board.sleep(); // TODO: this just feeds the watchdog for now
-                        slept = slept + 2000;
+                    if !self.settings.toggles.enable_lorawan_telemetry() {
+                        ready_to_standby = true;
                     }
 
-                    //     // start the next measurement cycle
-                    self.initialize_measurement_cycle();
+                    if !ready_to_standby {
+                        // do telemetry stuff until we are done or we time out 
+                        if let Some(telemeter) = &mut self.lorawan_telemeter {
+
+                            match telemeter.status() {
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::Joined => {
+                                    self.send_telemetry(board);
+                                    board.delay_ms(3000); // this is necessary rn since my pcb doesn't keep the lorawan radio powered in standby.
+                                    ready_to_standby = true;
+                                }
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::NotJoined => {
+                                    // still trying to join
+                                    ready_to_standby = false;
+                                }
+                                telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::TimedOut => {
+                                    ready_to_standby = true;
+                                }
+                            }
+ 
+                        } else {
+                            ready_to_standby = true;
+                        }
+                    }
+
+                    if ready_to_standby {
+                        // go into standby until the next interval (in minutes)
+                        board.standby(self.settings.sleep_interval);
+                        panic!("unreachable: after standby");
+                    }
+                    
+
+
                 }
             }
             DataLoggerMode::HibernateUntil => {
@@ -458,23 +495,7 @@ impl DataLogger {
         defmt::println!("run_measurement_cycle done");
     }
 
-    fn process_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
-
-        if let Some(telemeter) = &mut self.lorawan_telemeter {
-            telemeter.process_events(board);
-        }
-
-        if let Some(telemeter) = &mut self.modbus_telemeter {
-            telemeter.process_events(board);
-        }
-
-
-        let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
-        if !ready_to_transmit {
-            return;
-        }    
+    fn send_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
 
 
         let mut values: [i16; 8*3*2 + 6] = [MAX; 8*3*2 + 6]; // support all the values from the 3d groundwater flow sensor
@@ -485,7 +506,11 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count(){
                         match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            values[k] = (value * 100_f64) as i16;
+                            if value < 100_f64 {
+                                values[k] = (value * 100_f64) as i16;
+                            } else {
+                                values[k] = value as i16;
+                            }
                             k = k + 1;
                         }
                         Err(_) => defmt::println!("error reading value"),
@@ -508,16 +533,38 @@ impl DataLogger {
 
         // WORK HERE!!
         // TODO: this codec stuff needs to move into the lorawan.transmit
-   
-        if lorawan_ready {
-            self.lorawan_telemeter.as_mut().unwrap().transmit(board, &values);
-        }
         
-        if modbus_rtu_ready {
-            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
+        if let Some(lorawan_telemeter) = &mut self.lorawan_telemeter {
+            lorawan_telemeter.transmit(board, &values);
+        }
+       
+        
+        // if modbus_rtu_ready {
+        //     // self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
+        // }
+
+    }
+
+    fn process_telemetry(&mut self, board: &mut impl rriv_board::RRIVBoard) {
+
+        if let Some(telemeter) = &mut self.lorawan_telemeter {
+            telemeter.process_events(board);
+        }
+
+        if let Some(telemeter) = &mut self.modbus_telemeter {
+            telemeter.process_events(board);
         }
 
 
+        let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
+        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
+        let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
+        if !ready_to_transmit {
+            return;
+        }    
+
+        self.send_telemetry(board);
+        
     }
 
     fn process_errors(&mut self, board: &mut impl rriv_board::RRIVBoard){
@@ -537,7 +584,9 @@ impl DataLogger {
     }
 
     fn measure_sensor_values(&mut self, board: &mut impl rriv_board::RRIVBoard) {
+        defmt::trace!("msv");
         for i in 0..self.sensor_drivers.len() {
+            defmt::trace!("{}", i);
             if let Some(ref mut driver) = self.sensor_drivers[i] {
                 driver.take_measurement(board);
             }
@@ -1299,21 +1348,21 @@ impl DataLogger {
 
         if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
             if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
-                match self.set_up_lorawan_telemetry(*enable_lorawan_telemetry) {
+                match self.set_up_lorawan_telemetry(board, *enable_lorawan_telemetry, false) {
                     Ok(_) => {},
                     Err(error) => {return Err(error);}, 
                 }
             }
         }
 
-        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
-            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
-               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
-                    Ok(_) => {},
-                    Err(error) => {return Err(error);}, 
-                }
-            }
-        }
+        // if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
+        //     if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
+        //        match self.set_up_modbus_rtu(*enable_modbus_rtu) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
 
         if let Some(enable_interactive_logging) = &values.interactive_logging {
             if *enable_interactive_logging {
