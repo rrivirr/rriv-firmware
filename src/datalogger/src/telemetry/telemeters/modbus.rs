@@ -24,7 +24,7 @@ impl Telemeter for ModBusRTU {
     }
     
     fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
-        return true;
+        return false;
     }
     
     fn process_events(&mut self, board: &mut dyn RRIVBoard) {

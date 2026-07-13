@@ -59,7 +59,7 @@ use rriv_board::{
     EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
-use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
+use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime, Timelike};
 use stm32f1xx_hal::rtc::{Rtc, RtcClkLse, RtcClkLsi};
 
 use one_wire_bus::{Address, OneWire, SearchState};
@@ -277,7 +277,7 @@ impl Board {
         exti.pr.modify(|_, w| w.pr17().set_bit());       // Write 1 to clear
 
 
-        let alarm_time = start_sleep + seconds as u32; // test with 2 sec
+        let alarm_time = start_sleep + seconds as u32;
         rtc.set_alarm(alarm_time); 
 
         // turn off all the GPIO
@@ -345,7 +345,7 @@ impl Board {
         // rcc_cfgr.bkp.disable(&mut rcc.apb1);
 
         // === Configure ALL GPIO pins to ANALOG mode ===
-        // This is critical for low power consumption in Standby mode
+        // This is critical for low power consumption in Stop mode, but meaningless in Standby mode
 
         // GPIOA (Pins 0-15)
         let _pa0 = gpioa.pa0.into_analog(&mut gpioa.crl); // internal_adc1
@@ -1113,9 +1113,32 @@ impl RRIVBoard for Board {
         // minutes doesn't mean anything here yet.
         // this is really about 'interval' and calculating the seconds until the next wake
         // and then put them into the backup register and reset
-        let seconds = interval * 60;
+        let i2c1 = mem::replace(&mut self.i2c1, None);
+        let mut ds3231 = Ds323x::new_ds3231(i2c1.unwrap());
+        let result = ds3231.datetime();
+        self.i2c1 = Some(ds3231.destroy_ds3231());
+
+        let seconds_until_wake = match result {
+            Ok(date_time) => {
+                // defmt::println!("got DS3231 time {:?}", date_time.and_utc().timestamp());
+                // date_time.and_utc().timestamp()
+                let minute = date_time.minute() as u16;
+                let second = date_time.second() as u16;
+                let next_minutes = minute + interval - (minute % interval);
+                let minutes_diff = next_minutes - minute;
+                let minutes_diff_seconds = minutes_diff * 60;
+                let seconds_until_wake = minutes_diff_seconds - second;
+                seconds_until_wake
+            }
+            Err(err) => {
+                defmt::println!("DS3231 error {:?}", defmt::Debug2Format(&err));
+                interval * 60 // fall back to using interval as a delay period
+            }
+        };
+        
+
         // TODO: convert this into standard segemented hourly times using the exRTC
-        self.backup_domain.write_data_register_high(2, seconds as u16);
+        self.backup_domain.write_data_register_high(2, seconds_until_wake);
         self.backup_domain.write_data_register_low(2, 0b1);
         SCB::sys_reset(); // reset so we can standby without the watchdog enabled.
 
@@ -1256,7 +1279,7 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    defmt::println!("serial rx byte: {}", c);
+                    // defmt::println!("serial rx byte: {}", c);
 
                     let r = USART2_RX_PROCESSOR.borrow(cs);
 

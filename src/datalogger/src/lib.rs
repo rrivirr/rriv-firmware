@@ -403,7 +403,7 @@ impl DataLogger {
                 if !self.measurement_cycle_completed() {
                     self.process_errors(board);
                     self.run_measurement_cycle(board);
-                    defmt::println!("Measurement cycle completed");
+                    defmt::println!("ran measurement cycle");
                 } else {
                     let mut ready_to_standby = false;
 
@@ -418,7 +418,7 @@ impl DataLogger {
                             match telemeter.status() {
                                 telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::Joined => {
                                     self.send_telemetry(board);
-                                    board.delay_ms(1000); // this is necessary rn since my pcb doesn't keep the lorawan radio powered in standby.
+                                    board.delay_ms(3000); // this is necessary rn since my pcb doesn't keep the lorawan radio powered in standby.
                                     ready_to_standby = true;
                                 }
                                 telemetry::telemeters::lorawan::LoRaWANTelemetryStatus::NotJoined => {
@@ -535,7 +535,7 @@ impl DataLogger {
         // TODO: this codec stuff needs to move into the lorawan.transmit
         
         if let Some(lorawan_telemeter) = &mut self.lorawan_telemeter {
-                lorawan_telemeter.transmit(board, &values);
+            lorawan_telemeter.transmit(board, &values);
         }
        
         

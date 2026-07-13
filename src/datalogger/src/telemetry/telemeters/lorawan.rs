@@ -1,6 +1,7 @@
 use core::fmt::Write;
 
 use rriv_board::RRIVBoard;
+use serde::de;
 use serde_json::json;
 use util::str_from_utf8;
 
@@ -10,7 +11,7 @@ use crate::{drivers::resources::gpio::GpioRequest, telemetry::telemeters::Teleme
 use crate::services::usart_service;
 use alloc::string::{String,ToString};
 
-const JOIN_TIMEOUT:i64 = 30; // if we don't join within 30s, give up
+const JOIN_TIMEOUT:i64 = 60; // if we don't join within 60s, give up
 const JOIN_BACKOFF:i64 = 60*60; // if we time out, wait for 1 hour before trying again
 
 #[derive(Clone, Copy)]
@@ -21,12 +22,14 @@ enum RakWireless3172Step {
     SetBandConfirm = 3,
     SetMask = 4,
     SetMaskConfirm = 5,
-    StartJoin = 6,
-    StartJoinConfirm = 7,
-    CheckJoined = 8,
-    Joined = 9,
-    QueryResumableJoin = 10,
-    CheckResumableJoin = 11,
+    SetDataRate = 6,
+    SetDataRateConfirm = 7,
+    StartJoin = 8,
+    StartJoinConfirm = 9,
+    CheckJoined = 10,
+    Joined = 11,
+    QueryResumableJoin = 12,
+    CheckResumableJoin = 13,
     Undefined = 255,
 }
 
@@ -45,12 +48,14 @@ impl RakWireless3172Step {
             3 => Self::SetBandConfirm,
             4 => Self::SetMask,
             5 => Self::SetMaskConfirm,
-            6 => Self::StartJoin,
-            7 => Self::StartJoinConfirm,
-            8 => Self::CheckJoined,
-            9 => Self::Joined,
-            10 => Self::QueryResumableJoin,
-            11 => Self::CheckResumableJoin,
+            6 => Self::SetDataRate,
+            7 => Self::SetDataRateConfirm,
+            8 => Self::StartJoin,
+            9 => Self::StartJoinConfirm,
+            10 => Self::CheckJoined,
+            11 => Self::Joined,
+            12 => Self::QueryResumableJoin,
+            13 => Self::CheckResumableJoin,
             _ => Self::Undefined,
         }
     }
@@ -104,8 +109,8 @@ impl RakWireless3172 {
     }
 
     pub fn start(&mut self, board: &mut dyn RRIVBoard) {
-        self.started_at = board.epoch_timestamp();
         // TODO: we need to get the last time out so we can span standby/restart
+        self.started_at = board.epoch_timestamp(); // start trying to join
     }
 
     pub fn status(&self) -> LoRaWANTelemetryStatus {
@@ -353,6 +358,7 @@ impl Telemeter for RakWireless3172 {
                 if self.timed_out_at == -1_i64 { // we are not timed out yet
                     // check for timeout
                     if now - self.started_at > JOIN_TIMEOUT { // try to join for 30s, then time out
+                        defmt::println!("LoRaWAN join timed out");
                         self.timed_out_at = now;
                         // TODO: need to perist this so we can get it post-reset
                     }
@@ -399,6 +405,12 @@ impl Telemeter for RakWireless3172 {
             RakWireless3172Step::SetMaskConfirm => {
                 self.check_ok_or_restart(board);
             }
+            RakWireless3172Step::SetDataRate => {
+                self.send_and_increment_step(board, "AT+DR=2");
+            },
+            RakWireless3172Step::SetDataRateConfirm => {
+                self.check_ok_or_restart(board);
+            },
             RakWireless3172Step::StartJoin => {
                 self.send_and_increment_step(board, "AT+JOIN=1:0:15:100");
             }
@@ -456,6 +468,7 @@ impl Telemeter for RakWireless3172 {
             }
         }
 
+        defmt::debug!("{} {} {}", board.seconds(), self.last_transmission, (board.seconds() as i32 - self.last_transmission as i32).rem_euclid(60));
         if (board.seconds() as i32 - self.last_transmission as i32).rem_euclid(60) < 10 {
             false
         } else {
