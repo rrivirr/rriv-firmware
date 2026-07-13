@@ -1,3 +1,10 @@
+# [1.14.0-preview-low-power-modes.3](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-low-power-modes.2...v1.14.0-preview-low-power-modes.3) (2026-07-13)
+
+
+### Bug Fixes
+
+* get join working for standy wakeup ([64f5894](https://github.com/rrivirr/rriv-firmware/commit/64f5894e3ae4c61b4788838ad7df0b7f5d4ebf87))
+
 # [1.14.0-preview-low-power-modes.2](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-low-power-modes.1...v1.14.0-preview-low-power-modes.2) (2026-06-09)
 
 
