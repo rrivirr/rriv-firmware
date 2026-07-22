@@ -201,7 +201,7 @@ impl SensorDriver for RingTemperatureDriver {
 
         if pairs[0].values.len() < 6 {
             // TODO: check for zeros, not for len().  len is constant
-            rprint!("not enough values to calibrate");
+            defmt::warn!("not enough values to calibrate");
             return Err(());
         }
 
