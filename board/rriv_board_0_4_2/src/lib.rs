@@ -522,14 +522,6 @@ impl RRIVBoard for Board {
     fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
     }
-    
-    fn rs485_send(&mut self, message: &[u8]) {
-        cortex_m::interrupt::free(|_cs| {
-            for char in message.iter() {
-            _ = nb::block!( components::uart5::write(char.clone()));   
-            }
-        });
-    }
 
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
         match self.internal_adc.read(channel) {
@@ -1684,9 +1676,6 @@ impl BoardBuilder {
 
         watchdog.feed();
 
-
-        // defmt::println!("setting up RS485 serial b");
-        // setup_serialb(device_peripherals.UART5, &clocks);
 
         self.clocks = Some(clocks);
         // setup GPIO5 as EXTI2 interrupt PD2

@@ -52,8 +52,6 @@ pub struct DataLogger {
     calibration_point_values: [Option<Box<[CalibrationPair]>>; EEPROM_TOTAL_SENSOR_SLOTS],
 
     lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
-    modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
-    modbus_service: Option<modbus_service::ModbusByteProcessor>,
     sdi12_service: Option<sdi12_service::Sdi12RxProcessor>,
 
     // measurement cycle
@@ -75,10 +73,8 @@ impl DataLogger {
             serial_tx_mode: DataLoggerSerialTxMode::Normal,
             calibration_point_values: [CALIBRATION_INIT_VALUE; EEPROM_TOTAL_SENSOR_SLOTS],
             lorawan_telemeter: None,
-            modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            modbus_service: None,
             sdi12_service: None,
         }
     }
@@ -138,8 +134,6 @@ impl DataLogger {
         // setup each service
         command_service::setup(board);
         usart_service::setup(board);
-        self.modbus_service = Some(modbus_service::ModbusByteProcessor::new());
-        modbus_service::setup(board);
 
         let sdi12_gpio = 5;
         self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
@@ -196,12 +190,6 @@ impl DataLogger {
             Ok(_) => {},
             Err(err) => defmt::println!("{}", err),
         }
-   
-        match self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu()) {
-            Ok(_) => {},
-            Err(err) => defmt::println!("{}", err),
-        }
-
 
         match self.mode {
             DataLoggerMode::Field => {
@@ -223,32 +211,6 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
-    pub fn set_up_modbus_rtu(&mut self, enable: bool) -> Result<(), &'static str> {
-        if enable {
-            let telemeter = telemetry::telemeters::modbus::ModBusRTU();
-
-            let requested_gpios = telemeter.get_requested_gpios();
-            match self.assigned_gpios.update_or_conflict(requested_gpios) {
-                Ok(_) => {
-                    self.modbus_telemeter = Some(telemeter);
-                    return Ok(());
-                }
-                Err(_) => {
-                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
-                    // responses::send_command_response_error(board, "usart pin conflict", "");
-                    return Err("usart pin conflict");
-                }
-            }
-        } else {
-            if self.modbus_telemeter.is_some() {
-                let requested_gpios = self.modbus_telemeter.as_mut().unwrap().get_requested_gpios();
-                self.assigned_gpios.release(requested_gpios);
-            }
-            self.modbus_telemeter = None;
-            return Ok(());
-        }
-
-    }
 
     pub fn set_up_lorawan_telemetry(&mut self, enable: bool) -> Result<(), &'static str>{
 
@@ -279,24 +241,6 @@ impl DataLogger {
 
     }
 
-    pub fn relay_modbus_message(&mut self, board: &mut impl RRIVBoard) {
-        if let Some(modbus_service) = &mut self.modbus_service {
-            match modbus_service.take_message(board) {
-                Ok(adu) => {
-                    // relay this to the modbus driver, if configured
-                    for i in 0..self.sensor_drivers.len() {
-                        if let Some(ref mut driver) = self.sensor_drivers[i] {
-                            let requested_gpios = driver.get_requested_gpios();
-                            if requested_gpios.rs485() {
-                                driver.receive_modbus(adu);
-                            }
-                        }
-                    }
-                },
-                Err(_) => {},
-            }
-        }
-    }
 
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
@@ -330,12 +274,6 @@ impl DataLogger {
         if self.settings.toggles.enable_lorawan_telemetry() {
             if let Some(lorawan_telemeter) = &mut self.lorawan_telemeter {
                 lorawan_telemeter.run_loop_iteration(board);
-            }        
-        }
-
-        if self.settings.toggles.enable_modbus_rtu() {
-            if let Some(modbus_telemeter) = &mut self.modbus_telemeter {
-                modbus_telemeter.run_loop_iteration(board);
             }        
         }
 
@@ -376,8 +314,6 @@ impl DataLogger {
                     self.process_errors(board);
 
                     self.measure_sensor_values(board); // measureSensorValues(false);
-
-                    self.relay_modbus_message(board);
 
 
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
@@ -612,14 +548,9 @@ impl DataLogger {
             telemeter.process_events(board);
         }
 
-        if let Some(telemeter) = &mut self.modbus_telemeter {
-            telemeter.process_events(board);
-        }
-
 
         let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
+        let ready_to_transmit = lorawan_ready;
         if !ready_to_transmit {
             return;
         }    
@@ -659,10 +590,6 @@ impl DataLogger {
    
         if lorawan_ready {
             self.lorawan_telemeter.as_mut().unwrap().transmit(board, &values);
-        }
-        
-        if modbus_rtu_ready {
-            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
         }
 
 
@@ -1246,6 +1173,7 @@ impl DataLogger {
                     responses::calibration_point_list(board, pairs); // TODO: is responses the right place for marshaling JSON lists to serial?
                 }
             }
+
             CommandPayload::SensorCalibrateRemove(payload) => {
                 responses::send_command_response_message(
                     board,
@@ -1465,15 +1393,6 @@ impl DataLogger {
         if let Some(enable_lorawan_telemetry) = &values.enable_lorawan_telemetry {
             if self.settings.toggles.enable_lorawan_telemetry() != *enable_lorawan_telemetry {
                 match self.set_up_lorawan_telemetry(*enable_lorawan_telemetry) {
-                    Ok(_) => {},
-                    Err(error) => {return Err(error);}, 
-                }
-            }
-        }
-
-        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
-            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
-               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
                     Ok(_) => {},
                     Err(error) => {return Err(error);}, 
                 }

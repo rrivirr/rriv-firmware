@@ -129,10 +129,7 @@ pub fn get_registry() -> [DriverCreateFunctions; 256] {
         crate::drivers::ring_temperature_sim::RingTemperatureDriver,
         crate::drivers::ring_temperature_sim::RingTemperatureDriverSpecialConfiguration
     ));
-    driver_create_functions[12] = Some(driver_create_functions!(
-        crate::drivers::modbus::ModbusDriver,
-        crate::drivers::modbus::ModbusDriverSpecialConfiguration
-    ));
+    driver_create_functions[12] = None; // modbus placeholder
     driver_create_functions[13] = Some(driver_create_functions!(
         crate::drivers::mhz9041a::MHZ9041ADriver,
         crate::drivers::mhz9041a::MHZ9041ADriverSpecialConfiguration

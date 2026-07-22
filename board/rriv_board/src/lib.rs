@@ -64,7 +64,6 @@ pub trait RRIVBoard: Send {
                 // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
                 // maybe rrivctl_send
     fn usart_send(&mut self, bytes: &[u8]);
-    fn rs485_send(&mut self, message : &[u8]);
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
     fn delay_us(&mut self, us: u16);

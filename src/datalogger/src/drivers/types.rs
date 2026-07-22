@@ -93,11 +93,6 @@ pub trait SensorDriver {
         GpioRequest::none()
     }
 
-    #[allow(unused_variables)]
-    fn receive_modbus(&mut self, adu: modbus_core::rtu::ResponseAdu){
-        // most drivers don't need to receive modbus
-    }
-
     fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>;
 
 }
