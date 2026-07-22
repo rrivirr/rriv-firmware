@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.16](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.15...v1.14.0-preview-sdi12-pwm-groundwater.16) (2026-07-22)
+
+
+### Bug Fixes
+
+* improve handling of disable-storage feature ([cf488fc](https://github.com/rrivirr/rriv-firmware/commit/cf488fc21fc95c50b83d72be2045579a5d1bbf4f))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.15](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.14...v1.14.0-preview-sdi12-pwm-groundwater.15) (2026-05-21)
 
 
