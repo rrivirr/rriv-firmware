@@ -126,7 +126,7 @@ unsafe fn UART5() {
             // do a read from the sr register followed by a read from the dr register.
             let _ = usart.sr.read();
             let _ = usart.dr.read();
-            defmt::println!("uart5 error {:?}", defmt::Debug2Format(&err));
+            // defmt::println!("uart5 error {:?}", defmt::Debug2Format(&err));
             // Err(nb::Error::Other(err))
         } else {
             // Check if a byte is available

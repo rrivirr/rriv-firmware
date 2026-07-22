@@ -114,13 +114,18 @@ impl SensorDriver for RingTemperatureDriver {
 
     // TODO: this should come from a derived trait
     fn get_configuration_json(&mut self) -> serde_json::Value {
-        // let sensor_id_str: [u8; 6] = core::str::from_utf8(self.get_id());
+
+        let mut sensor_id = self.get_id();
+        let sensor_id = match util::str_from_utf8(&mut sensor_id) {
+            Ok(sensor_id) => sensor_id,
+            Err(_) => "Invalid",
+        };
 
         let sensor_name_bytes = sensor_name_from_type_id(self.get_type_id().into());
         let sensor_name_str = core::str::from_utf8(&sensor_name_bytes).unwrap_or_default();
 
         json!({
-            "id" : self.get_id(),
+            "id" : sensor_id,
             "type" : sensor_name_str,
             "calibration_offset": self.special_config.calibration_offset
         })

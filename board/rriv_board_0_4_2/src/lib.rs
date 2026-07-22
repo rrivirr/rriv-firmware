@@ -1,13 +1,17 @@
 #![cfg_attr(not(test), no_std)]
 
+#[cfg(all(feature = "storage-sdcard", feature = "storage-disabled"))]
+compile_error!("feature \"storage-sdcard\" and feature \"storage-disabled\" cannot be enabled at the same time");
+
 extern crate alloc;
 
 use alloc::boxed::Box;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
-use rriv_board::hardware_error::{HardwareError};
-use stm32f1xx_hal::time::MilliSeconds;
-use stm32f1xx_hal::timer::CounterUs;
+
+use rriv_board::hardware_error::HardwareError;
+use stm32f1xx_hal::time::{MilliSeconds, ms};
+use stm32f1xx_hal::timer::{Ch, Channel, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self};
 use core::mem;
@@ -27,8 +31,8 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::Pin;
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, USART2, USB};
+use stm32f1xx_hal::gpio::{Alternate, Edge, ExtiPin, Pin, PushPull};
+use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -54,7 +58,7 @@ use usb_device::{bus::UsbBusAllocator, prelude::*};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use rriv_board::{
-    EEPROM_TOTAL_SENSOR_SLOTS, RRIVBoard, RXProcessor, SerialRxPeripheral
+    EEPROM_TOTAL_SENSOR_SLOTS, GPIO_INTERRUPT_FUNCTION, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
 use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
@@ -95,6 +99,7 @@ static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
 static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
+
 #[repr(C)]
 pub struct Usart {
     tx: &'static Mutex<RefCell<Option<Tx<pac::USART2>>>>,
@@ -125,8 +130,10 @@ pub struct Board {
     pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
-    pub counter: CounterUs<TIM4>,
-    pub hardware_errors: [HardwareError; 5]
+    pub counter: CounterUs<TIM5>,
+    pub hardware_errors: [HardwareError; 5],
+    pub clocks: Clocks,
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>,
 }
 
 impl Board {
@@ -145,6 +152,8 @@ impl Board {
         // self.get_sensor_driver_services().set_gpio_pin_mode(2, rriv_board::gpio::GpioMode::PushPullOutput);
         // self.get_sensor_driver_services().write_gpio_pin(2, false);
         // defmt::println!("pin 2 set up"); rriv_board::RRIVBoard::delay_ms(self, 1000);
+
+        self.delay_ms(2000);
         defmt::println!("board started");
 
     }
@@ -376,6 +385,10 @@ impl RRIVBoard for Board {
 
     fn delay_ms(&mut self, ms: u16) {
         self.delay.delay_ms(ms);
+    }
+
+    fn delay_us(&mut self, us: u16) {
+        self.precise_delay.delay_us(us);
     }
 
     fn set_epoch(&mut self, epoch: i64) {
@@ -721,10 +734,10 @@ impl RRIVBoard for Board {
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool) {
         match pin {
-            1 => {
-                let gpio = &mut self.gpio.gpio1;
-                write_gpio!(gpio, value);
-            }
+            // 1 => {
+            //     let gpio = &mut self.gpio.gpio1;
+            //     write_gpio!(gpio, value);
+            // }
             2 => {
                 let gpio = &mut self.gpio.gpio2;
                 write_gpio!(gpio, value);
@@ -760,12 +773,27 @@ impl RRIVBoard for Board {
         };
     }
     
+    fn write_pwm_pin_duty(&mut self, value: u8){
+        if let Some(pwm) = &mut self.pwm {
+            let max = pwm.get_max_duty();
+            let x1 = max as u32 * (value as u32);
+            let x2 = x1 / 255;
+            pwm.set_duty(Channel::C3, x2 as u16);
+        }
+    }
+
+    fn write_pwm_pin_period(&mut self, period_ms: u32){
+        if let Some(pwm) = &mut self.pwm {
+            pwm.set_period(ms(period_ms).into_rate());
+        }
+    }
+
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
-            1 => {
-                let pin =  &mut self.gpio.gpio1;
-                return read_pin!(pin);
-            },
+            // 1 => {
+            //     let pin =  &mut self.gpio.gpio1;
+            //     return read_pin!(pin);
+            // },
             2 => {
                 let pin =  &mut self.gpio.gpio2;
                 return read_pin!(pin);
@@ -803,11 +831,11 @@ impl RRIVBoard for Board {
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: rriv_board::gpio::GpioMode) {
 
         match pin {
-            1 => {
-                let cr = &mut self.gpio_cr.gpiob_crh;
-                let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
-                set_pin_mode!(pin, cr, mode);
-            }
+            // 1 => {
+            //     // let cr = &mut self.gpio_cr.gpiob_crh;
+            //     // let pin: &mut Pin<'B', 8, Dynamic> = &mut self.gpio.gpio1;
+            //     // set_pin_mode!(pin, cr, mode);
+            // }
             2 => {
                 let cr = &mut self.gpio_cr.gpiob_crl;
                 let pin = &mut self.gpio.gpio2;
@@ -888,6 +916,20 @@ impl RRIVBoard for Board {
             }
         }
     }
+    
+
+    fn enable_interrupt(&self){
+        unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+    }
+    
+    fn disable_interrupt(&self){
+        NVIC::mask(pac::Interrupt::EXTI2);
+    }
+
+    fn get_current_time(&self) -> u32 {
+        cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ
+    }
+
 
 }
 
@@ -900,7 +942,7 @@ unsafe fn USART2() {
         if let Some(ref mut rx) = USART_RX.borrow(cs).borrow_mut().deref_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(c) = nb::block!(rx.read()) {
-                    defmt::println!("serial rx byte: {}", c);
+                    // defmt::println!("serial rx byte: {}", c);
 
                     let r = USART2_RX_PROCESSOR.borrow(cs);
 
@@ -929,6 +971,26 @@ fn USB_LP_CAN_RX0() {
         usb_interrupt(cs);
         dmb();
     });
+}
+
+#[interrupt]
+fn EXTI2() {
+    let exti = unsafe { &*pac::EXTI::ptr() };
+    if exti.pr.read().pr2().bit_is_set() {
+        exti.pr.write(|w| w.pr2().set_bit());
+        let now = cortex_m::peripheral::DWT::cycle_count();
+        let is_low = unsafe {(*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0 };
+        let gpio_state = if is_low { false } else { true };
+        let now = now / SYSCLK_MHZ; // convert to microseconds
+        cortex_m::interrupt::free(|_cs| {
+            unsafe {
+                if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
+                    gpio_interrupt_function(now, gpio_state);
+                }
+            }
+        });
+        // defmt::println!("GPIO interrupt at {}", now);
+    }
 }
 
 fn usb_interrupt(cs: &CriticalSection) {
@@ -987,8 +1049,10 @@ pub struct BoardBuilder {
     pub internal_rtc: Option<Rtc>,
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
-    pub counter: Option<CounterUs<TIM4>>,
-    hardware_errors: [HardwareError; 5]
+    pub counter: Option<CounterUs<TIM5>>,
+    hardware_errors: [HardwareError; 5],
+    pub clocks: Option<Clocks>,
+    pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>
 }
 
 impl BoardBuilder {
@@ -1011,7 +1075,9 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
-            hardware_errors: [HardwareError::None; 5]
+            hardware_errors: [HardwareError::None; 5],
+            clocks: None,
+            pwm: None
         }
     }
 
@@ -1034,10 +1100,6 @@ impl BoardBuilder {
             }
         };
 
-        // TODO: just one GPIO pin for the moment
-        let mut gpio = self.gpio.unwrap();
-        gpio.gpio6.make_push_pull_output(&mut gpio_cr.gpioc_crh);
-
         let mut watchdog = self.watchdog.unwrap();
         watchdog.feed();
 
@@ -1047,7 +1109,7 @@ impl BoardBuilder {
             i2c2: self.i2c2.unwrap(),
             delay: self.delay.unwrap(),
             precise_delay: self.precise_delay.unwrap(),
-            gpio: gpio,
+            gpio: self.gpio.unwrap(),
             gpio_cr: gpio_cr,
             // // power_control: self.power_control.unwrap(),
             internal_adc: internal_adc,
@@ -1063,7 +1125,9 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
-            hardware_errors: self.hardware_errors
+            hardware_errors: self.hardware_errors,
+            clocks: self.clocks.unwrap(),
+            pwm: Some(self.pwm.unwrap()),
         }
     }
 
@@ -1152,8 +1216,8 @@ impl BoardBuilder {
             USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
 
             let uid: [u8;12] = Uid::fetch().bytes();
-
-            let arg = format_args!("rriv_{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+            
+            let arg = format_args!("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",            
                     uid[0],
                     uid[1],
                     uid[2],
@@ -1167,14 +1231,14 @@ impl BoardBuilder {
                     uid[10],
                     uid[11]);
 
-
+            
             #[allow(unused_assignments)]
-            let mut uid_string: &str = "rriv";
-            static mut BUF:[u8;29] = [0u8; 29];
+            let mut uid_string: &str = "_rriv";
+            static mut BUF:[u8;24] = [0u8; 24];
 
             match format_no_std::show(
                     &mut BUF,
-                    arg
+                    arg 
                 ) {
                     Ok(formatted) => {
                         defmt::println!("{}", formatted); // TODO: this uses format!
@@ -1189,7 +1253,7 @@ impl BoardBuilder {
 
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
-                .product("Data Logger")
+                .product("RRIV Data Logger")
                 .serial_number(uid_string)
                 .device_class(USB_CLASS_CDC)
                 .build();
@@ -1264,11 +1328,13 @@ impl BoardBuilder {
         defmt::println!("board builder setup");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
-        let device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
+        let mut device_peripherals: pac::Peripherals = pac::Peripherals::take().unwrap();
 
-        let uid = Uid::fetch();
-        defmt::println!("uid: {:X}", uid.bytes());
-        self.uid = Some(uid.bytes());
+        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
+        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
+
+        watchdog.start(MilliSeconds::secs(6));
+        watchdog.feed();
 
         // mcu device registers
         let rcc = device_peripherals.RCC.constrain();
@@ -1278,15 +1344,34 @@ impl BoardBuilder {
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
 
-        // get an unsafe handle on our the CS pin so we can flash it
+
+        let uid = Uid::fetch();
+        defmt::println!("uid: {:X}", uid.bytes());
+        self.uid = Some(uid.bytes());
+
+        watchdog.feed();
+
+        // get an unsafe handle on our CS pin so we can flash it
+        // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let mut cs = unsafe {
-            let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
-            let mut gpioc = device_peripherals.GPIOC.split();
+        let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
+            let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
+            let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
-            cs.into_push_pull_output(&mut gpioc.crh)
+            let cs = cs.into_push_pull_output(&mut gpioc.crh);
+            let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+            let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+            let sclk_led_enable = gpiob.pb13.into_push_pull_output_with_state(&mut gpiob.crh, gpio::PinState::Low);
+            (cs, sclk_led_enable, pwm_pin)
         };
 
+        // get an unsafe handle on our pwm pin
+        // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
+        // let device_peripherals_steal: pac::Peripherals = unsafe { pac::Peripherals::steal() };
+        // let mut gpiob = device_peripherals_steal.GPIOB.split(); // this line is the problem????  yeah
+        // let pwm_pin = gpiob.pb8.into_alternate_push_pull(&mut gpiob.crh);
+
+        
 
         // Prepare the GPIO
         let gpioa: gpio::gpioa::Parts = device_peripherals.GPIOA.split();
@@ -1314,18 +1399,51 @@ impl BoardBuilder {
 
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
+        
+        let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
+        let mut sclk_led_enable: Pin<'B', 13, Output> = sclk_led_enable.into_floating_input(&mut gpio_cr.gpiob_crh).into_push_pull_output(&mut gpio_cr.gpiob_crh);
+        sclk_led_enable.set_high();
+        let notify_time = 125_u32;
+        for _i in 0..1 {
+            cs.set_high();
+            delay.delay_ms(notify_time);
+            cs.set_low();
+            delay.delay_ms(notify_time);
+        }
+        cs.set_high();
+
+        let tim4 = device_peripherals.TIM4;
+        let mut pwm: PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>> = 
+            tim4.pwm_hz::<Tim4NoRemap, _, _>(pwm_pin, &mut afio.mapr, 1.kHz(), &clocks);
+        pwm.enable(Channel::C3);
+        pwm.set_period(ms(10).into_rate());
+        
+        // show that pwm is alive
+        pwm.set_duty(Channel::C3, pwm.get_max_duty() / 2);
+        delay.delay_ms(150_u32);
+        pwm.set_duty(Channel::C3, 0);
+        delay.delay_ms(150_u32);
+        pwm.set_duty(Channel::C3, pwm.get_max_duty() / 2);
+        delay.delay_ms(150_u32);
+        pwm.set_duty(Channel::C3, 0);
+
+        self.pwm = Some(pwm);
 
         // let mut high = true;
         let precise_delay = PreciseDelayUs::new();
 
-        let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
-
-        let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
-        watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
-
-        watchdog.start(MilliSeconds::secs(6));
         watchdog.feed();
+    
+
+        dynamic_gpio_pins.gpio5.make_interrupt_source(&mut afio);
+        dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::RisingFalling);
+        dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
+        
+        // unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
+        // Disable interrupts on start
+        NVIC::mask(pac::Interrupt::EXTI2);
+
 
         BoardBuilder::setup_serial(
             serial_pins,
@@ -1341,24 +1459,33 @@ impl BoardBuilder {
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
-        watchdog.start(MilliSeconds::secs(24));
-        let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-        watchdog.start(MilliSeconds::secs(6));
-        let storage = match storage {
-            Ok(storage) => Some(storage),
-            Err(hardware_error) => {
-                add_hardware_error(&mut self.hardware_errors, hardware_error);
-                None
-            },
+
+        #[cfg(feature = "storage-sdcard")]
+        let storage: Option<Storage> = {
+            watchdog.start(MilliSeconds::secs(24));
+            let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+            watchdog.start(MilliSeconds::secs(6));
+            match result {
+                Ok(storage) => Some(storage),
+                Err(hardware_error) => {
+                    add_hardware_error(&mut self.hardware_errors, hardware_error);
+                    None
+                },
+            }
         };
+
+        #[cfg(feature = "storage-disabled")]
+        let storage: Option<Storage> = None;
+
+
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it
-            for _i in 1..10 {
+            for _i in 1..20 {
                 cs.set_high();
-                delay.delay_ms(100_u32);
+                delay.delay_ms(50_u32);
                 cs.set_low();
-                delay.delay_ms(100_u32);
+                delay.delay_ms(50_u32);
             }
             cs.set_high();
             
@@ -1367,19 +1494,23 @@ impl BoardBuilder {
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
 
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_low();
-        delay.delay_ms(500_u32);
-        power_pins.enable_3v.set_high();
-        delay.delay_ms(500_u32);
-
         // external adc and i2c stability require these steps
         power_pins.enable_5v.set_high();
         delay.delay_ms(250_u32);
         self.external_adc.as_mut().unwrap().enable(&mut delay);
         self.external_adc.as_mut().unwrap().reset(&mut delay);
 
+        
+        watchdog.feed();
+        for _i in 0..2 {
+            cs.set_high();
+            delay.delay_ms(notify_time);
+            cs.set_low();
+            delay.delay_ms(notify_time);
+        }
+        cs.set_high();
+        watchdog.feed();
+        
 
         defmt::println!("unhang I2C1 if hung");
 
@@ -1409,6 +1540,7 @@ impl BoardBuilder {
         let i2c1_pins = I2c1Pins::rebuild(scl1, sda1, &mut gpio_cr);
 
         // defmt::println!("starting i2c");
+        core_peripherals.DCB.enable_trace();
         core_peripherals.DWT.enable_cycle_counter(); // BlockingI2c says this is required  already
         let mut i2c1 = BoardBuilder::setup_i2c1(
             i2c1_pins,
@@ -1473,6 +1605,15 @@ impl BoardBuilder {
         defmt::println!("scan is done");
 
         watchdog.feed();
+        for _i in 0..3 {
+            cs.set_high();
+            delay.delay_ms(notify_time);
+            cs.set_low();
+            delay.delay_ms(notify_time);
+        }
+        cs.set_high();
+        watchdog.feed();
+        
 
         defmt::println!("i2c2 scanning...");
         for addr in 0x00_u8..0x7F {
@@ -1526,11 +1667,10 @@ impl BoardBuilder {
 
         self.storage = storage;
 
-        self.delay = Some(delay);
         self.precise_delay = Some(precise_delay);
 
         // the millis counter
-        let mut counter: CounterUs<TIM4> = device_peripherals.TIM4.counter_us(&clocks);
+        let mut counter: CounterUs<TIM5> = device_peripherals.TIM5.counter_us(&clocks);
         match counter.start(2.micros()) {
             Ok(_) => defmt::println!("Millis counter start ok"),
             Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
@@ -1539,14 +1679,31 @@ impl BoardBuilder {
 
         watchdog.feed();
 
-        self.watchdog = Some(watchdog);
 
-        defmt::println!("setting up RS485 serial b");
-        setup_serialb(device_peripherals.UART5, &clocks);
+        // defmt::println!("setting up RS485 serial b");
+        // setup_serialb(device_peripherals.UART5, &clocks);
+
+        self.clocks = Some(clocks);
+        // setup GPIO5 as EXTI2 interrupt PD2
+
+        watchdog.feed();
+        for _i in 0..4 {
+            cs.set_high();
+            delay.delay_ms(notify_time);
+            cs.set_low();
+            delay.delay_ms(notify_time);
+        }
+        cs.set_high();
+        watchdog.feed();
+
+        self.watchdog = Some(watchdog);
+        self.delay = Some(delay);
+
 
         defmt::println!("done with setup");
 
     }
+
 }
 
 unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
@@ -1571,7 +1728,7 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
                     match err {
                         UsbError::WouldBlock => {
                             if would_block_count > 100 {
-                                defmt::println!("USBWouldBlock limit exceeded");
+                                // defmt::println!("USBWouldBlock limit exceeded");
                                 return;
                             }
                             would_block_count = would_block_count + 1; // handle hung blocking condition.  possibly caused by client not reading and buffer full.

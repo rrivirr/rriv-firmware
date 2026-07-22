@@ -10,7 +10,7 @@ description = "RRIV board packages"
 [profile.release]
 opt-level = 'z'     # optimize for size and don't unroll loops
 codegen-units = 1 # setting this to 1 causes better optimizations, but slower code. setting it higher makes compiling parallelizable
-debug = false       # symbols are nice and they don't increase the size on Flash
+debug = false
 lto = true          # link-time optimizations
 strip = true
 
@@ -24,6 +24,7 @@ panic = "abort"
 
 # Optimize all dependencies
 [profile.release.package."*"]
+debug = false
 opt-level = "z"
 
 [profile.dev.package."*"]

@@ -4,7 +4,6 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 use alloc::boxed::Box;
-use rtt_target::rprint;
 use serde_json::json;
 
 // TODO: calibration offsets for all 6 sensors need to be stored and loaded into this driver, and written to EEPROM.
@@ -201,7 +200,7 @@ impl SensorDriver for RingTemperatureDriver {
 
         if pairs[0].values.len() < 6 {
             // TODO: check for zeros, not for len().  len is constant
-            rprint!("not enough values to calibrate");
+            // rprint!("not enough values to calibrate");
             return Err(());
         }
 
