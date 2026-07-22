@@ -6,11 +6,61 @@ use super::mcp9808::*;
 
 use super::types::*;
 use alloc::boxed::Box;
+use bitfield_struct::bitfield;
 use rtt_target::rprint;
 use serde_json::json;
 
 const MULTIPLEXER_ADDRESS: u8 = 0x70;
 // TODO: calibration offsets for all 6 sensors need to be stored and loaded into this driver, and written to EEPROM.
+
+enum MeasurementOutputMode {
+    Raw,  // default
+    Calibrated,
+    RawAndCalibrated,
+}
+
+#[bitfield(u8)] 
+struct MeasurementOutputs {
+    #[bits(1, default = true)]
+    raw: bool,
+
+    #[bits(1, default = false)]
+    calibrated: bool,
+
+    #[bits(1, default = false)]
+    differences: bool, // not supported yet
+
+    #[bits(1, default = false)]
+    vector: bool, // not supported yet
+
+    #[bits(4, access = RO, default = 0)]
+    reserved: u8,
+}
+
+impl MeasurementOutputs {
+    fn get_mode(&self) -> MeasurementOutputMode {
+        if self.raw() && self.calibrated() {
+            MeasurementOutputMode::RawAndCalibrated
+        } else if self.raw() {
+            MeasurementOutputMode::Raw
+        } else if self.calibrated() {
+            MeasurementOutputMode::Calibrated
+        } else {
+            MeasurementOutputMode::Raw
+        }
+    }
+
+    fn total_parameter_count(&self, channels: usize, sensors: usize) -> usize{
+        let mut count = 0;
+        if self.raw() {
+            count = count + channels * sensors;
+        }
+        if self.calibrated() {
+            count = count + channels * sensors;
+        }
+        count
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct RingMuxTemperatureDriverSpecialConfiguration {
@@ -18,6 +68,7 @@ pub struct RingMuxTemperatureDriverSpecialConfiguration {
     sensors: usize,
     calibration_offset: [i16; 8], // 16
     address_offset: u8, // 1
+    measurement_outputs: MeasurementOutputs
 }
 
 impl RingMuxTemperatureDriverSpecialConfiguration {
@@ -63,11 +114,42 @@ impl RingMuxTemperatureDriverSpecialConfiguration {
             }
         }
 
+        let mut measurement_outputs = MeasurementOutputs::new();
+        match &value["measurements_raw"] {
+            serde_json::Value::Bool(value) => {
+                measurement_outputs.set_raw(*value);
+            }
+            _ => {}
+        }
+
+        match &value["measurements_calibrated"] {
+            serde_json::Value::Bool(value) => {
+                measurement_outputs.set_calibrated(*value);
+            }
+            _ => {}
+        }
+
+        match &value["measurements_differences"] {
+            serde_json::Value::Bool(value) => {
+                measurement_outputs.set_differences(*value);
+            }
+            _ => {}
+        }
+
+        match &value["measurements_vector"] {
+            serde_json::Value::Bool(value) => {
+                measurement_outputs.set_vector(*value);
+            }
+            _ => {}
+        }
+
+
         Ok ( Self {
             channels: channels,
             sensors: sensors,
             calibration_offset: [0; TEMPERATURE_SENSORS_ON_RING],
             address_offset: 0,
+            measurement_outputs: measurement_outputs
         } ) // Just using default address offset of 0 for now, need to optionally read from JSON
     }
 
@@ -181,8 +263,8 @@ impl RingMuxTemperatureDriver {
         
         let message: [u8; 1] = [1 << channel];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
-            Ok(_) => rprint!("Enabled multiplexer channel {}\n", channel),
-            Err(_) => rprint!("Failed to enable multiplexer channel {}\n", channel),
+            Ok(_) => defmt::info!("Enabled multiplexer channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to enable multiplexer channel {}\n", channel),
         }
     }
 
@@ -192,7 +274,7 @@ impl RingMuxTemperatureDriver {
         let message: [u8; 1] = [0xFF];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => (),
-            Err(_) => rprint!("Failed to enable all multiplexer channels\n"),
+            Err(_) => defmt::warn!("Failed to enable all multiplexer channels\n"),
         }
     }
 
@@ -203,15 +285,15 @@ impl RingMuxTemperatureDriver {
         
         match board.ic2_read(MULTIPLEXER_ADDRESS, &mut message) {
             Ok(_) => {
-                rprint!("Multiplexer state before disabling channel {}: {:08b}\n", channel, message[0]);
+                defmt::info!("Multiplexer state before disabling channel {}: {:08b}\n", channel, message[0]);
             },
-            Err(_) => rprint!("Failed to read multiplexer state to disable channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to read multiplexer state to disable channel {}\n", channel),
         }
 
         message[0] &= !(1 << channel);
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => (),
-            Err(_) => rprint!("Failed to disable multiplexer channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to disable multiplexer channel {}\n", channel),
         }
     }
 
@@ -220,9 +302,9 @@ impl RingMuxTemperatureDriver {
         let message: [u8; 1] = [0];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => {
-                rprint!("Disabled all multiplexer channels\n");
+                defmt::info!("Disabled all multiplexer channels\n");
             },
-            Err(_) => rprint!("Failed to disable multiplexer channels\n"),
+            Err(_) => defmt::warn!("Failed to disable multiplexer channels\n"),
         }
     }
 
@@ -248,7 +330,11 @@ impl SensorDriver for RingMuxTemperatureDriver {
             "type" : sensor_name,
             "calibration_offset": self.special_config.calibration_offset,
             "channels": self.special_config.channels,
-            "sensors": self.special_config.sensors
+            "sensors": self.special_config.sensors,
+            "measurements_raw" : self.special_config.measurement_outputs.raw(),
+            "measurements_calibrated" : self.special_config.measurement_outputs.calibrated(),
+            "measurements_differences" : self.special_config.measurement_outputs.differences(),
+            "measurements_vector" : self.special_config.measurement_outputs.vector(),
         })
     }
 
@@ -265,20 +351,45 @@ impl SensorDriver for RingMuxTemperatureDriver {
         if self.special_config.channels > 0 {
             channels_used = self.special_config.channels;
         }
-        self.special_config.sensors * 2 * channels_used
+        
+        self.special_config.measurement_outputs.total_parameter_count(channels_used, self.special_config.sensors)
+
+        // let mut count = 0;
+        
+        // if self.special_config.measurement_outputs.raw() {
+        //     count = count + channels_used;
+        // }
+
+        // if self.special_config.measurement_outputs.calibrated() {
+        //     count = count + channels_used;
+        // }
+
+        // count
     }
 
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()> {
-        if self.measured_parameter_values[index] == f64::MAX {
+        
+        let index_mapped = match self.special_config.measurement_outputs.get_mode() {
+            MeasurementOutputMode::Raw => index * 2,
+            MeasurementOutputMode::Calibrated => index * 2 + 1,
+            MeasurementOutputMode::RawAndCalibrated => index,
+        };
+
+        if self.measured_parameter_values[index_mapped] == f64::MAX {
             Err(())
         } else {
-            Ok(self.measured_parameter_values[index])
+            Ok(self.measured_parameter_values[index_mapped])
         }
     }
 
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16] {
-        let sensor_index = (index / 2) % self.special_config.sensors;
-        let parameter_index = index % 2;
+
+        let (sensor_index, parameter_index) = match self.special_config.measurement_outputs.get_mode() {
+            MeasurementOutputMode::Raw => ( index % self.special_config.sensors, 0),
+            MeasurementOutputMode::Calibrated => ( index % self.special_config.sensors , 1),
+            MeasurementOutputMode::RawAndCalibrated => ( (index / 2) % self.special_config.sensors, index % 2)
+        };
+        
         let buf =
             self.sensor_drivers[sensor_index].get_measured_parameter_identifier(parameter_index);
 
@@ -352,7 +463,7 @@ impl SensorDriver for RingMuxTemperatureDriver {
 
         if pairs[0].values.len() < 6 {
             // TODO: check for zeros, not for len().  len is constant
-            rprint!("not enough values to calibrate");
+            defmt::warn!("not enough values to calibrate");
             return Err(());
         }
 
