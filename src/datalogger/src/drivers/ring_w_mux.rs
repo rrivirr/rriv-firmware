@@ -263,8 +263,8 @@ impl RingMuxTemperatureDriver {
         
         let message: [u8; 1] = [1 << channel];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
-            Ok(_) => rprint!("Enabled multiplexer channel {}\n", channel),
-            Err(_) => rprint!("Failed to enable multiplexer channel {}\n", channel),
+            Ok(_) => defmt::info!("Enabled multiplexer channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to enable multiplexer channel {}\n", channel),
         }
     }
 
@@ -274,7 +274,7 @@ impl RingMuxTemperatureDriver {
         let message: [u8; 1] = [0xFF];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => (),
-            Err(_) => rprint!("Failed to enable all multiplexer channels\n"),
+            Err(_) => defmt::warn!("Failed to enable all multiplexer channels\n"),
         }
     }
 

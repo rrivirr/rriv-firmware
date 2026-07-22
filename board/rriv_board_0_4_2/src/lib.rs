@@ -514,7 +514,6 @@ impl RRIVBoard for Board {
     fn rs485_send(&mut self, message: &[u8]) {
         cortex_m::interrupt::free(|_cs| {
             for char in message.iter() {
-            // rprintln!("char {}", char);
             _ = nb::block!( components::uart5::write(char.clone()));   
             }
         });

@@ -302,8 +302,7 @@ impl Storage {
                 filename_bytes[0..bytes.len()].clone_from_slice(&bytes); 
             }
         }
-        // let filename = filename.as_bytes();
-        // rprintln!("file: {:?}", core::str::from_utf8(filename));
+        defmt::trace!("file: {:?}", core::str::from_utf8(&filename_bytes));
         self.filename = filename_bytes;
 
     }
