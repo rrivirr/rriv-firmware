@@ -1174,7 +1174,7 @@ impl DataLogger {
                 }
             }
 
-            CommandPayload::SensorCalibrateRemove(payload) => {
+            CommandPayload::SensorCalibrateRemove(_payload) => {
                 responses::send_command_response_message(
                     board,
                     "This command is not implemented yet",

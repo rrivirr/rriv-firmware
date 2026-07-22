@@ -135,12 +135,6 @@ impl MHZ9041ADriverSpecialConfiguration {
         unsafe { *settings }
     }
 
-    pub fn new(calibration_offset: i16) -> MHZ9041ADriverSpecialConfiguration {
-        Self {
-            calibration_offset,
-            address: ADDRESS_AUTO_DETECT,
-        }
-    }
 }
 
 pub struct MHZ9041ADriver {
@@ -305,7 +299,7 @@ impl SensorDriver for MHZ9041ADriver {
         self.special_config.calibration_offset = (self.calibration_offset * 1000_f64) as i16;
         Ok(())
     }
-    
+
     #[allow(unused_variables)]
     fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
         Err("update not implemented")
@@ -328,21 +322,4 @@ impl MHZ9041ADriver {
         }
     }
 
-    pub fn new_with_address(
-        general_config: SensorDriverGeneralConfiguration,
-        special_config: MHZ9041ADriverSpecialConfiguration,
-        address: u8,
-    ) -> Self {
-        MHZ9041ADriver {
-            general_config,
-            special_config,
-            measured_parameter_values: [0.0; NUMBER_OF_MEASURED_PARAMETERS],
-            address,
-            calibration_offset: 0_f64,
-        }
-    }
-
-    pub fn get_calibration_offset(&self) -> &i16 {
-        &self.special_config.calibration_offset
-    }
 }

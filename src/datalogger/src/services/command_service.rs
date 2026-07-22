@@ -39,6 +39,7 @@ pub fn setup(board: &mut impl RRIVBoard) {
 
 fn pending_message_count(board: &impl RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
+        #[allow(static_mut_refs)]
         let command_data = COMMAND_DATA.borrow_mut();
         PENDING_MESSAGE_COUNT = CommandRecognizer::pending_message_count(&command_data);
     };
@@ -50,6 +51,7 @@ fn pending_message_count(board: &impl RRIVBoard) -> usize {
 
 fn take_command(board: &impl RRIVBoard) -> Result<[u8; BUFFER_SIZE], ()> {
     let do_take_command = || unsafe {
+        #[allow(static_mut_refs)]
         let command_data = COMMAND_DATA.borrow_mut();
         COMMAND = CommandRecognizer::take_command(command_data);
     };
@@ -238,6 +240,7 @@ impl<'a> CharacterProcessor {
 impl<'a, 'b> RXProcessor for CharacterProcessor {
     fn process_byte(&mut self, character: u8) {
         unsafe {
+            #[allow(static_mut_refs)]
             let command_data = COMMAND_DATA.borrow_mut();
             CommandRecognizer::process_character(command_data, character);
         }

@@ -1,4 +1,3 @@
-use rriv_board::gpio::{GpioMode};
 use serde_json::json;
 
 use crate::sensor_name_from_type_id;

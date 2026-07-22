@@ -40,6 +40,7 @@ impl<'a> USARTCharacterProcessor {
 impl<'a, 'b> RXProcessor for USARTCharacterProcessor {
     fn process_byte(&mut self, character: u8) {
         unsafe {
+            #[allow(static_mut_refs)]
             let message_data = MESSAGE_DATA.borrow_mut();
             process_character(message_data, character);
         }
@@ -125,6 +126,7 @@ fn _take_command(message_data: &mut MessageData) -> [u8; USART_BUFFER_SIZE] {
 
 pub fn pending_message_count(board: &dyn RRIVBoard) -> usize {
     let get_pending_message_count = || unsafe {
+        #[allow(static_mut_refs)]
         let message_data = MESSAGE_DATA.borrow_mut();
         PENDING_MESSAGE_COUNT = _pending_message_count(&message_data);
     };
@@ -141,6 +143,7 @@ pub fn take_command(board: &dyn RRIVBoard) -> Result<[u8; USART_BUFFER_SIZE], ()
     }
 
     let do_take_command = || unsafe {
+        #[allow(static_mut_refs)]
         let message_data = MESSAGE_DATA.borrow_mut();
         COMMAND = _take_command(message_data);
     };

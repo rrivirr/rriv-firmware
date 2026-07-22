@@ -974,6 +974,7 @@ fn EXTI2() {
         let now = now / SYSCLK_MHZ; // convert to microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
+                #[allow(static_mut_refs)]
                 if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
                     gpio_interrupt_function(now, gpio_state);
                 }
@@ -984,7 +985,9 @@ fn EXTI2() {
 }
 
 fn usb_interrupt(cs: &CriticalSection) {
+    #[allow(static_mut_refs)]
     let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
+    #[allow(static_mut_refs)]
     let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
 
     if !usb_dev.poll(&mut [serial]) {
@@ -1074,7 +1077,6 @@ impl BoardBuilder {
     pub fn build(self) -> Board {
         let mut gpio_cr = self.gpio_cr.unwrap();
 
-        let mut one_wire = None;
         let mut internal_adc = self.internal_adc.unwrap();
         let pin = internal_adc.take_port_5();
         let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
@@ -1082,11 +1084,12 @@ impl BoardBuilder {
         pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
         let pin: OneWirePin<Pin<'C', 0, Dynamic>> = OneWirePin { pin };
 
-        one_wire = match OneWire::new(pin) {
+        let one_wire = match OneWire::new(pin) {
             Ok(one_wire) => Some(one_wire),
             Err(e) => {
                 defmt::println!("{:?} bad one wire bus", defmt::Debug2Format(&e));
-                panic!("bad one wire bus");
+                None
+                // panic!("bad one wire bus");
             }
         };
 
@@ -1203,7 +1206,10 @@ impl BoardBuilder {
 
             USB_BUS = Some(bus);
 
-            USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
+            USB_SERIAL = {
+                #[allow(static_mut_refs)]
+                Some(SerialPort::new(USB_BUS.as_ref().unwrap()))
+            };
 
             let uid: [u8;12] = Uid::fetch().bytes();
             
@@ -1234,13 +1240,14 @@ impl BoardBuilder {
                         defmt::println!("{}", formatted); // TODO: this uses format!
                         uid_string = formatted;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // doesn't matter
                     },
                 }
 
             defmt::println!("{}", uid_string);
 
+            #[allow(static_mut_refs)]
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
                 .product("RRIV Data Logger")
@@ -1343,7 +1350,7 @@ impl BoardBuilder {
         // get an unsafe handle on our CS pin so we can flash it
         // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
+        let (mut cs, sclk_led_enable, pwm_pin) = unsafe {
             let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
             let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
@@ -1707,6 +1714,7 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
     cortex_m::interrupt::free(|_cs| {
         // USB
+        #[allow(static_mut_refs)]
         let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
         let bytes = string.as_bytes();
         let mut written = 0;
