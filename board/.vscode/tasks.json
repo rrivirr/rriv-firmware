@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "RRIV: Build App Binary Crate",
+            "label": "RRIV: Build Datalogger Debug Binary",
             "type": "shell",
             "command": "cargo",
             "args": [
@@ -18,7 +18,44 @@
             },
         },
         {
-            "label": "RRIV: Build Release App Binary Crate",
+            "label": "RRIV: Build Probe Debug Binary",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-p=app",
+                "--no-default-features",
+                "--features=storage-disabled"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+        },
+         {
+            "label": "RRIV: Build Probe Release",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-p=app",
+                "--release",
+                "--no-default-features",
+                "--features=storage-disabled"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+        },
+        {
+            "label": "RRIV: Build Datalogger Release Binary",
             "type": "shell",
             "command": "cargo",
             "args": [
@@ -34,7 +71,7 @@
                 "isDefault": false
             },
         },
-         {
+        {
             "label": "RRIV: Clean",
             "type": "shell",
             "command": "cargo",
@@ -51,10 +88,25 @@
             },
         },
         {
-            "label": "RRIV: Build Release",
+            "label": "RRIV: Clean Debug",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "clean"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+        },
+        {
+            "label": "RRIV: Build Datalogger Release",
             "dependsOn": [
                 "RRIV: Clean",
-                "RRIV: Build Release App Binary Crate"
+                "RRIV: Build Datalogger Release Binary"
             ]
         },
         {

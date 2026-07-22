@@ -1,5 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 
+#[cfg(all(feature = "storage-sdcard", feature = "storage-disabled"))]
+compile_error!("feature \"storage-sdcard\" and feature \"storage-disabled\" cannot be enabled at the same time");
+
 extern crate alloc;
 
 use alloc::boxed::Box;
@@ -1463,26 +1466,24 @@ impl BoardBuilder {
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
 
-        let mut enable_storage = true;
-        let storage = None;
-        #[cfg(feature = "disable-storage")]
-        {
-            enable_storage = false;
-        }
-
-        if enable_storage {
+        #[cfg(feature = "storage-sdcard")]
+        let storage: Option<Storage> = {
             watchdog.start(MilliSeconds::secs(24));
             let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
             watchdog.start(MilliSeconds::secs(6));
-            let storage = match result {
+            match result {
                 Ok(storage) => Some(storage),
                 Err(hardware_error) => {
                     add_hardware_error(&mut self.hardware_errors, hardware_error);
                     None
                 },
-            };
+            }
+        };
 
-        }
+        #[cfg(feature = "storage-disabled")]
+        let storage: Option<Storage> = None;
+
+
         if storage.is_none() {
             // sd card library has no way to release the spi and pins
             // so unsafely get the cs pin and flash it

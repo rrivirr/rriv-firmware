@@ -1,12 +1,12 @@
 {
     "version": "0.2.0",
     "configurations": [
-        // Build and Debug Rust Binary (app)
+        // Build, Flash, and Debug Datalogger Binary
         {
             "type": "probe-rs-debug",
-            "preLaunchTask": "RRIV: Build App Binary Crate",
+            "preLaunchTask": "RRIV: Build Datalogger Debug Binary",
             "request": "launch",
-            "name": "Build, Run, Debug Rust Binary",
+            "name": "Datalogger: Build & Debug",
             "cwd": "${workspaceFolder}",
             "chip": "STM32F103RE",
             "wireProtocol": "Swd",
@@ -37,9 +37,8 @@
                 }
             ],
             "env": {
-                // "RUST_LOG": "trace", // If you set this variable, check the VSCode console log window for the location of the log file.
                 "RUST_BACKTRACE": "1",
-                "RUST_LOG" : "debug"
+                "RUST_LOG" : "debug" // "trace" // If you set this variable, check the VSCode console log window for the location of the log file.
             },
             "linux": {
                 "env": {
@@ -47,20 +46,12 @@
                 }
             },
             "consoleLogLevel": "Console", //Info, Debug
-
-
-            // this is for building with the 24LC08?  not quite working from here
-            // these flags can probably be used with cargo embed?
-            // "cargo": {
-            //     "args": ["build", "--no-default-features", "--features", "24LC08", "-p", "app"]
-            // }
-
         },
-        {
+{
             "type": "probe-rs-debug",
-            "preLaunchTask": "RRIV: Build App Binary Crate",
+            "preLaunchTask": "RRIV: Build Release Binary",
             "request": "attach",
-            "name": "Attach and Debug Rust Binary",
+            "name": "Datalogger: Attach and Debug",
             "cwd": "${workspaceFolder}",
             "chip": "STM32F103RE",
             "wireProtocol": "Swd",
@@ -93,12 +84,12 @@
             },
             "consoleLogLevel": "Console", //Info, Debug
         },
-        // Build Rust Binary in Release Mode (app)
+         // Build Rust Binary in Release Mode (app)
         {
             "type": "probe-rs-debug",
-            "preLaunchTask": "RRIV: Build Release",
+            "preLaunchTask": "RRIV: Build Datalogger Release",
             "request": "launch",
-            "name": "Build & Run Release Rust Binary",
+            "name": "Datalogger Release: Build & Run",
             "cwd": "${workspaceFolder}",
             "chip": "STM32F103RE",
             "wireProtocol": "Swd",
@@ -136,5 +127,111 @@
             },
             "consoleLogLevel": "Console", //Info, Debug
         },
+
+        // Build, Flash, and Debug Probe Binary
+        {
+            "type": "probe-rs-debug",
+            "preLaunchTask": "RRIV: Build Probe Debug Binary",
+            "request": "launch",
+            "name": "Probe: Build & Debug",
+            "cwd": "${workspaceFolder}",
+            "chip": "STM32F103RE",
+            "wireProtocol": "Swd",
+            "runtimeExecutable":"probe-rs",
+            //           "probe": "1366:0101:000801023227", // Modify to match yours if needed, or keep commented
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "haltAfterReset": false,
+                "fullChipErase": true, // faster erasing???
+            },
+            "allowEraseAll" : true, // faster erasing
+            "coreConfigs": [
+                {
+                    "programBinary": "${workspaceFolder}/target/thumbv7m-none-eabi/debug/app",
+                    "svdFile": "${workspaceFolder}/STM32F103xx.svd",
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            "dataFormat": "String", // Format RTT data as String data
+                            "showTimestamps": true // Include host-side timestamps for every line of data transferred from the target RTT output
+                        },
+                        {
+                            "channelNumber": 1,
+                            "dataFormat": "BinaryLE" // Treat data as raw binary data, and do not format in any way
+                        }
+                    ]
+                }
+            ],
+            "env": {
+                "RUST_BACKTRACE": "1",
+                "RUST_LOG" : "debug" // "trace" // If you set this variable, check the VSCode console log window for the location of the log file.
+            },
+            "linux": {
+                "env": {
+                    "PATH": "${env:HOME}/.cargo/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${env:HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+                }
+            },
+            "consoleLogLevel": "Console", //Info, Debug
+        },
+        {
+            "type": "probe-rs-debug",
+            "preLaunchTask": "RRIV: Build Probe Release",
+            "request": "launch",
+            "name": "Probe Release: Build & Run",
+            "cwd": "${workspaceFolder}",
+            "chip": "STM32F103RE",
+            "wireProtocol": "Swd",
+            "runtimeExecutable":"probe-rs",
+            //           "probe": "1366:0101:000801023227", // Modify to match yours if needed, or keep commented
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "haltAfterReset": false
+            },
+            "coreConfigs": [
+                {
+                    "programBinary": "${workspaceFolder}/target/thumbv7m-none-eabi/release/app",
+                    "svdFile": "${workspaceFolder}/STM32F103xx.svd",
+                    "rttEnabled": true,
+                    "rttChannelFormats": [
+                        {
+                            "channelNumber": 0,
+                            "dataFormat": "String", // Format RTT data as String data
+                            "showTimestamps": true // Include host-side timestamps for every line of data transferred from the target RTT output
+                        },
+                        {
+                            "channelNumber": 1,
+                            "dataFormat": "BinaryLE" // Treat data as raw binary data, and do not format in any way
+                        }
+                    ]
+                }
+            ],
+            "env": {
+                // "RUST_LOG": "trace", // If you set this variable, check the VSCode console log window for the location of the log file.
+            },
+            "linux": {
+                "env": {
+                    "PATH": "${env:HOME}/.cargo/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${env:HOME}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+                }
+            },
+            "consoleLogLevel": "Console", //Info, Debug
+        },
+       
+        {
+            "name": "Clean Debug",
+            "type": "node",
+            "request": "launch",
+            "preLaunchTask": "RRIV: Clean Debug",
+            "runtimeExecutable": "echo",
+            "runtimeArgs": ["Task completed!"]
+        },
+         {
+            "name": "Clean Release",
+            "type": "node",
+            "request": "launch",
+            "preLaunchTask": "RRIV: Clean",
+            "runtimeExecutable": "echo",
+            "runtimeArgs": ["Task completed!"]
+        }
     ],
 }
