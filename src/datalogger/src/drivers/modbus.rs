@@ -139,6 +139,10 @@ impl SensorDriver for ModbusDriver {
 
         
     }
+    
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        todo!()
+    }
 }
 
 // impl Rs485DataRequestDriver {

@@ -167,6 +167,11 @@ impl SensorDriver for K30CO2 {
         Ok(())
     }
 
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
+
 }
 
 impl K30CO2 {

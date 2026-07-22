@@ -305,6 +305,11 @@ impl SensorDriver for MHZ9041ADriver {
         self.special_config.calibration_offset = (self.calibration_offset * 1000_f64) as i16;
         Ok(())
     }
+    
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
 }
 
 // ─── Constructor ────────────────────────────────────────────────────────────────

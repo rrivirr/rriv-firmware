@@ -222,4 +222,9 @@ impl SensorDriver for RingTemperatureDriver {
         }
         Ok(())
     }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
 }

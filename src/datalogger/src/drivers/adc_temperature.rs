@@ -87,8 +87,9 @@ impl SensorDriver for ADCTemperatureDriver {
         Ok(())
     }
    
-    #[allow(unused)]
-    fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
+     #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
     }
         
 }

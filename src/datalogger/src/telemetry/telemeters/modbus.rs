@@ -15,18 +15,22 @@ pub struct ModBusRTU();
 
 impl Telemeter for ModBusRTU {
 
+    #[allow(unused_variables)]
     fn transmit(&mut self, board: &mut dyn RRIVBoard, values: &[i16] ) {
         send_input_registers_response(board, values);
     }
     
+    #[allow(unused_variables)]
     fn run_loop_iteration(&mut self, board: &mut dyn RRIVBoard) {
         // nothing to do here yet
     }
     
+    #[allow(unused_variables)]
     fn ready_to_transmit(&mut self, board: &mut dyn RRIVBoard) -> bool {
         return true;
     }
-    
+
+    #[allow(unused_variables)]
     fn process_events(&mut self, board: &mut dyn RRIVBoard) {
         // not handled yet
     }
@@ -86,9 +90,9 @@ fn transmit(board: &mut dyn RRIVBoard, payload: &[u8]){
     match modbus_core::rtu::server::encode_response(adu, &mut adu_buffer) {
         Ok(length) => {
             let message: &[u8] = &adu_buffer[0..length];
-            for byte in message {
-                // defmt::println!("tx byte: {:X}", byte);
-            }
+            // for byte in message {
+            //     defmt::println!("tx byte: {:X}", byte);
+            // }
             transmit(board, message);
         },
         Err(_) => {

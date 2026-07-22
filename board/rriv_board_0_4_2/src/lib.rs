@@ -62,7 +62,7 @@ use rriv_board::{
     EEPROM_TOTAL_SENSOR_SLOTS, GPIO_INTERRUPT_FUNCTION, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
-use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
+use ds323x::{DateTimeAccess, Ds323x};
 use stm32f1xx_hal::rtc::Rtc;
 
 use one_wire_bus::{Address, OneWire, SearchState};
