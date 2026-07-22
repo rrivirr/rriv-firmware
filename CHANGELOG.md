@@ -1,3 +1,19 @@
+# [1.14.0](https://github.com/rrivirr/rriv-firmware/compare/v1.13.0...v1.14.0) (2026-07-22)
+
+
+### Bug Fixes
+
+* move the enable 3v so we dont crash stuff ([f6257be](https://github.com/rrivirr/rriv-firmware/commit/f6257be5c83b8a11951f87e7c6fddb2b4be2cc4e))
+* remove some rprint ([e77e833](https://github.com/rrivirr/rriv-firmware/commit/e77e833ae228ccfc3d5be588ee9c3daa3273d750))
+* remove some rprint ([c07e2ec](https://github.com/rrivirr/rriv-firmware/commit/c07e2ecc6ff79e98a47ac43670157e267e976637))
+* remove some rprint ([c7e5c27](https://github.com/rrivirr/rriv-firmware/commit/c7e5c276872937a17d094bf359b287641b45077f))
+
+
+### Features
+
+* allow selection of output parameters in ring mux driver ([98f43d4](https://github.com/rrivirr/rriv-firmware/commit/98f43d44d2319356726181147cb30504b3fd4ee2))
+* move the watchdog earlier ([da29810](https://github.com/rrivirr/rriv-firmware/commit/da2981096da92811473f497f2b43a682a873f4d2))
+
 # [1.13.0](https://github.com/rrivirr/rriv-firmware/compare/v1.12.6...v1.13.0) (2026-04-11)
 
 
