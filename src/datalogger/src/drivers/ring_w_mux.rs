@@ -285,15 +285,15 @@ impl RingMuxTemperatureDriver {
         
         match board.ic2_read(MULTIPLEXER_ADDRESS, &mut message) {
             Ok(_) => {
-                rprint!("Multiplexer state before disabling channel {}: {:08b}\n", channel, message[0]);
+                defmt::info!("Multiplexer state before disabling channel {}: {:08b}\n", channel, message[0]);
             },
-            Err(_) => rprint!("Failed to read multiplexer state to disable channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to read multiplexer state to disable channel {}\n", channel),
         }
 
         message[0] &= !(1 << channel);
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => (),
-            Err(_) => rprint!("Failed to disable multiplexer channel {}\n", channel),
+            Err(_) => defmt::warn!("Failed to disable multiplexer channel {}\n", channel),
         }
     }
 
@@ -302,9 +302,9 @@ impl RingMuxTemperatureDriver {
         let message: [u8; 1] = [0];
         match board.ic2_write(MULTIPLEXER_ADDRESS, &message) {
             Ok(_) => {
-                rprint!("Disabled all multiplexer channels\n");
+                defmt::info!("Disabled all multiplexer channels\n");
             },
-            Err(_) => rprint!("Failed to disable multiplexer channels\n"),
+            Err(_) => defmt::warn!("Failed to disable multiplexer channels\n"),
         }
     }
 
