@@ -6,6 +6,7 @@ compile_error!("feature \"storage-sdcard\" and feature \"storage-disabled\" cann
 extern crate alloc;
 
 use alloc::boxed::Box;
+use chrono::DateTime;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 
@@ -31,8 +32,8 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Edge, ExtiPin, Pin, PushPull};
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
+use stm32f1xx_hal::gpio::{Edge, ExtiPin, Pin, PushPull};
+use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -394,12 +395,10 @@ impl RRIVBoard for Board {
     fn set_epoch(&mut self, epoch: i64) {
         let i2c1 = mem::replace(&mut self.i2c1, None);
         let mut ds3231 = Ds323x::new_ds3231(i2c1.unwrap());
-        let millis = epoch * 1000;
-        // DateTime::from_timestamp_millis(micros);
-        let datetime = NaiveDateTime::from_timestamp_millis(millis);
+        let datetime = DateTime::from_timestamp(epoch, 0);
         // defmt::println!("{:?}", datetime);
         if let Some(datetime) = datetime {
-            match ds3231.set_datetime(&datetime) {
+            match ds3231.set_datetime(&datetime.naive_utc()) {
                 Ok(_) => {}
                 Err(err) => defmt::println!("Error set epoch {:?}", defmt::Debug2Format(&err)),
             }
