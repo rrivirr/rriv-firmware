@@ -30,6 +30,6 @@ defmt = "1.0.1"
 
 
 [features]
-default = ["storage"]
-disable-storage = []
-storage = []
+default = []
+storage-disabled = []
+storage-sdcard = []
