@@ -3,7 +3,9 @@
 mod datalogger;
 mod services;
 
+use core::f64;
 use core::i16::MAX;
+use core::cmp::min;
 
 use datalogger::commands::*;
 use datalogger::payloads::*;
@@ -20,6 +22,7 @@ use crate::datalogger::error::hardware_error_text;
 use crate::datalogger::helper;
 use crate::datalogger::modes::DataLoggerMode;
 use crate::datalogger::modes::DataLoggerSerialTxMode;
+use crate::services::sdi12_service::{Sdi12Command, MEASUREMENTS_IN_PAYLOAD};
 use crate::{protocol::responses, services::*, telemetry::telemeters::{Telemeter}};
 use alloc::boxed::Box;
 
@@ -49,8 +52,7 @@ pub struct DataLogger {
     calibration_point_values: [Option<Box<[CalibrationPair]>>; EEPROM_TOTAL_SENSOR_SLOTS],
 
     lorawan_telemeter: Option<telemetry::telemeters::lorawan::RakWireless3172>,
-    modbus_telemeter: Option<telemetry::telemeters::modbus::ModBusRTU>,
-    modbus_service: Option<modbus_service::ModbusByteProcessor>,
+    sdi12_service: Option<sdi12_service::Sdi12RxProcessor>,
 
     // measurement cycle
     completed_bursts: u8,
@@ -71,10 +73,9 @@ impl DataLogger {
             serial_tx_mode: DataLoggerSerialTxMode::Normal,
             calibration_point_values: [CALIBRATION_INIT_VALUE; EEPROM_TOTAL_SENSOR_SLOTS],
             lorawan_telemeter: None,
-            modbus_telemeter: None,
             completed_bursts: 0,
             readings_completed_in_current_burst: 0,
-            modbus_service: None
+            sdi12_service: None,
         }
     }
 
@@ -133,8 +134,9 @@ impl DataLogger {
         // setup each service
         command_service::setup(board);
         usart_service::setup(board);
-        self.modbus_service = Some(modbus_service::ModbusByteProcessor::new());
-        modbus_service::setup(board);
+
+        let sdi12_gpio = 5;
+        self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
 
         // read all the sensors from EEPROM
         let registry = get_registry();
@@ -188,18 +190,15 @@ impl DataLogger {
             Ok(_) => {},
             Err(err) => defmt::println!("{}", err),
         }
-   
-        match self.set_up_modbus_rtu(self.settings.toggles.enable_modbus_rtu()) {
-            Ok(_) => {},
-            Err(err) => defmt::println!("{}", err),
-        }
-
 
         match self.mode {
             DataLoggerMode::Field => {
                 // if we are launching into field mode, write column headers to a new file
                 self.write_column_headers_to_storage(board);
             },
+            DataLoggerMode::SDI12 => {
+                sdi12_service::setup(board, 5);
+            }
             _ => {
                 if self.settings.toggles.enable_interactive_logging() {
                     self.write_column_headers_to_storage(board);
@@ -212,32 +211,6 @@ impl DataLogger {
         protocol::status::send_ready_status(board);
     }
 
-    pub fn set_up_modbus_rtu(&mut self, enable: bool) -> Result<(), &'static str> {
-        if enable {
-            let telemeter = telemetry::telemeters::modbus::ModBusRTU();
-
-            let requested_gpios = telemeter.get_requested_gpios();
-            match self.assigned_gpios.update_or_conflict(requested_gpios) {
-                Ok(_) => {
-                    self.modbus_telemeter = Some(telemeter);
-                    return Ok(());
-                }
-                Err(_) => {
-                    // need a way to tell the telemeter so it can respond at a better time, or some similar strategy
-                    // responses::send_command_response_error(board, "usart pin conflict", "");
-                    return Err("usart pin conflict");
-                }
-            }
-        } else {
-            if self.modbus_telemeter.is_some() {
-                let requested_gpios = self.modbus_telemeter.as_mut().unwrap().get_requested_gpios();
-                self.assigned_gpios.release(requested_gpios);
-            }
-            self.modbus_telemeter = None;
-            return Ok(());
-        }
-
-    }
 
     pub fn set_up_lorawan_telemetry(&mut self, enable: bool) -> Result<(), &'static str>{
 
@@ -268,24 +241,6 @@ impl DataLogger {
 
     }
 
-    pub fn relay_modbus_message(&mut self, board: &mut impl RRIVBoard) {
-        if let Some(modbus_service) = &mut self.modbus_service {
-            match modbus_service.take_message(board) {
-                Ok(adu) => {
-                    // relay this to the modbus driver, if configured
-                    for i in 0..self.sensor_drivers.len() {
-                        if let Some(ref mut driver) = self.sensor_drivers[i] {
-                            let requested_gpios = driver.get_requested_gpios();
-                            if requested_gpios.rs485() {
-                                driver.receive_modbus(adu);
-                            }
-                        }
-                    }
-                },
-                Err(_) => {},
-            }
-        }
-    }
 
     pub fn run_loop_iteration(&mut self, board: &mut impl RRIVBoard) {
         //
@@ -322,12 +277,6 @@ impl DataLogger {
             }        
         }
 
-        if self.settings.toggles.enable_modbus_rtu() {
-            if let Some(modbus_telemeter) = &mut self.modbus_telemeter {
-                modbus_telemeter.run_loop_iteration(board);
-            }        
-        }
-
         // //
         // // receive serialb (modbus) message
         // //
@@ -346,6 +295,7 @@ impl DataLogger {
         //
         // Do the measurement cycle
         //
+        // defmt::println!("Current mode: {}", datalogger::modes::mode_text(&self.mode));
 
         match self.mode {
             DataLoggerMode::Interactive => {
@@ -364,8 +314,6 @@ impl DataLogger {
                     self.process_errors(board);
 
                     self.measure_sensor_values(board); // measureSensorValues(false);
-
-                    self.relay_modbus_message(board);
 
 
                     self.write_last_measurement_to_serial(board); //outputLastMeasurement();
@@ -412,6 +360,142 @@ impl DataLogger {
                 // this block is processed when we start up, don't get an interactive mode interrupt, and are in HibernateUntil mode
                 // or when we have just entered this mode
                 // TODO: hibernate until the requested wake time
+            }
+            DataLoggerMode::SDI12 => {
+                let mut take_measurement = false;
+                if let Some(sdi12_service) = &mut self.sdi12_service {
+                    // if sdi12_service.is_awake() == false {
+                    //     sdi12_service.wake_up(board);
+                    // }
+
+                    if sdi12_service.is_awake(board) {
+                        defmt::println!("board awake!");
+                        match sdi12_service.take_message('0', board) {
+                            Ok(mode) => {
+                                match mode {
+                                    Sdi12Command::M => {
+                                    }
+
+                                    Sdi12Command::HA => {
+                                        let mut total_measurements_count = 0;
+
+                                        for i in 0 .. self.sensor_drivers.len() {
+                                            if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                let driver_measurements = driver.get_measured_parameter_count();
+                                                total_measurements_count = total_measurements_count + driver_measurements;
+                                            }
+                                        }
+
+                                        let measurement_time = 5; // 5 seconds approximate for now
+                                        defmt::println!("total_measurements: {}", total_measurements_count);
+                                        sdi12_service.send_ha_ack(board, '0', measurement_time, total_measurements_count);
+                                        sdi12_service.set_total_measurements(total_measurements_count);
+                                        take_measurement = true;
+                                        sdi12_service.sleep(board); // this sensor doesn't have readings immediately available.
+                                        defmt::println!("SDI12: sleep");
+                                        // board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                    }
+
+                                    Sdi12Command::Mc(digit) => {
+                                        if digit == '0' {
+                                            let mut total_measurements_count = 0;
+
+                                            for i in 0 .. self.sensor_drivers.len() {
+                                                if let Some(ref mut driver) = self.sensor_drivers[i] {
+                                                    let driver_measurements = driver.get_measured_parameter_count();
+                                                    total_measurements_count = total_measurements_count + driver_measurements;
+                                                }
+                                            }
+
+
+                                            let measurement_time = 5; // 5 seconds approximate for now
+                                            defmt::println!("total_measurements: {}", total_measurements_count);
+                                            let n = if total_measurements_count > 9 {9_u8} else {total_measurements_count as u8};
+                                            sdi12_service.send_m_ack(board, '0', measurement_time, n);
+                                            sdi12_service.set_total_measurements(n as usize);
+                                            take_measurement = true;
+                                            sdi12_service.sleep(board); // this sensor doesn't have readings immediately available.
+                                            board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                        }
+                                        defmt::println!("Sent Ack to M");
+                                    }
+
+                                    Sdi12Command::D(digit) => {
+                                       
+                                            let mut data_send: [f64; MEASUREMENTS_IN_PAYLOAD as usize] = [f64::MAX; MEASUREMENTS_IN_PAYLOAD as usize];
+
+                                            let index = digit.to_digit(10);
+                                            if index.is_none() {
+                                                defmt::println!("parse error");
+                                                return;
+                                                //TODO: best way to handle this?
+                                            }
+                                            let index = index.unwrap() as usize;
+                                            defmt::println!("index {}", index);
+
+                                            let total_measurements = sdi12_service.get_total_measurements();
+                                            let start = index * MEASUREMENTS_IN_PAYLOAD as usize;
+                                            if start > total_measurements {
+                                                defmt::println!("SDI12: error, data request out of range");
+                                                return;
+                                            }
+                                            defmt::println!("total {}, start {}", total_measurements, start);
+                                            let end = start + min(MEASUREMENTS_IN_PAYLOAD as usize, total_measurements - start);
+                                            for i in start..end {
+                                                data_send[i-start] = sdi12_service.get_data(i);
+                                            }
+                                            
+                                            defmt::println!("Data ready");
+                                            sdi12_service.send_data(board, '0', data_send, min(MEASUREMENTS_IN_PAYLOAD, (sdi12_service.get_total_measurements() - start) as u8));
+                                            defmt::println!("Sent data");
+                                            sdi12_service.sleep(board);
+                                            // if end == sdi12_service.get_total_measurements() {
+                                            //     sdi12_service.sleep(board);
+                                            //     board.usb_serial_send(format_args!("SDI12: sleep\n"));
+                                            // }
+                                    }
+                                }
+                            }
+                            Err(message) => {
+                                defmt::println!("Error: {}", message);
+                                // responses::send_command_response_error(board, message, "")
+                            }
+                        }
+                    }
+                    // else {
+                    //     defmt::println!("board sleeping");
+                    // }
+                }
+                else {
+                    defmt::panic!("sdi12 service not setup");
+                }
+
+                if take_measurement {
+                    board.usb_serial_send(format_args!("SDI12: taking measurement\n"));
+
+                    self.measure_sensor_values(board);
+
+                    let sdi12_service =  self.sdi12_service.as_mut().unwrap();
+
+                    let mut measurement_index = 0;
+                    for i in 0 .. self.sensor_drivers.len() {
+                        if let Some(ref mut driver) = self.sensor_drivers[i] {
+                            for j in 0..driver.get_measured_parameter_count() {
+                                let value = match driver.get_measured_parameter_value(j) {
+                                    Ok(value) => value,
+                                    Err(_) => -99.0, // can't send max b/c we only use 4 chars.
+                                };
+                                sdi12_service.fill_data(measurement_index, value);
+                                // defmt::println!("data[{}] = {}", measurement_index, value);
+                                measurement_index = measurement_index + 1;
+                            }
+                        }
+                    }
+
+                    board.usb_serial_send(format_args!("SDI12: measurement ready\n"));
+                    self.write_last_measurement_to_serial(board); // watch mode stuff
+
+                }
             }
         }
     }
@@ -464,14 +548,9 @@ impl DataLogger {
             telemeter.process_events(board);
         }
 
-        if let Some(telemeter) = &mut self.modbus_telemeter {
-            telemeter.process_events(board);
-        }
-
 
         let lorawan_ready =  self.lorawan_telemeter.is_some() && self.lorawan_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let modbus_rtu_ready = self.modbus_telemeter.is_some() && self.modbus_telemeter.as_mut().unwrap().ready_to_transmit(board);
-        let ready_to_transmit = lorawan_ready || modbus_rtu_ready;
+        let ready_to_transmit = lorawan_ready;
         if !ready_to_transmit {
             return;
         }    
@@ -511,10 +590,6 @@ impl DataLogger {
    
         if lorawan_ready {
             self.lorawan_telemeter.as_mut().unwrap().transmit(board, &values);
-        }
-        
-        if modbus_rtu_ready {
-            self.modbus_telemeter.as_mut().unwrap().transmit(board, &values);
         }
 
 
@@ -624,7 +699,7 @@ impl DataLogger {
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let value = (value * 1000f64) as u32;
+                            let value = (value * 1000f64) as i32;
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
@@ -696,10 +771,11 @@ impl DataLogger {
                     board.write_log_file(format_args!(","));
                 }
 
+
                 for j in 0..driver.get_measured_parameter_count() {
                     match driver.get_measured_parameter_value(j) {
                         Ok(value) => {
-                            let value = (value * 1000f64) as u32;
+                            let value = (value * 1000f64) as i32;
                             match util::format_decimal(value) {
                                 Ok((buf,size)) => {
                                     let decimal = unsafe { core::str::from_utf8_unchecked(&buf[..size]) };
@@ -730,12 +806,6 @@ impl DataLogger {
     }
 
     fn write_last_measurement_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
-        // first output the column headers
-        match self.serial_tx_mode {
-            DataLoggerSerialTxMode::Interactive => self.write_column_headers_to_serial(board),
-            _ => {}
-        }
-
         // then output the last measurement values
         match self.serial_tx_mode {
             DataLoggerSerialTxMode::Watch => self.write_measured_parameters_to_serial(board),
@@ -744,49 +814,71 @@ impl DataLogger {
     }
 
     pub fn set_mode(&mut self, board: &mut impl RRIVBoard, mode: Value) -> bool {
-        let mut persist = false;
-        match mode {
+
+        let mode_value =  match mode {
             Value::String(mode) => {
-                let mode = mode.as_str();
-                // TODO: perhaps watch should be separate from mode, so you can watch any mode
-                // TODO: and rrivctl can still accept commands when in watch mode
-                match mode {
-                    "watch" => {
-                        self.write_column_headers_to_serial(board);
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(true);
-                    }
-                    "watch-debug" => {
-                        self.write_column_headers_to_serial(board);
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
-                        board.set_debug(true);
-                        self.set_telemeter_watch(true);
-                    }
-                    "quiet" => {
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(false);
-                    }
-                    "field" => {
-                        self.mode = DataLoggerMode::Field;
-                        // switching into field mode should create a new file
-                        self.write_column_headers_to_storage(board);
-                        persist = true;
-                    }
-                    _ => {
-                        self.mode = DataLoggerMode::Interactive;
-                        self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
-                        board.set_debug(false);
-                        self.set_telemeter_watch(false);
-                        persist = true;
-                    }
-                }
+                mode
             }
-            _ => {}
+            _ => { return false; }
+        };
+        let mode = mode_value.as_str();
+
+        // TODO: these are not true modes, need to be factored elsewhere
+        let mut done = true;
+        match mode {
+            "watch" => {
+                self.write_column_headers_to_serial(board);
+                self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
+                board.set_debug(false);
+                self.set_telemeter_watch(true);
+            }
+            "watch-debug" => {
+                self.write_column_headers_to_serial(board);
+                self.serial_tx_mode = DataLoggerSerialTxMode::Watch;
+                board.set_debug(true);
+                self.set_telemeter_watch(true);
+            }
+            "quiet" => {
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                board.set_debug(false);
+                self.set_telemeter_watch(false);
+            }
+            _ => {
+                done = false;
+            }
         }
+        if done { 
+            return false;
+        }
+
+        if self.settings.toggles.lock_mode() {
+            // persistant mode is locked, do nothing.
+            return false;
+        }
+        
+        match mode {
+            "field" => {
+                self.mode = DataLoggerMode::Field;
+                // switching into field mode should create a new file
+                self.write_column_headers_to_storage(board);
+            }
+            "sdi12" => {
+                self.mode = DataLoggerMode::SDI12;
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                sdi12_service::setup(board, 5);
+                board.set_debug(false);
+                defmt::println!("In SDI12 mode!");
+            }
+            _ => {
+                self.mode = DataLoggerMode::Interactive;
+                self.serial_tx_mode = DataLoggerSerialTxMode::Quiet;
+                board.set_debug(false);
+                self.set_telemeter_watch(false);
+            }
+        };
         self.settings.mode = self.mode.to_u8();
-        return persist;
+        return true;
+
     }
 
     fn set_telemeter_watch(&mut self, watch: bool) {
@@ -1081,7 +1173,8 @@ impl DataLogger {
                     responses::calibration_point_list(board, pairs); // TODO: is responses the right place for marshaling JSON lists to serial?
                 }
             }
-            CommandPayload::SensorCalibrateRemove(payload) => {
+
+            CommandPayload::SensorCalibrateRemove(_payload) => {
                 responses::send_command_response_message(
                     board,
                     "This command is not implemented yet",
@@ -1306,20 +1399,20 @@ impl DataLogger {
             }
         }
 
-        if let Some(enable_modbus_rtu) = &values.enable_modbus_rtu {
-            if self.settings.toggles.enable_modbus_rtu() != *enable_modbus_rtu {
-               match self.set_up_modbus_rtu(*enable_modbus_rtu) {
-                    Ok(_) => {},
-                    Err(error) => {return Err(error);}, 
-                }
-            }
-        }
-
         if let Some(enable_interactive_logging) = &values.interactive_logging {
             if *enable_interactive_logging {
                 self.write_column_headers_to_storage(board);
             }
         }
+
+        // if let Some(enable_sdi12) = &values.enable_sdi12 {
+        //     if self.settings.toggles.enable_sdi12() != *enable_sdi12 {
+        //        match self.set_up_modbus_rtu(*enable_sdi12) {
+        //             Ok(_) => {},
+        //             Err(error) => {return Err(error);}, 
+        //         }
+        //     }
+        // }
 
         let new_settings: DataloggerSettings = self.settings.with_values(values);
         let mut old_settings: DataloggerSettings = self.settings.clone();
@@ -1374,9 +1467,11 @@ impl DataLogger {
            "delay_between_bursts" : self.settings.delay_between_bursts,
            "bursts_per_measurement_cycle" : self.settings.bursts_per_measurement_cycle,
            "mode" : datalogger::modes::mode_text(&self.mode),
+           "lock_mode" : self.settings.toggles.lock_mode(),
            "interactive_logging": self.settings.toggles.enable_interactive_logging(),
            "enable_lorawan_telemetry" : self.settings.toggles.enable_lorawan_telemetry(),
-           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu()
+           "enable_modbus_rtu" : self.settings.toggles.enable_modbus_rtu(),
+           "enable_sdi12" : self.settings.toggles.enable_sdi12(),
         })
     }
 

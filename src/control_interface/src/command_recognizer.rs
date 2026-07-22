@@ -4,8 +4,12 @@
 
 
 
-pub const BUFFER_NUM: usize = 3; // Includes an extra empty cell for end marker, TODO: what a waste!
-pub const BUFFER_SIZE: usize = 200;
+pub const BUFFER_NUM: usize = 2; // Includes an extra empty cell for end marker, TODO: what a waste!
+pub const BUFFER_SIZE: usize = 500;
+
+// TODO
+// wasting space like in the above doesn't make sense.  This needs to work as one block of memory, either receive a single command 
+// or if receiving multiple commands save them in order.  that's the only answer.
 
 pub struct CommandData {
     receiving: bool,

@@ -20,6 +20,7 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 #[cfg(feature = "24LC01")]
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
@@ -63,9 +64,9 @@ pub trait RRIVBoard: Send {
                 // TODO: give his a more unique name specifying that it's used to talk with the serial rrivctl interface
                 // maybe rrivctl_send
     fn usart_send(&mut self, bytes: &[u8]);
-    fn rs485_send(&mut self, message : &[u8]);
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
+    fn delay_us(&mut self, us: u16);
     fn timestamp(&mut self) -> i64;
     fn millis(&mut self) -> u32;
 
@@ -97,6 +98,8 @@ pub trait RRIVBoard: Send {
 
 
     fn write_gpio_pin(&mut self, pin: u8, value: bool);
+    fn write_pwm_pin_duty(&mut self, value: u8);
+    fn write_pwm_pin_period(&mut self, period_ms: u32);
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()>;
 
     fn set_gpio_pin_mode(&mut self, pin: u8, mode: GpioMode);
@@ -116,8 +119,27 @@ pub trait RRIVBoard: Send {
 
     fn get_errors(&self) -> [HardwareError; 5]; // return up to 5 hardware errors currently raised
     fn error_alarm(&mut self); // activate a generic error alarm, normally an LED
-    
+ 
+    // TODO: can't put this here because of 'static, but don't need self anyway
+    // fn configure_gpio_interrupt_function<T: Fn() + 'static>(&self, function: T );
+
+    fn enable_interrupt(&self);
+    fn disable_interrupt(&self);
+    fn get_current_time(&self) -> u32;
+
 }
+
+
+pub static mut GPIO_INTERRUPT_FUNCTION: Option< Box<dyn Fn(u32, bool)> > = None;
+
+pub fn configure_gpio_interrupt_function<T: Fn(u32, bool) + 'static>(function: T ) {
+    // unmask the correct EXTI interrupt for SDI-12 or whatever
+    // store the function we actionally want to call
+    unsafe {
+        GPIO_INTERRUPT_FUNCTION = Some(Box::new(function));
+    }
+}
+
 
 
 pub trait RRIVBoardBuilder {

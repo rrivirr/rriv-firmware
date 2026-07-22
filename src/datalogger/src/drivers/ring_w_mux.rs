@@ -7,7 +7,6 @@ use super::mcp9808::*;
 use super::types::*;
 use alloc::boxed::Box;
 use bitfield_struct::bitfield;
-use rtt_target::rprint;
 use serde_json::json;
 
 const MULTIPLEXER_ADDRESS: u8 = 0x70;
@@ -115,14 +114,14 @@ impl RingMuxTemperatureDriverSpecialConfiguration {
         }
 
         let mut measurement_outputs = MeasurementOutputs::new();
-        match &value["measurements_raw"] {
+        match &value["m_raw"] {
             serde_json::Value::Bool(value) => {
                 measurement_outputs.set_raw(*value);
             }
             _ => {}
         }
 
-        match &value["measurements_calibrated"] {
+        match &value["m_cal"] {
             serde_json::Value::Bool(value) => {
                 measurement_outputs.set_calibrated(*value);
             }
@@ -182,7 +181,7 @@ impl RingMuxTemperatureDriver {
         let mut addresses = [0u8; TEMPERATURE_SENSORS_ON_RING];
         if special_config.sensors == 6 {
             addresses = [
-                0b0011110, 0b0011010, 0b0011000, 0b0011100, 0b0011110, 0b0011101, 0, 0
+                0b0011110, 0b0011101, 0b0011000, 0b0011100, 0b0011001, 0b0011010, 0, 0
             ];
         }
         else if special_config.sensors == 8 {
@@ -318,7 +317,12 @@ impl SensorDriver for RingMuxTemperatureDriver {
 
     // TODO: this should come from a derived trait
     fn get_configuration_json(&mut self) -> serde_json::Value {
-        // let sensor_id_str: [u8; 6] = core::str::from_utf8(self.get_id());
+
+        let mut sensor_id = self.get_id();
+        let sensor_id = match util::str_from_utf8(&mut sensor_id) {
+            Ok(sensor_id) => sensor_id,
+            Err(_) => "Invalid",
+        };
 
         let mut sensor_name = sensor_name_from_type_id(self.get_type_id().into());
         let sensor_name = match util::str_from_utf8(&mut sensor_name) {
@@ -326,15 +330,15 @@ impl SensorDriver for RingMuxTemperatureDriver {
             Err(_) => "Invalid",
         };
         json!({
-            "id" : self.get_id(),
+            "id" : sensor_id,
             "type" : sensor_name,
             "calibration_offset": self.special_config.calibration_offset,
             "channels": self.special_config.channels,
             "sensors": self.special_config.sensors,
-            "measurements_raw" : self.special_config.measurement_outputs.raw(),
-            "measurements_calibrated" : self.special_config.measurement_outputs.calibrated(),
-            "measurements_differences" : self.special_config.measurement_outputs.differences(),
-            "measurements_vector" : self.special_config.measurement_outputs.vector(),
+            "m_raw" : self.special_config.measurement_outputs.raw(),
+            "m_cal" : self.special_config.measurement_outputs.calibrated(),
+            // "measurements_differences" : self.special_config.measurement_outputs.differences(),
+            // "measurements_vector" : self.special_config.measurement_outputs.vector(),
         })
     }
 
@@ -485,7 +489,9 @@ impl SensorDriver for RingMuxTemperatureDriver {
         }
         Ok(())
     }
-
-    fn update_actuators(&mut self, _board: &mut dyn rriv_board::RRIVBoard) {
+    
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
     }
 }

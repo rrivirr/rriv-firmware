@@ -189,6 +189,11 @@ impl SensorDriver for MCP9808TemperatureDriver {
        defmt::println!("fit {}", self.special_config.calibration_offset);    
        Ok(())
     }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
         
 }
 

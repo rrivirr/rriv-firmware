@@ -221,7 +221,12 @@ impl SensorDriver for AHT20 {
     }
     
     fn clear_calibration(&mut self) {
-        defmt::println!("not implemented");
+        defmt::println!("clear calibration not implemented");
+    }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
     }
 
 }

@@ -1,5 +1,6 @@
 use core::panic;
 
+use chrono::DateTime;
 use cortex_m::asm;
 use ds323x::{Datelike, Timelike};
 use embedded_hal::spi::{Mode, Phase, Polarity};
@@ -91,28 +92,27 @@ impl RrivTimeSource {
 // Additinally, in the case of the RRIVBoard, we do not want to query the I2C RTC every time we write
 // therefore, this time should be coming form the internal RTC, which needs to be set to match that I2C RTC
 
-static mut EPOCH_TIMESTAMP: i64 = 0;
+static mut EPOCH_TIMESTAMP: i64 = 0;  // this is only references from a single thread, so static mut is OK
 
 impl TimeSource for RrivTimeSource {
     fn get_timestamp(&self) -> embedded_sdmmc::Timestamp {
 
-      let naive: NaiveDateTime = 
-      unsafe {
-         NaiveDateTime::from_timestamp(EPOCH_TIMESTAMP, 0)	
-      };
-      let time = naive.time();
-      let timestamp = embedded_sdmmc::Timestamp::from_calendar(
-        naive.year().try_into().unwrap(), 
-        naive.month().try_into().unwrap(), 
-        naive.day().try_into().unwrap(), 
+        let datetime = unsafe { DateTime::from_timestamp(EPOCH_TIMESTAMP, 0) };
+        let datetime = datetime.unwrap_or_default();
+
+        let time = datetime.time();
+        let timestamp = embedded_sdmmc::Timestamp::from_calendar(
+        datetime.year().try_into().unwrap(), 
+        datetime.month().try_into().unwrap(), 
+        datetime.day().try_into().unwrap(), 
         time.hour().try_into().unwrap(), 
         time.minute().try_into().unwrap(), 
         time.second().try_into().unwrap()
-      );
-      match timestamp {
-        Ok(timestamp) => timestamp,
-        Err(_err) => Timestamp::from_calendar(0, 0, 0, 0, 0, 0).unwrap()
-      }
+        );
+        match timestamp {
+            Ok(timestamp) => timestamp,
+            Err(_err) => Timestamp::from_calendar(0, 0, 0, 0, 0, 0).unwrap()
+        }
       
     }
 }

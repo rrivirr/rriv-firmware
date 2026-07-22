@@ -21,6 +21,8 @@ pub struct DataloggerSettingsValues {
     pub enable_lorawan_telemetry: Option<bool>,
     pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
+    pub enable_sdi12: Option<bool>,
+    pub lock_mode: Option<bool>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -38,6 +40,8 @@ pub struct DataloggerSetPayload {
     pub enable_lorawan_telemetry: Option<bool>,
     pub enable_modbus_rtu: Option<bool>,
     pub interactive_logging: Option<bool>,
+    pub enable_sdi12: Option<bool>,
+    pub lock_mode: Option<bool>
     // pub user_note: Option<Value>, // not implemented for now
     // pub user_value: Option<i16>
 }
@@ -114,6 +118,13 @@ impl DataloggerSetPayload {
             datalogger_settings_values.enable_modbus_rtu = Some(enable_modbus_rtu);
         }
 
+        if let Some(enable_sdi12) = self.enable_sdi12 {
+            datalogger_settings_values.enable_sdi12 = Some(enable_sdi12);
+        }
+
+        if let Some(lock_mode) = self.lock_mode {
+            datalogger_settings_values.lock_mode = Some(lock_mode);
+        }
 
         datalogger_settings_values
     }
@@ -174,13 +185,15 @@ impl SensorSetPayload {
                         Ok(sensor_type) => sensor_type_id = Some(sensor_type),
                         Err(_) => {
                             // responses::send_command_response_message(board, "sensor type not found");
-                            return Err("sensor type not found");
+                            // return Err("sensor type not found");
+                            sensor_type_id = None;
                         }
                     }
                 }
                 _ => {
                     // responses::send_command_response_message(board, "sensor type not specified");
-                    return Err("sensor type not specified");
+                    // return Err("sensor type not specified");
+                    sensor_type_id = None;
                 }
             }
         } else {
