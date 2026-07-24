@@ -431,7 +431,7 @@ impl DataLogger {
                                                 //TODO: best way to handle this?
                                             }
                                             let index = index.unwrap() as usize;
-                                            defmt::println!("index {}", index);
+                                            // defmt::println!("index {}", index);
 
                                             let total_measurements = sdi12_service.get_total_measurements();
                                             let start = index * MEASUREMENTS_IN_PAYLOAD as usize;
@@ -439,15 +439,15 @@ impl DataLogger {
                                                 defmt::println!("SDI12: error, data request out of range");
                                                 return;
                                             }
-                                            defmt::println!("total {}, start {}", total_measurements, start);
+                                            // defmt::println!("total {}, start {}", total_measurements, start);
                                             let end = start + min(MEASUREMENTS_IN_PAYLOAD as usize, total_measurements - start);
                                             for i in start..end {
                                                 data_send[i-start] = sdi12_service.get_data(i);
                                             }
                                             
-                                            defmt::println!("Data ready");
+                                            // defmt::println!("Data ready");
                                             sdi12_service.send_data(board, '0', data_send, min(MEASUREMENTS_IN_PAYLOAD, (sdi12_service.get_total_measurements() - start) as u8));
-                                            defmt::println!("Sent data");
+                                            // defmt::println!("Sent data");
                                             sdi12_service.sleep(board);
                                             // if end == sdi12_service.get_total_measurements() {
                                             //     sdi12_service.sleep(board);
@@ -683,7 +683,7 @@ impl DataLogger {
     // TODO: this function and the next one can be DRY by passing a closure
     fn write_measured_parameters_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         let epoch = board.epoch_timestamp();
-        let millis = board.get_millis() % 1000;
+        let millis = board.millis();
         let output = format_args!("{}.{},", epoch, millis);
         board.usb_serial_send(format_args!("{}",&output));
 
@@ -734,7 +734,7 @@ impl DataLogger {
 
     fn write_raw_measurement_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         let epoch = board.epoch_timestamp();
-        let millis = board.get_millis() % 1000;
+        let millis = board.millis();
         // "type,site,logger,deployment,deployed_at,uid,time.s,battery.V"
 
         // TODO: find a better way to print this uid, or generate and use a UUID that doesn't come from the MCU's uid

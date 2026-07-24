@@ -99,7 +99,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     LAST_TICK = self.sdi12_board.get_current_time();
                 }
                 self.sdi12_board.enable_interrupt();
-                defmt::println!("State changed to: Sdi12Listening");      
+                // defmt::println!("State changed to: Sdi12Listening");      
             }
             SDIPinState::Sdi12Sleep => {
                 self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);
@@ -109,7 +109,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     LAST_TICK = self.sdi12_board.get_current_time();
                 }  
                 self.sdi12_board.enable_interrupt();
-                defmt::println!("State changed to: Sdi12Sleep");
+                // defmt::println!("State changed to: Sdi12Sleep");
             }
             _ => {
                 // For SDI12_HOLDING and SDI12_ENABLED, set pin mode to INPUT
@@ -141,7 +141,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             while self.sdi12_board.read() {
                 // defmt::println!("iter_count: {}", iter_count);
                 if iter_count > 10 {
-                    defmt::println!("Timeout! line is not falling low");
+                    // defmt::println!("Timeout! line is not falling low");
                     return false;
                 }
                 iter_count += 1;
@@ -149,7 +149,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
             self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
             if self.sdi12_board.read() {
-                defmt::println!("Invalid marking");
+                // defmt::println!("Invalid marking");
                 return false;
             }
             self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
@@ -312,7 +312,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             // self.sdi12_board.delay_us(SDI12_GAP);
         }
         self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
-        defmt::println!("Command sent, switching to listening mode");
+        // defmt::println!("Command sent, switching to listening mode");
         self.set_state(SDIPinState::Sdi12Listening);
     }
 
@@ -329,13 +329,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     buffer[bytes_read] = byte;
                     bytes_read += 1;
                     if byte == '!' {
-                        defmt::println!("buffer[{}] = {}", bytes_read, byte);
+                        // defmt::println!("buffer[{}] = {}", bytes_read, byte);
                         break;
                     }
                 },
                 None => {
-                    defmt::println!("Timeout error");
-                    defmt::println!("buffer[{}] = {}", bytes_read, buffer);
+                    // defmt::println!("Timeout error");
+                    // defmt::println!("buffer[{}] = {}", bytes_read, buffer);
                     break; // SDI12_timeout or error
                 }
             }
@@ -361,7 +361,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn read_response(&mut self) -> [char; SDI12_BUFFER_SIZE] {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Listening);
-        defmt::println!("Reading response...");
+        // defmt::println!("Reading response...");
         let mut buffer: [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
         let mut bytes_read = 0;
         while bytes_read < SDI12_BUFFER_SIZE {
@@ -377,7 +377,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     }
                 },
                 None => {
-                    defmt::println!("Timeout SDI12");
+                    // defmt::println!("Timeout SDI12");
                     break; // SDI12_timeout or error
                 }
             }
@@ -500,7 +500,7 @@ fn start_char() {
 fn char_to_buffer(c: char) {
     unsafe {
         if (RX_TAIL + 1) % SDI12_BUFFER_SIZE == RX_HEAD {
-            defmt::println!("Buffer overflow, discarding data");
+            // defmt::println!("Buffer overflow, discarding data");
         }
         else {
             RX_BUFFER[RX_TAIL] = c;
@@ -547,7 +547,7 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
         else {
             if bits_to_process == 0 {
                 // this is an error condition, since the next step will crash
-                defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
+                // defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
                 unsafe{ RX_STATE = WAITING_FOR_START_BIT};
                 return;
             }
@@ -598,18 +598,18 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
     match rx_state {
         WAITING_FOR_BREAK => {
             if gpio_state == true {
-                defmt::println!("Break started!");
+                // defmt::println!("Break started!");
                 rx_state = WAITING_FOR_MARK;
             }
         }
         WAITING_FOR_MARK => {
             if gpio_state == false {
                 if dt > (SDI12_MARK_DURATION_US - SDI12_TIMING_TOLERANCE) as u32 {
-                    defmt::println!("Valid marking condition detected, ready to receive data");
+                    // defmt::println!("Valid marking condition detected, ready to receive data");
                     rx_state = WAITING_FOR_START_AFTER_BREAK;
                 }
                 else {
-                    defmt::println!("Invalid marking condition, waiting for break again");
+                    // defmt::println!("Invalid marking condition, waiting for break again");
                     rx_state = WAITING_FOR_BREAK;
                 }
             }
@@ -626,7 +626,7 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
                     return;
                 }
                 else {
-                    defmt::println!("Invalid marking condition, waiting for break again");
+                    // defmt::println!("Invalid marking condition, waiting for break again");
                     rx_state = WAITING_FOR_BREAK;
                 }
             }
@@ -659,7 +659,7 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
             else {
                 if bits_to_process == 0 {
                     // this is an error condition, since the next step will crash
-                defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
+                    // defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
                     unsafe{ RX_STATE = WAITING_FOR_BREAK };
                     return;
                 }

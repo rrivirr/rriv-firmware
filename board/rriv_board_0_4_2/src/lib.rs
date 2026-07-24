@@ -100,6 +100,8 @@ static USART2_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
 static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
+static mut UID_STRING_BUFFER:[u8;24] = [0u8; 24];
+
 
 #[repr(C)]
 pub struct Usart {
@@ -431,14 +433,11 @@ impl RRIVBoard for Board {
         return self.internal_rtc.current_time().into(); // internal RTC
     }
 
-    fn get_millis(&mut self) -> u32 {
-        let millis = self.counter.now();
-        let millis = millis.ticks();
-        millis
-    }
-
     fn millis(&mut self) -> u32 {
-        return self.get_millis();
+        let micros = self.counter.now();
+        let millis = micros.ticks() / 1000;
+        let millis = millis % 1000; // TODO: this is a hack
+        millis
     }
 
     fn get_battery_level(&mut self) -> i16 {
@@ -968,10 +967,11 @@ fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
-        let now = cortex_m::peripheral::DWT::cycle_count();
+        let now = cortex_m::peripheral::DWT::cycle_count(); // TODO: the DWT itself could be wrong in release mode.
         let is_low = unsafe {(*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0 };
         let gpio_state = if is_low { false } else { true };
         let now = now / SYSCLK_MHZ; // convert to microseconds
+        // TODO: get a better source for microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
                 #[allow(static_mut_refs)]
@@ -1229,21 +1229,21 @@ impl BoardBuilder {
 
             
             #[allow(unused_assignments)]
-            let mut uid_string: &str = "_rriv";
-            static mut BUF:[u8;24] = [0u8; 24];
+            let uid_string_default: & str = "_rriv";
 
-            match format_no_std::show(
-                    &mut BUF,
+            #[allow(static_mut_refs)]
+            let uid_string = match format_no_std::show(
+                    &mut UID_STRING_BUFFER,
                     arg 
                 ) {
                     Ok(formatted) => {
-                        defmt::println!("{}", formatted); // TODO: this uses format!
-                        uid_string = formatted;
+                        defmt::println!("{}", formatted);
+                        formatted
                     }
                     Err(_e) => {
-                        // doesn't matter
+                        uid_string_default
                     },
-                }
+                };
 
             defmt::println!("{}", uid_string);
 
@@ -1676,8 +1676,8 @@ impl BoardBuilder {
         // the millis counter
         let mut counter: CounterUs<TIM5> = device_peripherals.TIM5.counter_us(&clocks);
         match counter.start(2.micros()) {
-            Ok(_) => defmt::println!("Millis counter start ok"),
-            Err(err) => defmt::println!("Millis counter start not ok {:?}", defmt::Debug2Format(&err)),
+            Ok(_) => defmt::println!("Micros counter start ok"),
+            Err(err) => defmt::println!("Micros counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
         self.counter = Some(counter);
 

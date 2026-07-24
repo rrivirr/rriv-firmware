@@ -12,8 +12,10 @@ pub type SensorSpecialSettingsSlice = [u8; SENSOR_SETTINGS_PARTITION_SIZE];
 pub struct SensorDriverGeneralConfiguration {
     pub id: [u8; 6],
     pub sensor_type_id: u16,
-    pub warmup: u16,
-    pub readings_per_burst: u8,
+    // TODO: implement warmup
+    // pub warmup: u16,  
+    // TODO: implement readings_per_burst
+    // pub readings_per_burst: u8,
 }
 
 #[derive(Copy, Clone)]
@@ -25,8 +27,8 @@ impl SensorDriverGeneralConfiguration {
         Self {
             id: id,
             sensor_type_id: sensor_type_id,
-            warmup: 0,
-            readings_per_burst: 1,
+            // warmup: 0,
+            // readings_per_burst: 1,
         }
     }
 
@@ -41,8 +43,8 @@ impl SensorDriverGeneralConfiguration {
         Self {
             id: [0u8; 6],
             sensor_type_id: 0,
-            warmup: 0,
-            readings_per_burst: 0,
+            // warmup: 0,
+            // readings_per_burst: 0,
        }
     }
 }
