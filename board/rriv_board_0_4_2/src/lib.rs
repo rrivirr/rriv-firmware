@@ -101,6 +101,7 @@ static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
 static mut UID_STRING_BUFFER:[u8;24] = [0u8; 24];
+static MICROS_COUNTER_AUTO_RELOAD: u32 = 1000000;
 
 
 #[repr(C)]
@@ -967,10 +968,15 @@ fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
-        let now = cortex_m::peripheral::DWT::cycle_count(); // TODO: the DWT itself could be wrong in release mode.
+
+        let device_peripherals = unsafe { pac::Peripherals::steal() };
+        let now = device_peripherals.TIM5.cnt.read().bits();
+
+        // let now = cortex_m::peripheral::DWT::cycle_count(); // TODO: the DWT itself could be wrong in release mode.
+        // let now = now / SYSCLK_MHZ; // convert to microseconds
+
         let is_low = unsafe {(*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0 };
         let gpio_state = if is_low { false } else { true };
-        let now = now / SYSCLK_MHZ; // convert to microseconds
         // TODO: get a better source for microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
@@ -1675,7 +1681,7 @@ impl BoardBuilder {
 
         // the millis counter
         let mut counter: CounterUs<TIM5> = device_peripherals.TIM5.counter_us(&clocks);
-        match counter.start(2.micros()) {
+        match counter.start(MICROS_COUNTER_AUTO_RELOAD.micros()) { // timeout is the autoreload reset
             Ok(_) => defmt::println!("Micros counter start ok"),
             Err(err) => defmt::println!("Micros counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
