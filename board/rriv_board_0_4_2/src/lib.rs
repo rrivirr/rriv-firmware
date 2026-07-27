@@ -101,7 +101,7 @@ static UART5_RX_PROCESSOR: Mutex<RefCell<Option<Box<&mut dyn RXProcessor>>>> =
     Mutex::new(RefCell::new(None));
 
 static mut UID_STRING_BUFFER:[u8;24] = [0u8; 24];
-static MICROS_COUNTER_AUTO_RELOAD: u32 = 1000000;
+static MICROS_COUNTER_AUTO_RELOAD: u32 = 65535; //1000000 won't work on 16 bit counter
 
 
 #[repr(C)]
@@ -916,8 +916,10 @@ impl RRIVBoard for Board {
         NVIC::mask(pac::Interrupt::EXTI2);
     }
 
-    fn get_current_time(&self) -> u32 {
-        cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ
+    fn microseconds(&self) -> u16 {
+        let micros = self.counter.now();
+        micros.ticks() as u16
+        // cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ
     }
 
 
@@ -970,14 +972,11 @@ fn EXTI2() {
         exti.pr.write(|w| w.pr2().set_bit());
 
         let device_peripherals = unsafe { pac::Peripherals::steal() };
-        let now = device_peripherals.TIM5.cnt.read().bits();
-
-        // let now = cortex_m::peripheral::DWT::cycle_count(); // TODO: the DWT itself could be wrong in release mode.
-        // let now = now / SYSCLK_MHZ; // convert to microseconds
+        let now = device_peripherals.TIM5.cnt.read().bits() as u16;
 
         let is_low = unsafe {(*pac::GPIOD::ptr()).idr.read().bits() & (1 << 2) == 0 };
         let gpio_state = if is_low { false } else { true };
-        // TODO: get a better source for microseconds
+
         cortex_m::interrupt::free(|_cs| {
             unsafe {
                 #[allow(static_mut_refs)]

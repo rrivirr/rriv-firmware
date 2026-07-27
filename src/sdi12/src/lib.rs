@@ -6,7 +6,7 @@ use rriv_board::gpio;
 const SDI12_TIMING_TOLERANCE: u16 = 400;
 const SDI12_BREAK_DURATION_US: u16 = 12100;
 const SDI12_MARK_DURATION_US: u16 = 8400;
-const SDI12_TICKS_PER_BIT: u16 = 833; // 1 bit duration at 1200 baud
+const SDI12_MICROSECONDS_PER_BIT: u16 = 833; // 1 bit duration at 1200 baud
 // const SDI12_TIMEOUT : u32 = 100; // timeout for reading response in milliseconds
 const SDI12_GAP: u16 = 5000;
 pub const SDI12_BUFFER_SIZE: usize = 100; // size of the buffer for reading responses
@@ -18,7 +18,7 @@ const WAITING_FOR_BREAK: u8 = 254;
 const WAITING_FOR_MARK: u8 = 253;
 const WAITING_FOR_START_AFTER_BREAK: u8 = 252;
 
-static mut LAST_TICK: u32 = 0;
+static mut LAST_INTERRUPT_MICROSECONDS: u16 = 0;
 static mut RX_STATE: u8 = WAITING_FOR_START_BIT;      // 255 means idle state, 0-7 means receiving bits for a byte, 8 means waiting for stop bit
 static mut RX_VALUE: u8 = 0x00;
 static mut RX_MASK: u8 = 0x01;
@@ -46,7 +46,7 @@ pub trait BoardForSDI12 {
     fn millis(&mut self) -> u32;
     fn enable_interrupt(&mut self);
     fn disable_interrupt(&mut self);
-    fn get_current_time(&self) -> u32;  // microseconds
+    fn microseconds(&self) -> u16;  // microseconds
 }
 
 #[allow(non_camel_case_types)]
@@ -96,7 +96,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 self.sdi12_board.pin_mode(gpio::GpioMode::PullDownInput);        
                 unsafe { 
                     RX_STATE = WAITING_FOR_START_BIT;     // reset the interrupt state variables
-                    LAST_TICK = self.sdi12_board.get_current_time();
+                    LAST_INTERRUPT_MICROSECONDS = self.sdi12_board.microseconds();
                 }
                 self.sdi12_board.enable_interrupt();
                 // defmt::println!("State changed to: Sdi12Listening");      
@@ -106,7 +106,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                 unsafe { 
                     RX_STATE = WAITING_FOR_BREAK;     // reset the interrupt state variables
                     RECEIVED_BREAK = false;
-                    LAST_TICK = self.sdi12_board.get_current_time();
+                    LAST_INTERRUPT_MICROSECONDS = self.sdi12_board.microseconds();
                 }  
                 self.sdi12_board.enable_interrupt();
                 // defmt::println!("State changed to: Sdi12Sleep");
@@ -123,13 +123,16 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
         self.set_state(SDIPinState::Sdi12Transmitting);
         
+        self.sdi12_board.disable_interrupt();
         // Hold it HIGH for 12 ms
         self.sdi12_board.write(true);
         self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US);
+        // self.sdi12_board.delay_us(50);
         
         // Marking by holding it LOW for 8.33 ms
         self.sdi12_board.write(false);
         self.sdi12_board.delay_us(SDI12_MARK_DURATION_US);
+        self.sdi12_board.enable_interrupt();
     }
 
     pub fn receive_break(&mut self) -> bool {   
@@ -168,23 +171,23 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     //     // start bit
     //     self.sdi12_board.write(true);
-    //     self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //     self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
     //     // data bits
     //     for i in 0..8 {
     //         let bit = (byte >> i) & 1;
     //         self.sdi12_board.write(bit == 0);
-    //         self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //         self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
     //     }
     //     // stop bit
     //     self.sdi12_board.write(false);
-    //     self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+    //     self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
     // }
 
     pub fn write_char(&mut self, c: char) {
         let mut out_char = c as u8;
-        let ticks_per_bit: u32 = SDI12_TICKS_PER_BIT as u32; // SDI12_TICKS_PER_BIT
+        let microseconds_per_bit: u16 = SDI12_MICROSECONDS_PER_BIT; // SDI12_MICROSECONDS_PER_BIT
         
-        let mut start_time = self.sdi12_board.get_current_time();
+        let mut start_time = self.sdi12_board.microseconds();
 
         // 1. Immediately get going on the start bit (HIGH)
         self.sdi12_board.write(true); 
@@ -194,7 +197,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         out_char |= parity_bit << 7; 
 
         // 3. Calculate the position of the last bit that is a 0/HIGH.
-        let mut last_high_bit: u8 = 9;
+        let mut last_high_bit: u8 = 8; // bit 0 is start bit, 1-7 are char, 8 is parity
         let mut msb_mask: u8 = 0x80;
         
         while (msb_mask & out_char) != 0 {
@@ -203,13 +206,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
 
         // 4. Hold the line for the rest of the start bit duration
-        while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
-        start_time = start_time.wrapping_add(ticks_per_bit); 
+        while self.sdi12_board.microseconds().wrapping_sub(start_time) < microseconds_per_bit {}
+        let char_start_time = start_time.wrapping_add(microseconds_per_bit); // now start time is the start time of the char being sent
 
         // 5. Send data bits until the last bit different from marking (LOW)
         let mut current_tx_bit_num: u8 = 1;
         
-        while current_tx_bit_num < last_high_bit {
+        while current_tx_bit_num <= last_high_bit {
             let bit_value = out_char & 0x01;
             
             if bit_value != 0 {
@@ -219,8 +222,9 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
 
             // Wait for bit duration
-            while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
-            start_time = start_time.wrapping_add(ticks_per_bit);
+            self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
+            // while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
+            // start_time = start_time.wrapping_add(ticks_per_bit);
 
             out_char >>= 1; 
             current_tx_bit_num += 1;
@@ -237,11 +241,13 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         // =========================================================
 
         // 7. Hold the line LOW until the end of the 10th bit
-        let remaining_bits = 10 - last_high_bit;
-        let bit_time_remaining = ticks_per_bit * (remaining_bits as u32);
+        // let remaining_bits = 9 - last_high_bit;
+        // let bit_time_remaining = microseconds_per_bit * (remaining_bits as u16);
         
         // Notice we use `start_time` here, so the trailing bits stay locked to the grid
-        while self.sdi12_board.get_current_time().wrapping_sub(start_time) < bit_time_remaining {}
+        let total_remaining_time = 9 * microseconds_per_bit; // wait until a total of 9 bit ticks have elapsed.
+        while self.sdi12_board.microseconds().wrapping_sub(char_start_time) < total_remaining_time {}
+        defmt::println!("{} {}", start_time, total_remaining_time);
     }
 
     pub fn read_char(&mut self) -> Option<char> {
@@ -264,7 +270,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             self.sdi12_board.delay_us(1000);
         }
         // defmt::println!("detected a start bit");
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT / 2);
+        self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT / 2);
 
         if self.sdi12_board.read() == false {
             return None; 
@@ -273,7 +279,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         let mut byte: u8 = 0;
 
         for i in 0..8 {
-            self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+            self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
             let bit_value = match self.sdi12_board.read() {
                 true => 0,
                 false => 1
@@ -281,7 +287,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             byte |= bit_value << i;
         }
 
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+        self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
         let stop_bit = self.sdi12_board.read();
 
         if stop_bit {
@@ -303,7 +309,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Transmitting);
-        self.sdi12_board.delay_us(SDI12_GAP);
+        self.sdi12_board.delay_us(SDI12_GAP); //TODO: what is this doing for us?  probably unnecessary, just extends marking
         for c in command.iter() {
             self.write_char(*c);
             if *c == '!' {
@@ -311,7 +317,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
             // self.sdi12_board.delay_us(SDI12_GAP);
         }
-        self.sdi12_board.delay_us(SDI12_TICKS_PER_BIT);
+        self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
         // defmt::println!("Command sent, switching to listening mode");
         self.set_state(SDIPinState::Sdi12Listening);
     }
@@ -484,8 +490,8 @@ fn parity_bit(byte: u8) -> bool {
     count % 2 == 1
 }
 
-fn num_bits_passed(dt: u32) -> u16 {
-    ((dt + 2) / SDI12_TICKS_PER_BIT as u32) as u16
+fn num_bits_passed(dt: u16) -> u16 {
+    (dt + 2) / SDI12_MICROSECONDS_PER_BIT
 }
 
 // Interrupt Handlers
@@ -509,11 +515,11 @@ fn char_to_buffer(c: char) {
     }
 }
 
-pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
+pub fn datalogger_interrupt_handler(now: u16, gpio_state: bool) {
 
-    let dt = now.wrapping_sub(unsafe { LAST_TICK });
+    let dt = now.wrapping_sub(unsafe { LAST_INTERRUPT_MICROSECONDS });
     let bits_passed = num_bits_passed(dt);
-    unsafe { LAST_TICK = now; }
+    unsafe { LAST_INTERRUPT_MICROSECONDS = now; }
     let mut rx_state = unsafe { RX_STATE };
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
@@ -585,31 +591,32 @@ pub fn datalogger_interrupt_handler(now: u32, gpio_state: bool) {
     }
 }
 
-pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
+pub fn probe_interrupt_handler(now: u16, gpio_state: bool) {
 
-    let dt = now.wrapping_sub(unsafe { LAST_TICK });
+    // let dt = (now as i32 - unsafe { LAST_INTERRUPT_MICROSECONDS } as i32 ).rem_euclid(20000) as u32;  //wrapping_sub(unsafe { LAST_INTERRUPT_MICROSECONDS });
+    let dt = now.wrapping_sub(unsafe { LAST_INTERRUPT_MICROSECONDS }); // u16 max size counter
     let bits_passed = num_bits_passed(dt);
     let mut rx_state = unsafe { RX_STATE };
     let mut rx_value = unsafe { RX_VALUE };
     let mut rx_mask = unsafe { RX_MASK };
-    // defmt::println!("Interrupt! gpio_state: {}, LAST_TICK: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, unsafe { LAST_TICK }, dt, bits_passed, rx_state);
-    unsafe { LAST_TICK = now; }
+    defmt::println!("Interrupt! gpio_state: {}, LAST_INTERRUPT_MICROSECONDS: {}, dt: {}, bits_passed: {}, rx_state: {}", gpio_state, unsafe { LAST_INTERRUPT_MICROSECONDS }, dt, bits_passed, rx_state);
+    unsafe { LAST_INTERRUPT_MICROSECONDS = now; }
 
     match rx_state {
         WAITING_FOR_BREAK => {
             if gpio_state == true {
-                // defmt::println!("Break started!");
+                defmt::println!("Break started!");
                 rx_state = WAITING_FOR_MARK;
             }
         }
         WAITING_FOR_MARK => {
             if gpio_state == false {
-                if dt > (SDI12_MARK_DURATION_US - SDI12_TIMING_TOLERANCE) as u32 {
-                    // defmt::println!("Valid marking condition detected, ready to receive data");
+                if dt > SDI12_BREAK_DURATION_US {
+                    defmt::println!("Valid marking condition detected, ready to receive data");
                     rx_state = WAITING_FOR_START_AFTER_BREAK;
                 }
                 else {
-                    // defmt::println!("Invalid marking condition, waiting for break again");
+                    defmt::println!("Invalid marking condition, waiting for break again");
                     rx_state = WAITING_FOR_BREAK;
                 }
             }
@@ -619,14 +626,15 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
         }
         WAITING_FOR_START_AFTER_BREAK => {
             if gpio_state == true {
-                // it is a start bit after valid marking condition
-                if dt > (SDI12_MARK_DURATION_US - SDI12_TIMING_TOLERANCE) as u32 {
+                if dt > SDI12_MARK_DURATION_US {
+                    defmt::println!("Start bit after valid marking condition detected");
+                    // it is a start bit after valid marking condition
                     unsafe { RECEIVED_BREAK = true; }
                     start_char();
                     return;
                 }
                 else {
-                    // defmt::println!("Invalid marking condition, waiting for break again");
+                    defmt::println!("Invalid marking condition, waiting for break again");
                     rx_state = WAITING_FOR_BREAK;
                 }
             }
@@ -659,7 +667,7 @@ pub fn probe_interrupt_handler(now: u32, gpio_state: bool) {
             else {
                 if bits_to_process == 0 {
                     // this is an error condition, since the next step will crash
-                    // defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
+                    defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
                     unsafe{ RX_STATE = WAITING_FOR_BREAK };
                     return;
                 }

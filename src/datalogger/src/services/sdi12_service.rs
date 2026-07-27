@@ -80,7 +80,8 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
 
     fn delay_us(&mut self, us: u16) {
         self.board.delay_us(us);
-        self.board.run_loop_iteration(); // TODO: feed the watchdog, need a dedicated call for this though.
+        // self.board.run_loop_iteration(); // TODO: feed the watchdog, need a dedicated call for this though.
+        // this cannot happen here as it extends the delay.
     }
 
     fn pin_mode(&mut self, mode: gpio::GpioMode) {
@@ -99,8 +100,8 @@ impl<'a> BoardForSDI12 for Sdi12Board<'a> {
         self.board.disable_interrupt();
     }
 
-    fn get_current_time(&self) -> u32 {
-        self.board.get_current_time()
+    fn microseconds(&self) -> u16 {
+        self.board.microseconds()
     }
 
 }
@@ -174,7 +175,7 @@ impl<'a> Sdi12RxProcessor {
     pub fn take_message(&mut self, address: char, board: &mut dyn RRIVBoard) -> Result<Sdi12Command, &str> {
         let mut buffer : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
         let mut i = 0;
-        let mut now = board.get_current_time();
+        let mut now = board.microseconds();
         loop {
             let my_board = Sdi12Board::new(self.gpio, board);
             let mut sdi12 = SDI12::new(my_board);
@@ -187,10 +188,10 @@ impl<'a> Sdi12RxProcessor {
                         break;
                     }
                 }
-                now = board.get_current_time(); // reset timeout timer on every received character
+                now = board.microseconds(); // reset timeout timer on every received character
             }
-            else if board.get_current_time().wrapping_sub(now) > 100000 {
-                // timeout after 100 milliseconds
+            else if board.microseconds().wrapping_sub(now) > 65000 {
+                // timeout after 650 milliseconds
                 let my_board = Sdi12Board::new(self.gpio, board);
                 let mut sdi12 = SDI12::new(my_board);
                 sdi12.sleep();
@@ -372,8 +373,8 @@ impl<'a> Sdi12TxProcessor {
     pub fn send_break(&mut self, board: &mut dyn RRIVBoard) {
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
-        defmt::println!("Sent break");
         sdi12.send_break();
+        defmt::println!("Sent break");
     }
 
     #[allow(unused)]
@@ -415,7 +416,7 @@ impl<'a> Sdi12TxProcessor {
     }
 
     pub fn read_response(&mut self, board: &mut dyn RRIVBoard) -> Result<[char; SDI12_BUFFER_SIZE], &'static str> {
-        let mut now = board.get_current_time();
+        let mut now = board.microseconds();
         let mut i = 0;
         let mut response : [char; SDI12_BUFFER_SIZE] = ['\0'; SDI12_BUFFER_SIZE];
         loop {
@@ -431,9 +432,9 @@ impl<'a> Sdi12TxProcessor {
                         break;
                     }
                 }
-                now = board.get_current_time(); // reset timeout timer on every received character
+                now = board.microseconds(); // reset timeout timer on every received character
             }
-            else if board.get_current_time().wrapping_sub(now) > 150000 {
+            else if board.microseconds().wrapping_sub(now) > 15000 { // TODO: this timeout looks supicious
                 // timeout after 15 milliseconds
                 defmt::println!("SDI12: response timeout");
                 let my_board = Sdi12Board::new(self.gpio, board);

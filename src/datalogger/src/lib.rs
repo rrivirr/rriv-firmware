@@ -364,6 +364,7 @@ impl DataLogger {
             DataLoggerMode::SDI12 => {
                 let mut take_measurement = false;
                 if let Some(sdi12_service) = &mut self.sdi12_service {
+                    // not needed, wake up handled in interrupt
                     // if sdi12_service.is_awake() == false {
                     //     sdi12_service.wake_up(board);
                     // }
