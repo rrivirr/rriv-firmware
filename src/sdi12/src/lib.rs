@@ -73,6 +73,51 @@ pub struct SDI12 <B> {
     timeout_counter: u32
 }
 
+
+pub fn available() -> usize {
+        unsafe {
+            // let mut available = 0;
+            // for i in RX_HEAD..RX_TAIL { // TODO: this circumvents circular buffer, but we don't need circular buffer
+            //     if RX_BUFFER[i] == '!' || RX_BUFFER[i] == '\n' {
+            //         available = 1;
+            //         break;
+            //     }
+            // }
+            // available
+            core::hint::black_box((RX_TAIL + SDI12_BUFFER_SIZE - RX_HEAD) % SDI12_BUFFER_SIZE)
+            // let mut available = 0;
+            // for i in RX_HEAD..RX_TAIL { // force compiler to include this code and not remove during optimization
+            //     if RX_BUFFER[i] != '\0' {
+            //         available = available + 1;
+            //     }
+                
+            // }
+            // available
+        }
+    }
+
+    pub fn read() -> Option<char> { // to do: this is questionable without mutex
+        unsafe {
+            if RX_HEAD == RX_TAIL {
+                None
+            }
+            else {
+                let c = RX_BUFFER[RX_HEAD];
+                RX_HEAD = (RX_HEAD + 1) % SDI12_BUFFER_SIZE;
+                Some(c)
+            }
+        }
+    }
+
+
+    pub fn clear_buffer() {
+        unsafe {
+            RX_HEAD = 0;
+            RX_TAIL = 0;
+        }
+    }
+
+
 impl<B> SDI12<B> where B: BoardForSDI12,
 {
     pub fn new(sdi12_board: B) -> Self
@@ -125,44 +170,42 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
         self.set_state(SDIPinState::Sdi12Transmitting);
         
-        self.sdi12_board.disable_interrupt();
-        // Hold it HIGH for 12 ms
+        // Hold it HIGH for 12.1 ms
         self.sdi12_board.write(true);
         self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US);
-        // self.sdi12_board.delay_us(50);
         
         // Marking by holding it LOW for 8.33 ms
         self.sdi12_board.write(false);
         self.sdi12_board.delay_us(SDI12_MARK_DURATION_US);
-        self.sdi12_board.enable_interrupt();
+
     }
 
-    pub fn receive_break(&mut self) -> bool {   // TODO: not used currently
-        self.set_state(SDIPinState::Sdi12Listening);
-        if self.sdi12_board.read() {
-            // defmt::println!("Start for 12ms");
-            self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - SDI12_TIMING_TOLERANCE);
-            let mut iter_count = 0;
-            while self.sdi12_board.read() {
-                // defmt::println!("iter_count: {}", iter_count);
-                if iter_count > 10 {
-                    // defmt::println!("Timeout! line is not falling low");
-                    return false;
-                }
-                iter_count += 1;
-                self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
-            }
-            self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
-            if self.sdi12_board.read() {
-                // defmt::println!("Invalid marking");
-                return false;
-            }
-            self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
-            self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
-            return true;
-        }
-        return false;
-    }
+    // pub fn receive_break(&mut self) -> bool {   // TODO: not used currently
+    //     self.set_state(SDIPinState::Sdi12Listening);
+    //     if self.sdi12_board.read() {
+    //         // defmt::println!("Start for 12ms");
+    //         self.sdi12_board.delay_us(SDI12_BREAK_DURATION_US - SDI12_TIMING_TOLERANCE);
+    //         let mut iter_count = 0;
+    //         while self.sdi12_board.read() {
+    //             // defmt::println!("iter_count: {}", iter_count);
+    //             if iter_count > 10 {
+    //                 // defmt::println!("Timeout! line is not falling low");
+    //                 return false;
+    //             }
+    //             iter_count += 1;
+    //             self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
+    //         }
+    //         self.sdi12_board.delay_us(SDI12_MARK_DURATION_US - 2 * SDI12_TIMING_TOLERANCE);
+    //         if self.sdi12_board.read() {
+    //             // defmt::println!("Invalid marking");
+    //             return false;
+    //         }
+    //         self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
+    //         self.sdi12_board.delay_us(SDI12_TIMING_TOLERANCE);
+    //         return true;
+    //     }
+    //     return false;
+    // }
 
     // pub fn write_char(&mut self, c: char) {
     //     // sdi-12 write character implementation
@@ -318,7 +361,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
     pub fn send_command(&mut self, command: [char; SDI12_COMMAND_SIZE]) {
         // sdi-12 implementation
         self.set_state(SDIPinState::Sdi12Transmitting);
-        self.sdi12_board.delay_us(SDI12_GAP); //TODO: what is this doing for us?  probably unnecessary, just extends marking
+        self.sdi12_board.delay_us(SDI12_GAP); //TODO: what is this doing for us?  waits for line to settle... somewhat unnecessary, just extends marking
         for c in command.iter() {
             self.write_char(*c);
             if *c == '!' {
@@ -331,38 +374,9 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         self.set_state(SDIPinState::Sdi12Listening);
     }
 
-    pub fn read_command(&mut self) -> [char; SDI12_COMMAND_SIZE] {
-        self.set_state(SDIPinState::Sdi12Listening);
-        let mut buffer: [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
-        let mut bytes_read = 0;
-
-        while bytes_read < SDI12_COMMAND_SIZE {
-            self.timeout_counter = self.sdi12_board.millis();
-            match self.read_char() {
-                Some(byte) => {
-                    // store the byte in the response buffer
-                    buffer[bytes_read] = byte;
-                    bytes_read += 1;
-                    if byte == '!' {
-                        // defmt::println!("buffer[{}] = {}", bytes_read, byte);
-                        break;
-                    }
-                },
-                None => {
-                    defmt::println!("Reac command byte error");
-                    // defmt::println!("buffer[{}] = {}", bytes_read, buffer);
-                    break; // SDI12_timeout or error
-                }
-            }
-        }
-        self.sdi12_board.delay_us(SDI12_GAP);
-
-        buffer
-    }
-
     pub fn send_response(&mut self, data: [char; SDI12_BUFFER_SIZE]) {
         self.set_state(SDIPinState::Sdi12Transmitting);
-        // self.sdi12_board.delay_us(SDI12_GAP);
+        self.sdi12_board.delay_us(4000); // this makes sure there is time between command and response on the line
         for c in data.iter() {
             self.write_char(*c);
             if *c == '\n' {
@@ -370,7 +384,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
             // self.sdi12_board.delay_us(SDI12_GAP);
         }
-        // self.set_state(SDIPinState::Sdi12Listening);
+        self.set_state(SDIPinState::Sdi12Listening);
     }
 
     pub fn read_response(&mut self) -> [char; SDI12_BUFFER_SIZE] {
@@ -440,26 +454,8 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         (data, count as u8)
     }
 
-    pub fn available(&mut self) -> usize {
-        unsafe {
-            (RX_TAIL + SDI12_BUFFER_SIZE - RX_HEAD) % SDI12_BUFFER_SIZE
-        }
-    }
-
-    pub fn read(&mut self) -> Option<char> { // to do: this is questionable without mutex
-        unsafe {
-            if RX_HEAD == RX_TAIL {
-                None
-            }
-            else {
-                let c = RX_BUFFER[RX_HEAD];
-                RX_HEAD = (RX_HEAD + 1) % SDI12_BUFFER_SIZE;
-                Some(c)
-            }
-        }
-    }
-
-    pub fn peek(&mut self) -> Option<char> {
+    
+    pub fn peek() -> Option<char> {
         unsafe {
             if RX_HEAD == RX_TAIL {
                 None
@@ -470,12 +466,6 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
     }
 
-    pub fn clear_buffer(&mut self) {
-        unsafe {
-            RX_HEAD = 0;
-            RX_TAIL = 0;
-        }
-    }
 
     pub fn sleep(&mut self) {
         self.set_state(SDIPinState::Sdi12Sleep);
@@ -677,7 +667,7 @@ pub fn probe_interrupt_handler(now: u16, gpio_state: bool) {
                 if bits_to_process == 0 {
                     // this is an error condition, since the next step will crash
                     defmt::println!("Invalid bit state, waiting for start bit again. to process: {}, passed: {}", bits_to_process, bits_passed);
-                    unsafe{ RX_STATE = WAITING_FOR_BREAK };
+                    unsafe{ RX_STATE = WAITING_FOR_BREAK }; // TODO: need to also set RECEIVED_BREAK to false
                     return;
                 }
                 rx_mask <<= bits_to_process - 1;   // if the bit is LOW, just move the mask
@@ -686,6 +676,7 @@ pub fn probe_interrupt_handler(now: u16, gpio_state: bool) {
 
             if rx_state > 7 {
                 // check parity bit
+                // TODO: parity check must cancel entire command and clear the break.
                 // let parity_bit_received = (rx_value >> 7) & 1 == 0;
                 // let parity_bit_calculated = parity_bit(rx_value & 0x7F);
                 // if parity_bit_received == parity_bit_calculated {

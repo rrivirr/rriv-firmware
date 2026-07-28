@@ -4,7 +4,7 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
-const MAX_MILLIS: u32 = 60000;
+const MAX_MILLIS: u32 = 1000;
 #[derive(Copy, Clone)]
 pub struct TimedSwitch2SpecialConfiguration {
     on_time_s: usize,
@@ -339,10 +339,10 @@ impl SensorDriver for TimedSwitch2 {
             defmt::println!("Setting PWM period to {} ms", period_ms);
             board.write_pwm_pin_period(period_ms);
         // }
-        let timestamp = board.timestamp();
-        self.last_state_updated_at = timestamp;
+        let seconds = board.seconds();
+        self.last_state_updated_at = seconds;
         self.duty_cycle_state = self.state == 1;
-        let millis = board.millis();
+        let millis = board.milliseconds();
         self.last_duty_cycle_update = millis;
         self.duty_cycle_on_time = (self.special_config.period * self.special_config.ratio * 1000.0) as u32;
         self.duty_cycle_off_time = (self.special_config.period * 1000.0) as u32 - self.duty_cycle_on_time;
@@ -381,8 +381,8 @@ impl SensorDriver for TimedSwitch2 {
     }
 
     fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {
-        let timestamp = board.timestamp();
-        let millis = board.millis();
+        let timestamp = board.seconds();
+        let millis = board.milliseconds();
         let hardware_pwm = self.special_config.pwm_enable && self.special_config.hardware_pwm;
 
         let mut gpio_state = false;

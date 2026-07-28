@@ -66,8 +66,9 @@ pub trait RRIVBoard: Send {
     fn serial_debug(&mut self, args: fmt::Arguments);
     fn delay_ms(&mut self, ms: u16);
     fn delay_us(&mut self, us: u16);
-    fn timestamp(&mut self) -> i64;
-    fn millis(&mut self) -> u32;
+    fn seconds(&mut self) -> i64;
+    fn milliseconds(&mut self) -> u32;
+    fn microseconds(&self) -> u16;
 
 
     fn get_battery_level(&mut self) -> i16;
@@ -124,7 +125,6 @@ pub trait RRIVBoard: Send {
 
     fn enable_interrupt(&self);
     fn disable_interrupt(&self);
-    fn microseconds(&self) -> u16;
 
 }
 

@@ -431,11 +431,11 @@ impl RRIVBoard for Board {
 
     // also crystal time, systick?
 
-    fn timestamp(&mut self) -> i64 {
+    fn seconds(&mut self) -> i64 {
         return self.internal_rtc.current_time().into(); // internal RTC
     }
 
-    fn millis(&mut self) -> u32 {
+    fn milliseconds(&mut self) -> u32 {
         let millis = self.counter_ms.now().ticks();
         let millis = millis % 1000; // TODO: this is a hack
         millis
@@ -969,6 +969,17 @@ fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
     if exti.pr.read().pr2().bit_is_set() {
         exti.pr.write(|w| w.pr2().set_bit());
+
+
+        // unsafe {
+        //  let device_peripherals: pac::Peripherals = pac::Peripherals::steal();
+        //     let mut gpioc = device_peripherals.GPIOC.split();
+        //     let cs = gpioc.pc8;
+        //     let mut cs = cs.into_push_pull_output(&mut gpioc.crh);
+        //     for _i in 0..10 {
+        //         cs.set_high();
+        //     }
+        // }
 
         let device_peripherals = unsafe { pac::Peripherals::steal() };
         let now = device_peripherals.TIM5.cnt.read().bits() as u16;

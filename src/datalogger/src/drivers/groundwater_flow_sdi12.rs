@@ -250,6 +250,8 @@ impl SensorDriver for GroundwaterFlowSDI12 {
         if self.mode == 1 {
             for i in 0..max {
                 let done = self.data_mode(board);
+                board.run_loop_iteration(); // reset watchdog
+                board.delay_ms(50); // put some space between messages
                 if done {
                     break;
                 }
@@ -376,8 +378,6 @@ impl GroundwaterFlowSDI12 {
                 self.mode = 1; // stay in data mode to try again
             }
         }
-        board.delay_ms(50);
-        board.run_loop_iteration();
         received_all_data
     }
 

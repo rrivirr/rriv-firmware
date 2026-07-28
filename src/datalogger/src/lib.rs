@@ -304,7 +304,7 @@ impl DataLogger {
                 // process telemetry
                 // process actuators
 
-                if board.timestamp()
+                if board.seconds()
                     >= self.last_interactive_log_time
                         + self.settings.interactive_logging_interval as i64
                 {
@@ -324,7 +324,7 @@ impl DataLogger {
                         self.write_raw_measurement_to_storage(board);
                     }                    
 
-                    self.last_interactive_log_time = board.timestamp();
+                    self.last_interactive_log_time = board.seconds();
                 }
                 
                 self.process_telemetry(board);
@@ -371,13 +371,16 @@ impl DataLogger {
 
                     if sdi12_service.is_awake(board) {
                         defmt::println!("board awake!");
-                        match sdi12_service.take_message('0', board) {
+                        // board.usb_serial_send(format_args!("SDI12: awake\n"));
+                        match sdi12_service.take_command_message('0', board) {
                             Ok(mode) => {
                                 match mode {
                                     Sdi12Command::M => {
                                     }
 
                                     Sdi12Command::HA => {
+                                        // board.usb_serial_send(format_args!("SDI12: got HA\n"));
+
                                         let mut total_measurements_count = 0;
 
                                         for i in 0 .. self.sensor_drivers.len() {
@@ -394,6 +397,7 @@ impl DataLogger {
                                         take_measurement = true;
                                         sdi12_service.sleep(board); // this sensor doesn't have readings immediately available.
                                         defmt::println!("SDI12: sleep");
+                                        board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                         // board.usb_serial_send(format_args!("SDI12: sleep\n"));
                                     }
 
@@ -422,6 +426,7 @@ impl DataLogger {
                                     }
 
                                     Sdi12Command::D(digit) => {
+                                            // board.usb_serial_send(format_args!("SDI12: got D{}", digit));
                                        
                                             let mut data_send: [f64; MEASUREMENTS_IN_PAYLOAD as usize] = [f64::MAX; MEASUREMENTS_IN_PAYLOAD as usize];
 
@@ -684,7 +689,7 @@ impl DataLogger {
     // TODO: this function and the next one can be DRY by passing a closure
     fn write_measured_parameters_to_serial(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         let epoch = board.epoch_timestamp();
-        let millis = board.millis();
+        let millis = board.milliseconds();
         let output = format_args!("{}.{},", epoch, millis);
         board.usb_serial_send(format_args!("{}",&output));
 
@@ -735,7 +740,7 @@ impl DataLogger {
 
     fn write_raw_measurement_to_storage(&mut self, board: &mut impl rriv_board::RRIVBoard) {
         let epoch = board.epoch_timestamp();
-        let millis = board.millis();
+        let millis = board.milliseconds();
         // "type,site,logger,deployment,deployed_at,uid,time.s,battery.V"
 
         // TODO: find a better way to print this uid, or generate and use a UUID that doesn't come from the MCU's uid
