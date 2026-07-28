@@ -293,7 +293,7 @@ impl GroundwaterFlowSDI12 {
         let buffer = sdi12_service.read_response(board);
         if buffer.is_err() {
             self.num_data = 0;
-            defmt::println!("Timeout to HA command. Retrying...");
+            defmt::println!("Error or timeout to HA command. Retrying...");
             self.mode = 0; // stay in command mode
             return ack_received;
         }
@@ -338,7 +338,7 @@ impl GroundwaterFlowSDI12 {
         // if received, process the buffer
         let buffer = sdi12_service.read_response(board);
         if buffer.is_err() {
-            defmt::println!("Timeout to D{} command. Retrying...", self.index);
+            defmt::println!("Error or timeout to D{} command. Retrying...", self.index);
             board.delay_ms(100); // wait briefly.
             self.mode = 1; // stay in data mode to try again
             return false;
