@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::arch::asm;
+
 use rriv_board::gpio;
 
 // SDI-12 Timing Constants (in microseconds)
@@ -206,7 +208,10 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
 
         // 4. Hold the line for the rest of the start bit duration
-        while self.sdi12_board.microseconds().wrapping_sub(start_time) < microseconds_per_bit {}
+        while self.sdi12_board.microseconds().wrapping_sub(start_time) < microseconds_per_bit {
+            unsafe { asm!("nop"); }
+        }
+        start_time = start_time.wrapping_add(microseconds_per_bit);
         let char_start_time = start_time.wrapping_add(microseconds_per_bit); // now start time is the start time of the char being sent
 
         // 5. Send data bits until the last bit different from marking (LOW)
@@ -222,9 +227,10 @@ impl<B> SDI12<B> where B: BoardForSDI12,
             }
 
             // Wait for bit duration
-            self.sdi12_board.delay_us(SDI12_MICROSECONDS_PER_BIT);
-            // while self.sdi12_board.get_current_time().wrapping_sub(start_time) < ticks_per_bit {}
-            // start_time = start_time.wrapping_add(ticks_per_bit);
+            while self.sdi12_board.microseconds().wrapping_sub(start_time) < microseconds_per_bit {
+                unsafe { asm!("nop"); }
+            }
+            start_time = start_time.wrapping_add(microseconds_per_bit);
 
             out_char >>= 1; 
             current_tx_bit_num += 1;
@@ -246,7 +252,9 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         
         // Notice we use `start_time` here, so the trailing bits stay locked to the grid
         let total_remaining_time = 9 * microseconds_per_bit; // wait until a total of 9 bit ticks have elapsed.
-        while self.sdi12_board.microseconds().wrapping_sub(char_start_time) < total_remaining_time {}
+        while self.sdi12_board.microseconds().wrapping_sub(char_start_time) < total_remaining_time {
+            unsafe { asm!("nop"); }
+        }
         defmt::println!("{} {}", start_time, total_remaining_time);
     }
 
