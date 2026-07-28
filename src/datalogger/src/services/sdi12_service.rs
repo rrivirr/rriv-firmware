@@ -131,15 +131,15 @@ impl<'a> Sdi12RxProcessor {
         }
     }
 
-    #[allow(unused)]
-    pub fn wake_up(&mut self, board: &mut dyn RRIVBoard) {
-        let my_board = Sdi12Board::new(self.gpio, board);
-        let mut sdi12 = SDI12::new(my_board);
-        self.awake = sdi12.receive_break();
-        if self.awake {
-            board.usb_serial_send(format_args!("SDI12: received break\n"));
-        }
-    }
+    // #[allow(unused)]
+    // pub fn wake_up(&mut self, board: &mut dyn RRIVBoard) {
+    //     let my_board = Sdi12Board::new(self.gpio, board);
+    //     let mut sdi12 = SDI12::new(my_board);
+    //     self.awake = sdi12.receive_break();
+    //     if self.awake {
+    //         board.usb_serial_send(format_args!("SDI12: received break\n"));
+    //     }
+    // }
 
     pub fn set_total_measurements(&mut self, n: usize) {
         self.total_measurements = n;
@@ -165,7 +165,7 @@ impl<'a> Sdi12RxProcessor {
     }
 
     pub fn sleep(&mut self, board: &mut dyn RRIVBoard) {
-        defmt::println!("board asleep");
+        defmt::println!("board goes to sleep");
         self.awake = false;
         let my_board = Sdi12Board::new(self.gpio, board);
         let mut sdi12 = SDI12::new(my_board);
@@ -173,9 +173,10 @@ impl<'a> Sdi12RxProcessor {
     }
 
     pub fn take_message(&mut self, address: char, board: &mut dyn RRIVBoard) -> Result<Sdi12Command, &str> {
+        // board.usb_serial_send(format_args!("SDI12: take message\n"));
         let mut buffer : [char; SDI12_COMMAND_SIZE] = ['\0'; SDI12_COMMAND_SIZE];
         let mut i = 0;
-        let mut now = board.microseconds();
+        let mut start_timeout = board.millis();
         loop {
             let my_board = Sdi12Board::new(self.gpio, board);
             let mut sdi12 = SDI12::new(my_board);
@@ -188,13 +189,14 @@ impl<'a> Sdi12RxProcessor {
                         break;
                     }
                 }
-                now = board.microseconds(); // reset timeout timer on every received character
+                start_timeout = board.millis(); // reset timeout timer on every received character
             }
-            else if board.microseconds().wrapping_sub(now) > 65000 {
-                // timeout after 650 milliseconds
+            else if (board.millis() as i32 - start_timeout as i32).rem_euclid(60000) > 100 { 
                 let my_board = Sdi12Board::new(self.gpio, board);
                 let mut sdi12 = SDI12::new(my_board);
+                sdi12.clear_buffer();
                 sdi12.sleep();
+                board.usb_serial_send(format_args!("SDI12: take message timeout\n"));
                 defmt::println!("SDI12: command reception timeout");
                 return Err("Command reception timeout");
             }
@@ -202,7 +204,7 @@ impl<'a> Sdi12RxProcessor {
 
         if buffer[0] != address {
             self.sleep(board);
-            board.usb_serial_send(format_args!("SDI12: sleep\n"));
+            board.usb_serial_send(format_args!("SDI12: address not matched\n"));
             defmt::println!("{} != {}", buffer[0], address);
             return Err("Address not matching");
         }

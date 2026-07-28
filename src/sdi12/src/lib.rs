@@ -137,7 +137,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         self.sdi12_board.enable_interrupt();
     }
 
-    pub fn receive_break(&mut self) -> bool {   
+    pub fn receive_break(&mut self) -> bool {   // TODO: not used currently
         self.set_state(SDIPinState::Sdi12Listening);
         if self.sdi12_board.read() {
             // defmt::println!("Start for 12ms");
@@ -251,11 +251,11 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         // let bit_time_remaining = microseconds_per_bit * (remaining_bits as u16);
         
         // Notice we use `start_time` here, so the trailing bits stay locked to the grid
-        let total_remaining_time = 9 * microseconds_per_bit; // wait until a total of 9 bit ticks have elapsed.
-        while self.sdi12_board.microseconds().wrapping_sub(char_start_time) < total_remaining_time {
+        let total_time = 9 * microseconds_per_bit; // wait until a total of 9 bit ticks have elapsed.
+        while self.sdi12_board.microseconds().wrapping_sub(char_start_time) < total_time {
             unsafe { asm!("nop"); }
         }
-        defmt::println!("{} {}", start_time, total_remaining_time);
+        // defmt::println!("{} {}", start_time, total_remaining_time);
     }
 
     pub fn read_char(&mut self) -> Option<char> {
@@ -308,6 +308,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         let parity_bit_received = (byte >> 7) & 1 == 1;
         let parity_bit_calculated = parity_bit(character_data);
         if parity_bit_received != parity_bit_calculated {
+            defmt::println!("Parity error");
             return None;
         }
 
@@ -348,7 +349,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     }
                 },
                 None => {
-                    // defmt::println!("Timeout error");
+                    defmt::println!("Reac command byte error");
                     // defmt::println!("buffer[{}] = {}", bytes_read, buffer);
                     break; // SDI12_timeout or error
                 }
@@ -361,7 +362,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
 
     pub fn send_response(&mut self, data: [char; SDI12_BUFFER_SIZE]) {
         self.set_state(SDIPinState::Sdi12Transmitting);
-        self.sdi12_board.delay_us(SDI12_GAP);
+        // self.sdi12_board.delay_us(SDI12_GAP);
         for c in data.iter() {
             self.write_char(*c);
             if *c == '\n' {
@@ -391,7 +392,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
                     }
                 },
                 None => {
-                    // defmt::println!("Timeout SDI12");
+                    defmt::println!("Read response byte error");
                     break; // SDI12_timeout or error
                 }
             }
@@ -445,7 +446,7 @@ impl<B> SDI12<B> where B: BoardForSDI12,
         }
     }
 
-    pub fn read(&mut self) -> Option<char> {
+    pub fn read(&mut self) -> Option<char> { // to do: this is questionable without mutex
         unsafe {
             if RX_HEAD == RX_TAIL {
                 None
