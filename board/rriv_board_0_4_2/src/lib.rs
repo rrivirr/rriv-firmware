@@ -12,7 +12,7 @@ use one_wire_bus::crc::crc8;
 
 use rriv_board::hardware_error::HardwareError;
 use stm32f1xx_hal::time::{MilliSeconds, ms};
-use stm32f1xx_hal::timer::{Ch, Channel, CounterUs, PwmHz, Tim4NoRemap};
+use stm32f1xx_hal::timer::{Ch, Channel, CounterMs, CounterUs, PwmHz, Tim4NoRemap};
 
 use core::fmt::{self};
 use core::mem;
@@ -33,7 +33,7 @@ use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
 use stm32f1xx_hal::gpio::{Edge, ExtiPin, Pin, PushPull};
-use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
+use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, TIM5, TIM6, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -135,6 +135,7 @@ pub struct Board {
     one_wire_search_state: Option<SearchState>,
     pub watchdog: IndependentWatchdog,
     pub counter: CounterUs<TIM5>,
+    pub counter_ms: CounterMs<TIM6>,
     pub hardware_errors: [HardwareError; 5],
     pub clocks: Clocks,
     pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>,
@@ -435,8 +436,7 @@ impl RRIVBoard for Board {
     }
 
     fn millis(&mut self) -> u32 {
-        let micros = self.counter.now();
-        let millis = micros.ticks() / 1000;
+        let millis = self.counter_ms.now().ticks();
         let millis = millis % 1000; // TODO: this is a hack
         millis
     }
@@ -1047,6 +1047,7 @@ pub struct BoardBuilder {
     pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
+    pub counter_ms: Option<CounterMs<TIM6>>,
     hardware_errors: [HardwareError; 5],
     pub clocks: Option<Clocks>,
     pub pwm: Option<PwmHz<TIM4, Tim4NoRemap, Ch<2>, Pin<'B', 8, gpio::Alternate<PushPull>>>>
@@ -1072,6 +1073,7 @@ impl BoardBuilder {
             storage: None,
             watchdog: None,
             counter: None,
+            counter_ms: None,
             hardware_errors: [HardwareError::None; 5],
             clocks: None,
             pwm: None
@@ -1122,6 +1124,7 @@ impl BoardBuilder {
             one_wire_search_state: None,
             watchdog: watchdog,
             counter: self.counter.unwrap(),
+            counter_ms: self.counter_ms.unwrap(),
             hardware_errors: self.hardware_errors,
             clocks: self.clocks.unwrap(),
             pwm: Some(self.pwm.unwrap()),
@@ -1685,6 +1688,14 @@ impl BoardBuilder {
             Err(err) => defmt::println!("Micros counter start not ok {:?}", defmt::Debug2Format(&err)),
         }
         self.counter = Some(counter);
+
+
+        let mut counter_ms: CounterMs<TIM6> = device_peripherals.TIM6.counter_ms(&clocks);
+        match counter_ms.start(60000.millis()) { // timeout is the autoreload reset
+            Ok(_) => defmt::println!("Micros counter start ok"),
+            Err(err) => defmt::println!("Micros counter start not ok {:?}", defmt::Debug2Format(&err)),
+        }
+        self.counter_ms = Some(counter_ms);
 
         watchdog.feed();
 
