@@ -4,7 +4,7 @@ use crate::sensor_name_from_type_id;
 
 use super::types::*;
 
-const MAX_MILLIS: u32 = 65535;
+const MAX_MILLIS: u32 = 60000;
 #[derive(Copy, Clone)]
 pub struct TimedSwitch2SpecialConfiguration {
     on_time_s: usize,
