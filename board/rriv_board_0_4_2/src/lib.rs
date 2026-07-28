@@ -919,7 +919,6 @@ impl RRIVBoard for Board {
     fn microseconds(&self) -> u16 {
         let micros = self.counter.now();
         micros.ticks() as u16
-        // cortex_m::peripheral::DWT::cycle_count() / SYSCLK_MHZ
     }
 
 
@@ -1382,6 +1381,7 @@ impl BoardBuilder {
 
         // Set up pins
         let (pins, mut gpio_cr) = Pins::build(gpioa, gpiob, gpioc, gpiod, &mut afio.mapr);
+         #[allow(unused_variables)]     
         let (
             external_adc_pins,
             internal_adc_pins,
@@ -1467,10 +1467,10 @@ impl BoardBuilder {
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
-        let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
 
         #[cfg(feature = "storage-sdcard")]
         let storage: Option<Storage> = {
+            let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
             watchdog.start(MilliSeconds::secs(24));
             let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
             watchdog.start(MilliSeconds::secs(6));
