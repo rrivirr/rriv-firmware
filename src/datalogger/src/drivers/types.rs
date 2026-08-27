@@ -65,35 +65,73 @@ impl CalibrationPair {
 
 
 pub trait SensorDriver {
+
+    // return a byte array representation of the driver configuration values
+    // this gets stored in the EEPROM and loaded on boot by the datalogger
     fn get_configuration_bytes(&self, storage: &mut [u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE]); // derivable
+    
+    // return a json representatio nof the driver configuration values
+    // this is used to communicate with rrivctl, the command line configuration tool, over USB
     fn get_configuration_json(&mut self) -> serde_json::Value;
+
+    // update configuration values
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>;
+    
+    // implementation of logic necessary to set up the driver and sensor hardware for operations
+    // this is called on sensor driver load, during configuration or boot
     fn setup(&mut self, board: &mut dyn rriv_board::RRIVBoard);
+    
+    // return the identifier id of the driver, specificed by rrivctl
+    // the getters!(); macro is used to implement this automatically in structs implementing SensorDriver
     fn get_id(&self) -> [u8; 6];
+    
+    // return the type id of the driver, a pre-assigned index specified by registry.rs
+    // the getters!(); macro is used to implement this automatically in structs implementing SensorDriver
     fn get_type_id(&self) -> u16;
 
+    // return the number of parameters this sensor measures
     fn get_measured_parameter_count(&mut self) -> usize;
+    
+    // return the values of the parameters measured by this sensor
+    // index indicates which parameter value to return
     fn get_measured_parameter_value(&mut self, index: usize) -> Result<f64, ()>;
+    
+    // return identifiers of the parameters measured by this sensor
+    // identifiers are strings used to identify the parameters in logs and data files
+    // index indicates which parameter identifiers to return
     fn get_measured_parameter_identifier(&mut self, index: usize) -> [u8; 16];
 
+    // get a measurement from the sensor
+    // measurement is stored in implementation specific variables, and returned by get_measured_parameter_value
     fn take_measurement(&mut self, board: &mut dyn rriv_board::RRIVBoard);
     
+    // perform any control actions implemented by the sensor
+    // called before take_measurement in the datalogger's run loop
+    // this function is optional
     #[allow(unused)]
     fn update_actuators(&mut self, board: &mut dyn rriv_board::RRIVBoard) {}
 
-    // for fitting calibrations, for drivers that implement a calibration
+    // fit a calibration for the sensor based on stored calibration pairs
+    // each calibration pair contains the raw sensor reading value, and a true value known to the operator
+    // gathering and storage of calibration pairs is handled by the datalogger code
+    // storage of fit parameters and application of the calibration to driver outputs must be implemented in the driver
+    // implementing calibration, and this function. is optional
     #[allow(unused)]
     fn fit(&mut self, pairs: &[CalibrationPair]) -> Result<(), ()> { 
         // error if fn called without a calibration routine implemented
         Err(()) 
     }
-    fn clear_calibration(&mut self) {}
-    // fn get_required_calibration_point_count(&self) -> usize;  // TODO
 
+    // remove the current calibration from the sensor
+    // implementing calibration, and this function. is optional
+    fn clear_calibration(&mut self) {}
+
+    // return GPIO pins needed by the driver
+    // the datalogger uses this to avoid GPIO configuration confliects
     fn get_requested_gpios(&self) -> GpioRequest {
         GpioRequest::none()
     }
 
-    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str>;
 
 }
 

@@ -199,6 +199,9 @@ impl SensorDriver for MCP9808TemperatureDriver {
 
 const AMBIENT_TEMPERATURE_REGISTER_ADDRESS: u8 = 0x05;
 
+//
+// Implementation of constructors for driver objects
+//
 impl MCP9808TemperatureDriver {
     pub fn new(
         general_config: SensorDriverGeneralConfiguration,
