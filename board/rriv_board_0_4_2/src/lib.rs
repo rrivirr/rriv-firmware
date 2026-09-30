@@ -1556,7 +1556,9 @@ impl BoardBuilder {
 
         // defmt::println!("skipping unhang I2C2 if hung");
 
-        defmt::println!("unhang I2C2 if hung");
+        defmt::println!(
+            "unhang I2C2 if hung: if firmware restarts, check the I2C bus voltage, pinout, and wiring"
+        );
 
         let mut scl2 = i2c2_pins
             .i2c2_scl
