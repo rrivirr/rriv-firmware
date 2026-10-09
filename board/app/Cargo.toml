@@ -14,7 +14,9 @@ embedded-alloc = "0.5.0"
 defmt = "1.0.1"
 
 rriv_board = { path = "../rriv_board"}
-rriv_board_0_4_2 = { path = "../rriv_board_0_4_2"}
+# default-features = false so the storage backend is chosen only by this crate's
+# features below; otherwise the board crate's own defaults could re-enable the SD card.
+rriv_board_0_4_2 = { path = "../rriv_board_0_4_2", default-features = false }
 datalogger = { path = "../../src/datalogger" }
 
 [dependencies.stm32f1xx-hal]
@@ -23,7 +25,10 @@ features = ["rt", "stm32f103", "high"]
 
 
 [features]
+# Exactly one storage backend must be enabled. Because storage-sdcard is a default,
+# selecting the other backend requires turning defaults off:
+#   cargo build --no-default-features --features storage-disabled
 default = ["storage-sdcard"]
-storage-sdcard = ["rriv_board_0_4_2/storage-sdcard"] 
-storage-disabled = ["rriv_board_0_4_2/storage-disabled"] 
+storage-sdcard = ["rriv_board_0_4_2/storage-sdcard"]
+storage-disabled = ["rriv_board_0_4_2/storage-disabled"]
 
