@@ -124,6 +124,24 @@ impl DataLogger {
     }
 
     pub fn setup(&mut self, board: &mut impl RRIVBoard) {
+
+        let bytes = [0u8; rriv_board::EEPROM_DATALOGGER_SETTINGS_SIZE];
+        board.store_datalogger_settings(&bytes);
+        defmt::println!("cleared datalogger settings");
+
+        for slot in 0..12 {
+          let bytes = [0u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE];
+          board.store_sensor_settings(slot, &bytes);
+          defmt::println!("cleared sensors settings {}", slot);
+        }
+
+        defmt::println!("eeprom cleared");
+        loop{}
+
+
+
+
+
         // enable power to the eeprom and bring i2bufferc online
 
         // defmt::println!("retrieving settings");
