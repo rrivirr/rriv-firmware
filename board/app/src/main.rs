@@ -32,13 +32,39 @@ fn main() -> ! {
 
     let mut board = rriv_board_0_4_2::build();
     board.start(); // not needed, for debug only
-    let mut datalogger = DataLogger::new();
-    datalogger.setup(&mut board);
-    board.watchdog.feed(); // make sure we leave enough time for the panic handler
-    loop {
-        board.run_loop_iteration();
-        datalogger.run_loop_iteration(&mut board);
+
+    for i in 0..3 {
+      board.error_alarm();
+      board.run_loop_iteration();
     }
+
+    let bytes = [0u8; rriv_board::EEPROM_DATALOGGER_SETTINGS_SIZE];
+    board.store_datalogger_settings(&bytes);
+    defmt::println!("cleared datalogger settings");
+    board.run_loop_iteration();
+    board.error_alarm();
+    board.delay_ms(500);
+
+    for slot in 0..12 {
+      let bytes = [0u8; rriv_board::EEPROM_SENSOR_SETTINGS_SIZE];
+      board.store_sensor_settings(slot, &bytes);
+      defmt::println!("cleared sensors settings {}", slot);
+      board.run_loop_iteration();
+      board.error_alarm();
+    }
+
+    defmt::println!("eeprom cleared");
+    board.usb_serial_send(format_args!("{}\n", json!({"status":"eeprom-cleared"}).to_string().as_str()));
+    loop{}
+
+   
+    // let mut datalogger = DataLogger::new();
+    // datalogger.setup(&mut board);
+    // board.watchdog.feed(); // make sure we leave enough time for the panic handler
+    // loop {
+    //     board.run_loop_iteration();
+    //     datalogger.run_loop_iteration(&mut board);
+    // }
 }
 
 

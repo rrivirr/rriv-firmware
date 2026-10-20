@@ -136,6 +136,7 @@ impl DataLogger {
         }
 
         defmt::println!("eeprom cleared");
+        board.usb_serial_send(format_args!("{}\n", json!({"status":"eeprom-cleared"}).to_string().as_str()));
         loop{}
 
 
