@@ -20,9 +20,6 @@ extern crate rriv_board;
 extern crate rriv_board_0_4_2;
 use crate::rriv_board::RRIVBoard;
 
-extern crate datalogger;
-use datalogger::DataLogger;
-
 
 
 #[entry]
@@ -57,14 +54,6 @@ fn main() -> ! {
     board.usb_serial_send(format_args!("{}\n", json!({"status":"eeprom-cleared"}).to_string().as_str()));
     loop{}
 
-   
-    // let mut datalogger = DataLogger::new();
-    // datalogger.setup(&mut board);
-    // board.watchdog.feed(); // make sure we leave enough time for the panic handler
-    // loop {
-    //     board.run_loop_iteration();
-    //     datalogger.run_loop_iteration(&mut board);
-    // }
 }
 
 

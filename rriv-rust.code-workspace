@@ -1,12 +1,9 @@
 {
 	"folders": [
-		{
-			"path": "board"
-		},
-		{
-			"path": "src"
-		}
-	],
+    {
+      "path": "board"
+    }
+  ],
 	"settings": {
 		"[rust]": {
 			"editor.defaultFormatter": "rust-lang.rust-analyzer"
