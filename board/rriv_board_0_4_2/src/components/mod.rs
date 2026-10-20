@@ -10,9 +10,6 @@ pub use battery_level::*;
 pub mod rgb_led;
 pub use rgb_led::*;
 
-pub mod storage;
-pub use storage::*;
-
 pub mod oscillator_control;
 pub use oscillator_control::*;
 

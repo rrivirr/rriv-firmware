@@ -16,6 +16,7 @@ defmt = "1.0.1"
 rriv_board = { path = "../rriv_board"}
 rriv_board_0_4_2 = { path = "../rriv_board_0_4_2"}
 datalogger = { path = "../../src/datalogger" }
+serde_json = { version = "1.0.104", default-features = false, features = ["alloc"] }
 
 [dependencies.stm32f1xx-hal]
 version = "0.10.0"

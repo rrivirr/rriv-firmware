@@ -125,7 +125,7 @@ pub struct Board {
     pub i2c1: Option<BoardI2c1>,
     pub i2c2: BoardI2c2,
     pub internal_rtc: Rtc,
-    pub storage: Option<Storage>,
+    // pub storage: Option<Storage>,
     pub debug: bool,
     pub file_epoch: i64,
     pub one_wire_bus: Option<OneWire<OneWirePin<Pin<'C', 0, Dynamic>>>>,
@@ -143,9 +143,9 @@ impl Board {
         // self.power_control.cycle_3v(&mut self.delay);
 
         let timestamp: i64 = rriv_board::RRIVBoard::epoch_timestamp(self);
-        if let Some(ref mut storage) = &mut self.storage {
-            storage.create_file(timestamp);
-        }
+        // if let Some(ref mut storage) = &mut self.storage {
+        //     storage.create_file(timestamp);
+        // }
 
         // setting the pin for receiving telemetry on UART5
         // this crashes the mcu hard, maybe only if something isn't plugged in
@@ -464,26 +464,26 @@ impl RRIVBoard for Board {
     fn write_log_file(&mut self, args: fmt::Arguments) {
         // self.storage.write(data.as_bytes(), self.file_epoch);
 
-        let mut buf = [0u8; 100];
-        match format_no_std::show(
-            &mut buf,
-            args
-        ) {
-            Ok(string) => {
-                if let Some(ref mut storage) = &mut self.storage {
-                    storage.write(string.as_bytes(), self.file_epoch);
-                }
-            }
-            Err(_) => {
-                defmt::println!("format error writing log file")
-            },
-        }
+        // let mut buf = [0u8; 100];
+        // match format_no_std::show(
+        //     &mut buf,
+        //     args
+        // ) {
+        //     Ok(string) => {
+        //         if let Some(ref mut storage) = &mut self.storage {
+        //             storage.write(string.as_bytes(), self.file_epoch);
+        //         }
+        //     }
+        //     Err(_) => {
+        //         defmt::println!("format error writing log file")
+        //     },
+        // }
     }
 
     fn flush_log_file(&mut self) {
-        if let Some(ref mut storage) = &mut self.storage {
-            storage.flush();
-        }
+        // if let Some(ref mut storage) = &mut self.storage {
+        //     storage.flush();
+        // }
     }
 
     fn dump_eeprom(&mut self) {
@@ -1040,7 +1040,7 @@ pub struct BoardBuilder {
     pub i2c1: Option<BoardI2c1>,
     pub i2c2: Option<BoardI2c2>,
     pub internal_rtc: Option<Rtc>,
-    pub storage: Option<Storage>,
+    // pub storage: Option<Storage>,
     pub watchdog: Option<IndependentWatchdog>,
     pub counter: Option<CounterUs<TIM5>>,
     hardware_errors: [HardwareError; 5],
@@ -1065,7 +1065,7 @@ impl BoardBuilder {
             rgb_led: None,
             oscillator_control: None,
             internal_rtc: None,
-            storage: None,
+            // storage: None,
             watchdog: None,
             counter: None,
             hardware_errors: [HardwareError::None; 5],
@@ -1111,7 +1111,7 @@ impl BoardBuilder {
             rgb_led: self.rgb_led.unwrap(),
             oscillator_control: self.oscillator_control.unwrap(),
             internal_rtc: self.internal_rtc.unwrap(),
-            storage: self.storage,
+            // storage: self.storage,
             debug: false,
             file_epoch: 0,
             one_wire_bus: one_wire,
@@ -1464,36 +1464,36 @@ impl BoardBuilder {
 
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
 
-        #[cfg(feature = "storage-sdcard")]
-        let storage: Option<Storage> = {
-            watchdog.start(MilliSeconds::secs(24));
-            let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-            watchdog.start(MilliSeconds::secs(6));
-            match result {
-                Ok(storage) => Some(storage),
-                Err(hardware_error) => {
-                    add_hardware_error(&mut self.hardware_errors, hardware_error);
-                    None
-                },
-            }
-        };
+        // #[cfg(feature = "storage-sdcard")]
+        // let storage: Option<Storage> = {
+        //     watchdog.start(MilliSeconds::secs(24));
+        //     let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+        //     watchdog.start(MilliSeconds::secs(6));
+        //     match result {
+        //         Ok(storage) => Some(storage),
+        //         Err(hardware_error) => {
+        //             add_hardware_error(&mut self.hardware_errors, hardware_error);
+        //             None
+        //         },
+        //     }
+        // };
 
-        #[cfg(feature = "storage-disabled")]
-        let storage: Option<Storage> = None;
+        // #[cfg(feature = "storage-disabled")]
+        // let storage: Option<Storage> = None;
 
 
-        if storage.is_none() {
-            // sd card library has no way to release the spi and pins
-            // so unsafely get the cs pin and flash it
-            for _i in 1..20 {
-                cs.set_high();
-                delay.delay_ms(50_u32);
-                cs.set_low();
-                delay.delay_ms(50_u32);
-            }
-            cs.set_high();
+        // if storage.is_none() {
+        //     // sd card library has no way to release the spi and pins
+        //     // so unsafely get the cs pin and flash it
+        //     for _i in 1..20 {
+        //         cs.set_high();
+        //         delay.delay_ms(50_u32);
+        //         cs.set_low();
+        //         delay.delay_ms(50_u32);
+        //     }
+        //     cs.set_high();
             
-        }
+        // }
 
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
@@ -1669,7 +1669,7 @@ impl BoardBuilder {
         self.gpio = Some(dynamic_gpio_pins);
         self.gpio_cr = Some(gpio_cr);
 
-        self.storage = storage;
+        // self.storage = storage;
 
         self.precise_delay = Some(precise_delay);
 
@@ -1752,53 +1752,53 @@ pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
     });
 }
 
-pub fn write_panic_to_storage(message: &str) {
-    let device_peripherals = unsafe { pac::Peripherals::steal() };
-    let rcc = device_peripherals.RCC.constrain();
-    let mut flash = device_peripherals.FLASH.constrain();
-    let mut afio = device_peripherals.AFIO.constrain(); // Prepare the alternate function I/O registers
+// pub fn write_panic_to_storage(message: &str) {
+//     let device_peripherals = unsafe { pac::Peripherals::steal() };
+//     let rcc = device_peripherals.RCC.constrain();
+//     let mut flash = device_peripherals.FLASH.constrain();
+//     let mut afio = device_peripherals.AFIO.constrain(); // Prepare the alternate function I/O registers
 
-    let clocks = rcc
-        .cfgr
-        .use_hse(HSE_MHZ.MHz())
-        .sysclk(SYSCLK_MHZ.MHz())
-        .pclk1(PCLK_MHZ.MHz())
-        // .adcclk(14.MHz())
-        .freeze(&mut flash.acr);
+//     let clocks = rcc
+//         .cfgr
+//         .use_hse(HSE_MHZ.MHz())
+//         .sysclk(SYSCLK_MHZ.MHz())
+//         .pclk1(PCLK_MHZ.MHz())
+//         // .adcclk(14.MHz())
+//         .freeze(&mut flash.acr);
 
-    let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
+//     let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
 
-    // Prepare the GPIO
-    let gpioa: gpio::gpioa::Parts = device_peripherals.GPIOA.split();
-    let gpiob = device_peripherals.GPIOB.split();
-    let gpioc = device_peripherals.GPIOC.split();
-    let gpiod = device_peripherals.GPIOD.split();
+//     // Prepare the GPIO
+//     let gpioa: gpio::gpioa::Parts = device_peripherals.GPIOA.split();
+//     let gpiob = device_peripherals.GPIOB.split();
+//     let gpioc = device_peripherals.GPIOC.split();
+//     let gpiod = device_peripherals.GPIOD.split();
 
-    // Set up pins
-    let (pins, mut gpio_cr) = Pins::build(gpioa, gpiob, gpioc, gpiod, &mut afio.mapr);
-    let (
-        _external_adc_pins,
-        _internal_adc_pins,
-        _battery_level_pins,
-        _dynamic_gpio_pins,
-        _i2c1_pins,
-        _i2c2_pins,
-        mut _oscillator_control_pins,
-        mut _power_pins,
-        _rgb_led_pins,
-        _serial_pins,
-        _spi1_pins,
-        spi2_pins,
-        _usb_pins,
-    ) = pin_groups::build(pins, &mut gpio_cr);
+//     // Set up pins
+//     let (pins, mut gpio_cr) = Pins::build(gpioa, gpiob, gpioc, gpiod, &mut afio.mapr);
+//     let (
+//         _external_adc_pins,
+//         _internal_adc_pins,
+//         _battery_level_pins,
+//         _dynamic_gpio_pins,
+//         _i2c1_pins,
+//         _i2c2_pins,
+//         mut _oscillator_control_pins,
+//         mut _power_pins,
+//         _rgb_led_pins,
+//         _serial_pins,
+//         _spi1_pins,
+//         spi2_pins,
+//         _usb_pins,
+//     ) = pin_groups::build(pins, &mut gpio_cr);
 
-    let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-    match storage {
-        Ok(mut storage) => {
-            storage.create_file(0);
-            storage.write(message.as_bytes(), 0);
-            storage.flush();
-        }
-        Err(_) => {},
-    }
-}
+//     let storage = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
+//     match storage {
+//         Ok(mut storage) => {
+//             storage.create_file(0);
+//             storage.write(message.as_bytes(), 0);
+//             storage.flush();
+//         }
+//         Err(_) => {},
+//     }
+// }
