@@ -35,7 +35,7 @@ There is a one-liner shell script installer availble here: [https://probe.rs/](h
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
 ```
 
-udev rules must be installed on Debian based Linux systems to allow access to the probe for non-root users.  Instructions can be found here: https://probe.rs/docs/getting-started/probe-setup/
+udev rules must be installed on Debian based Linux systems to allow access to the probe for non-root users.  Instructions can be found here: https://probe.rs/docs/getting-started/probe-setup/.  You may use an automated script to apply these changes found at https://github.com/rrivirr/rriv-scripts/blob/main/udev/install-udev.sh
 
 Users of VSCode will also want to install the following extensions:
 * [rust-analyzer](https://code.visualstudio.com/docs/languages/rust)
