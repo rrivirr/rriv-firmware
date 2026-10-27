@@ -26,4 +26,6 @@ features = ["rt", "stm32f103", "high"]
 default = ["storage-sdcard"]
 storage-sdcard = ["rriv_board_0_4_2/storage-sdcard"] 
 storage-disabled = ["rriv_board_0_4_2/storage-disabled"] 
+# Link the app at 0x0800C200, after the RRIV bootloader and its image header (board/bootloader).
+with-bootloader = []
 
