@@ -21,6 +21,18 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
 
+/// How the board's last start-ups went (see `rriv_board_0_4_2::startup`).
+pub struct StartupReport {
+    /// The step the last unfinished start-up stopped at, if one didn't finish.
+    pub stopped_at: Option<&'static str>,
+    /// Start-ups in a row that didn't finish before this one.
+    pub failed_startups: u8,
+    /// What reset the board before this start-up.
+    pub reset_cause: &'static str,
+    /// This start-up ran with the start-up trace on.
+    pub traced: bool,
+}
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
