@@ -32,8 +32,10 @@ fn main() -> ! {
 
     let mut board = rriv_board_0_4_2::build();
     board.start(); // not needed, for debug only
+    rriv_board_0_4_2::startup::begin(rriv_board_0_4_2::startup::Step::DataloggerSetup);
     let mut datalogger = DataLogger::new();
     datalogger.setup(&mut board);
+    rriv_board_0_4_2::startup::finished();
     board.watchdog.feed(); // make sure we leave enough time for the panic handler
     loop {
         board.run_loop_iteration();
