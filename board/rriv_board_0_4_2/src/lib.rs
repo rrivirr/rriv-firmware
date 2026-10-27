@@ -488,6 +488,54 @@ impl RRIVBoard for Board {
         }
     }
 
+    fn reboot_into_bootloader(&mut self) {
+        // Leave the request where the bootloader looks for it (backup data
+        // registers survive a system reset), let USB deliver the reply, reset.
+        unsafe {
+            let dp = pac::Peripherals::steal();
+            dp.RCC.apb1enr.modify(|_, w| w.pwren().set_bit().bkpen().set_bit());
+            dp.PWR.cr.modify(|_, w| w.dbp().set_bit());
+            dp.BKP.dr[rriv_boot::BOOT_REQUEST_REGISTER]
+                .write(|w| w.d().bits(rriv_boot::BOOT_REQUEST_MAGIC));
+        }
+        self.delay.delay_ms(100_u32);
+        cortex_m::peripheral::SCB::sys_reset();
+    }
+
+    fn restart(&mut self) {
+        self.delay.delay_ms(100_u32);
+        cortex_m::peripheral::SCB::sys_reset();
+    }
+
+    fn restart_with_startup_trace(&mut self) {
+        startup::request_trace();
+        rriv_board::RRIVBoard::restart(self);
+    }
+
+    fn startup_report(&mut self) -> rriv_board::StartupReport {
+        startup::report()
+    }
+
+    fn image_version(&self) -> Option<&'static str> {
+        // The bootloader points VTOR at the app's vectors before jumping, so
+        // anything else means the app was flashed without it (and no header).
+        let vtor = unsafe { (*cortex_m::peripheral::SCB::PTR).vtor.read() };
+        if vtor != rriv_boot::APP_VECTORS {
+            return None;
+        }
+        let region = unsafe {
+            core::slice::from_raw_parts(
+                rriv_boot::APP_START as *const u8,
+                (rriv_boot::FLASH_END - rriv_boot::APP_START) as usize,
+            )
+        };
+        rriv_boot::image::header_version(region)
+    }
+
+    fn clear_serial_number(&mut self) {
+        eeprom::write_serial_number_to_eeprom(self, &[0xFF; rriv_board::EEPROM_SERIAL_NUMBER_SIZE]);
+    }
+
     fn dump_eeprom(&mut self) {
         let mut buffer: [u8; EEPROM_TOTAL_SENSOR_SLOTS * rriv_board::EEPROM_SENSOR_SETTINGS_SIZE] =
             [0; EEPROM_TOTAL_SENSOR_SLOTS * rriv_board::EEPROM_SENSOR_SETTINGS_SIZE];
