@@ -68,6 +68,7 @@ use stm32f1xx_hal::rtc::Rtc;
 use one_wire_bus::{Address, OneWire, SearchState};
 
 mod components;
+pub mod startup;
 use components::*;
 // use components::gpio::read_pin;
 
@@ -139,6 +140,7 @@ pub struct Board {
 
 impl Board {
     pub fn start(&mut self) {
+        startup::begin(startup::Step::BoardStart);
         defmt::println!("starting board");
         // self.power_control.cycle_3v(&mut self.delay);
 
@@ -1075,6 +1077,7 @@ impl BoardBuilder {
     }
 
     pub fn build(self) -> Board {
+        startup::begin(startup::Step::OneWire);
         let mut gpio_cr = self.gpio_cr.unwrap();
 
         let mut internal_adc = self.internal_adc.unwrap();
@@ -1322,6 +1325,7 @@ impl BoardBuilder {
     }
 
     fn setup(&mut self) {
+        startup::boot();
         defmt::println!("board builder setup");
 
         let mut core_peripherals: pac::CorePeripherals = cortex_m::Peripherals::take().unwrap();
@@ -1330,7 +1334,11 @@ impl BoardBuilder {
         let mut watchdog = IndependentWatchdog::new(device_peripherals.IWDG);
         watchdog.stop_on_debug(&device_peripherals.DBGMCU, true);
 
-        watchdog.start(MilliSeconds::secs(6));
+        // The start-up trace pauses around every step, so it runs without
+        // the watchdog; nothing can stop the watchdog once it's started.
+        if !startup::tracing() {
+            watchdog.start(MilliSeconds::secs(6));
+        }
         watchdog.feed();
 
         // mcu device registers
@@ -1403,7 +1411,9 @@ impl BoardBuilder {
 
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
-        
+        startup::set_clock(clocks.sysclk().raw());
+        startup::begin(startup::Step::Indicators);
+
         let mut delay: DelayUs<TIM3> = device_peripherals.TIM3.delay(&clocks);
 
         let mut sclk_led_enable: Pin<'B', 13, Output> = sclk_led_enable.into_floating_input(&mut gpio_cr.gpiob_crh).into_push_pull_output(&mut gpio_cr.gpiob_crh);
@@ -1440,6 +1450,7 @@ impl BoardBuilder {
         watchdog.feed();
     
 
+        startup::begin(startup::Step::Serial);
         dynamic_gpio_pins.gpio5.make_interrupt_source(&mut afio);
         dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::RisingFalling);
         dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
@@ -1456,19 +1467,27 @@ impl BoardBuilder {
             &clocks,
         );
 
+        startup::begin(startup::Step::Rtc);
         self.internal_rtc = Some(Rtc::new(device_peripherals.RTC, &mut backup_domain)); // TODO: make sure LSE on and running?
 
 
+        startup::begin(startup::Step::Usb);
         BoardBuilder::setup_usb(usb_pins, &mut gpio_cr, device_peripherals.USB, &clocks);
+        startup::usb_ready();
         usb_serial_send("{\"status\":\"usb started up\"}\n", &mut delay);
 
+        startup::begin(startup::Step::Storage);
         let delay2: DelayUs<TIM2> = device_peripherals.TIM2.delay(&clocks);
 
         #[cfg(feature = "storage-sdcard")]
         let storage: Option<Storage> = {
-            watchdog.start(MilliSeconds::secs(24));
+            if !startup::tracing() {
+                watchdog.start(MilliSeconds::secs(24));
+            }
             let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
-            watchdog.start(MilliSeconds::secs(6));
+            if !startup::tracing() {
+                watchdog.start(MilliSeconds::secs(6));
+            }
             match result {
                 Ok(storage) => Some(storage),
                 Err(hardware_error) => {
@@ -1495,6 +1514,7 @@ impl BoardBuilder {
             
         }
 
+        startup::begin(startup::Step::ExternalAdcPower);
         self.external_adc = Some(ExternalAdc::new(external_adc_pins));
         self.external_adc.as_mut().unwrap().disable(&mut delay);
 
@@ -1516,6 +1536,7 @@ impl BoardBuilder {
         watchdog.feed();
         
 
+        startup::begin(startup::Step::I2c1);
         defmt::println!("unhang I2C1 if hung");
 
         let mut scl1 = i2c1_pins
@@ -1556,6 +1577,7 @@ impl BoardBuilder {
 
         // defmt::println!("skipping unhang I2C2 if hung");
 
+        startup::begin(startup::Step::I2c2);
         defmt::println!("unhang I2C2 if hung");
 
         let mut scl2 = i2c2_pins
@@ -1594,6 +1616,7 @@ impl BoardBuilder {
             BoardBuilder::setup_i2c2(i2c2_pins, &mut gpio_cr, device_peripherals.I2C2, &clocks);
         defmt::println!("set up i2c2 done");
 
+        startup::begin(startup::Step::I2cScan);
         defmt::println!("i2c1 scanning...");
 
         for addr in 0x00_u8..0x7F {
@@ -1634,6 +1657,7 @@ impl BoardBuilder {
         watchdog.feed();
 
         // configure external ADC
+        startup::begin(startup::Step::ExternalAdc);
         self.external_adc.as_mut().unwrap().configure(&mut i2c1);
 
         self.i2c1 = Some(i2c1);
@@ -1643,10 +1667,12 @@ impl BoardBuilder {
         // then Board would have ownership of the feature object, and make changes to the the registers (say through shutdown) through the interface of that struct
 
         // build the power control
+        startup::begin(startup::Step::PowerCycle);
         let mut power_control = Some(PowerControl::new(power_pins)).unwrap();
         power_control.cycle_5v(&mut delay);
 
         // build the internal adc
+        startup::begin(startup::Step::InternalAdc);
         let internal_adc_configuration =
             InternalAdcConfiguration::new(internal_adc_pins, device_peripherals.ADC1);
         let mut internal_adc = internal_adc_configuration.build(&clocks);
@@ -1655,6 +1681,7 @@ impl BoardBuilder {
         internal_adc.enable(&mut delay);
         self.internal_adc = Some(internal_adc);
 
+        startup::begin(startup::Step::Peripherals);
         self.rgb_led = Some(build_rgb_led(
             rgb_led_pins,
             device_peripherals.TIM1,
