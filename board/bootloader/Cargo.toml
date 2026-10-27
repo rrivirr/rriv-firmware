@@ -1,0 +1,20 @@
+[package]
+name = "bootloader"
+# The bootloader's own version (`info` reports it). Bump it whenever the
+# bootloader binary changes; CI checks (scripts/check-bootloader-version.sh).
+version = "1.0.0"
+edition = "2021"
+description = "RRIV USB (CDC) bootloader"
+
+[dependencies]
+cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
+usb-device = "0.2.9"
+usbd-serial = "0.1.1"
+defmt = "1.0.1"
+rtt-target = { version = "0.6.1", features = ["defmt"] }
+rriv_boot = { path = "../rriv_boot" }
+
+[dependencies.stm32f1xx-hal]
+version = "0.10.0"
+features = ["rt", "stm32f103", "high"]
