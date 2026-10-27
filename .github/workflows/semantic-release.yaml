@@ -64,26 +64,98 @@ jobs:
       run: cargo build --release
       working-directory: board/app
     
-    - name: Upload binaries to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: board/target/thumbv7m-none-eabi/release/app
-        asset_name: rriv-firmware.elf
-        tag: ${{ needs.release.outputs.new-release-git-tag }}
-        overwrite: true
-
     - name: Cargo build debug
       run: cargo build
       working-directory: board/app
-    
-    - name: Upload binaries to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: board/target/thumbv7m-none-eabi/debug/app
-        asset_name: rriv-firmware-debug.elf
-        tag: ${{ needs.release.outputs.new-release-git-tag }}
-        overwrite: true
-          
 
+    # `file#label`: the release page shows the label; downloads keep the file
+    # name (rrivctl and rriv-api look assets up by name).
+    - name: Upload binaries to release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.release.outputs.new-release-git-tag }}
+      run: |
+        mkdir -p out
+        cp board/target/thumbv7m-none-eabi/release/app out/rriv-firmware.elf
+        cp board/target/thumbv7m-none-eabi/debug/app out/rriv-firmware-debug.elf
+        gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+          "out/rriv-firmware.elf#rriv-firmware.elf: app for boards without the bootloader (probe flash)" \
+          "out/rriv-firmware-debug.elf#rriv-firmware-debug.elf: debug build of that app (probe flash)"
+
+
+
+  signed:
+    name: Publish signed images
+    if: ${{ needs.release.outputs.new-release-git-tag }}
+    runs-on: ubuntu-latest
+    needs: release
+    # Vault's firmware-release role only accepts tokens from this environment;
+    # its protection rules (branches, reviewers) gate the signing key.
+    environment: firmware-release
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      TAG: ${{ needs.release.outputs.new-release-git-tag }}
+      RELEASE_PUBLIC_KEY: board/keys/release.key.pub
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.release.outputs.new-release-git-tag }}
+
+    - name: Check for the release public key
+      run: |
+        if [ ! -f "$RELEASE_PUBLIC_KEY" ]; then
+          echo "::error::$RELEASE_PUBLIC_KEY isn't committed, so no signed images can be published (see board/keys/README.md)."
+          exit 1
+        fi
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        targets: thumbv7m-none-eabi
+        components: llvm-tools
+
+    # Everything, rriv_image included, is compiled before the key is read, so
+    # no build script runs while the key is in the job.
+    - name: Build
+      run: scripts/build-signed-release.sh build "$RELEASE_PUBLIC_KEY" release
+
+    # exportEnv off: the key is only this step's output, passed to the one
+    # step below, never an environment variable for the rest of the job.
+    - name: Read the signing key from Vault
+      id: vault
+      uses: hashicorp/vault-action@v3
+      with:
+        url: https://vault.rriv.org:8200
+        method: jwt
+        path: github-actions
+        role: firmware-release
+        jwtGithubAudience: rriv-vault
+        exportEnv: false
+        secrets: secret/data/firmware-signing private_key | FIRMWARE_SIGNING_KEY
+
+    # The key goes to rriv_image on stdin: no file, and nothing else runs.
+    - name: Sign
+      env:
+        SIGNING_KEY: ${{ steps.vault.outputs.FIRMWARE_SIGNING_KEY }}
+      run: |
+        printf '%s\n' "$SIGNING_KEY" | scripts/build-signed-release.sh sign "$TAG" /dev/stdin release
+
+    - name: Package
+      run: scripts/build-signed-release.sh package "$TAG" "$RELEASE_PUBLIC_KEY" release
+
+    - name: Upload signed images to release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        cd release
+        gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+          "rriv-firmware-signed.bin#rriv-firmware-signed.bin: install over USB (web or rrivctl firmware update)" \
+          "rriv-firmware-combined.bin#rriv-firmware-combined.bin: bootloader + app, one probe flash for boards without the bootloader" \
+          "rriv-firmware-signed.elf#rriv-firmware-signed.elf: the signed image's app as an ELF (no header), for debugging and decoding its logs" \
+          "rriv-bootloader.bin#rriv-bootloader.bin: the bootloader, release key (probe flash)" \
+          "rriv-bootloader.elf#rriv-bootloader.elf: the bootloader's ELF, for debugging" \
+          "release.json#release.json: versions, sizes and SHA-256 of these files" \
+          "SHA256SUMS#SHA256SUMS: checksums (sha256sum -c SHA256SUMS)"
