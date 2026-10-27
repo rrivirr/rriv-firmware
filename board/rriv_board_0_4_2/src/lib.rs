@@ -1301,7 +1301,7 @@ impl BoardBuilder {
             #[allow(static_mut_refs)]
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
-                .product("RRIV Data Logger")
+                .product("RRIV Datalogger")
                 .serial_number(uid_string)
                 .device_class(USB_CLASS_CDC)
                 .build();
