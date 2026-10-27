@@ -38,9 +38,15 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
                             gitref = found_ref;
                         }
 
+                        // The version the image was signed with, so this matches
+                        // what the bootloader reports; the git tag for an app
+                        // flashed without the bootloader.
                         let mut firmware_version = "none";
                         if let Some(found_ver) = option_env!("FIRMWARE_VERSION") {
                             firmware_version = found_ver;
+                        }
+                        if let Some(signed) = board.image_version() {
+                            firmware_version = signed;
                         }
 
                         let response = json!({
@@ -58,6 +64,19 @@ pub fn get_board(board: &mut impl RRIVBoard, payload: BoardGetPayload) {
                     }
                     "eeprom" => {
                         board.dump_eeprom();
+                    }
+                    "startup" => {
+                        let report = board.startup_report();
+                        let response = json!({
+                            "startup": {
+                                "previous_completed": report.stopped_at.is_none(),
+                                "stopped_at": report.stopped_at,
+                                "failed_startups": report.failed_startups,
+                                "reset_cause": report.reset_cause,
+                                "traced": report.traced,
+                            }
+                        });
+                        responses::send_json(board, response);
                     }
                     _ => {
                         responses::send_command_response_message(
