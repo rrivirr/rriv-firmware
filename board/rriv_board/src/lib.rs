@@ -92,6 +92,22 @@ pub trait RRIVBoard: Send {
     fn dump_eeprom(&mut self);
     fn get_uid(&mut self) -> [u8; 12];
     fn set_serial_number(&mut self, serial_number: [u8;5]) -> bool;
+    /// Ask the bootloader to stay in update mode, then reset. Doesn't return
+    /// on hardware.
+    fn reboot_into_bootloader(&mut self);
+    /// Reset the MCU once USB has had time to deliver the last reply. Doesn't
+    /// return on hardware.
+    fn restart(&mut self);
+    /// Restart with the start-up trace on for that one start-up.
+    fn restart_with_startup_trace(&mut self);
+    fn startup_report(&mut self) -> StartupReport;
+    /// The version in the app's signed image header, when it runs behind the
+    /// RRIV bootloader; None otherwise.
+    fn image_version(&self) -> Option<&'static str> {
+        None
+    }
+    /// Blank the stored serial number (all 0xFF), so a new one can be set.
+    fn clear_serial_number(&mut self);
     fn get_serial_number(&mut self) -> [u8;5];
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format
