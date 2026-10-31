@@ -344,6 +344,38 @@ pub struct DeviceGetPayload {
     pub action: Value,
 }
 
+/// `{"object":"datalogger","action":"reset"}`: default datalogger settings and
+/// no sensors, keeping the serial number, then restart.
+#[derive(Serialize, Deserialize)]
+pub struct DataloggerResetPayload {
+    pub object: Value,
+    pub action: Value,
+}
+
+/// `{"object":"device","action":"reset","serial_number":"00003"}`: blank the
+/// serial number, default datalogger settings and no sensors, then restart.
+/// The serial number must be the board's own, so it isn't sent by accident.
+#[derive(Serialize, Deserialize)]
+pub struct DeviceResetPayload {
+    pub object: Value,
+    pub action: Value,
+    pub serial_number: Option<Value>,
+}
+
+/// `{"object":"board","action":"diagnostic"}`: restart with the start-up trace.
+#[derive(Serialize, Deserialize)]
+pub struct BoardDiagnosticPayload {
+    pub object: Value,
+    pub action: Value,
+}
+
+/// `{"object":"board","action":"bootloader"}`: restart into the bootloader.
+#[derive(Serialize, Deserialize)]
+pub struct BoardBootloaderPayload {
+    pub object: Value,
+    pub action: Value,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SensorCalibratePointPayload {
     pub object: Value,
@@ -509,6 +541,10 @@ pub enum CommandPayload {
     TelemeterGet,
     DeviceSetSerialNumber(DeviceSetSerialNumberPayload),
     DeviceGet(DeviceGetPayload),
+    BoardBootloader(BoardBootloaderPayload),
+    DataloggerReset(DataloggerResetPayload),
+    DeviceReset(DeviceResetPayload),
+    BoardDiagnostic(BoardDiagnosticPayload),
 }
 
 // errors to use in refactor

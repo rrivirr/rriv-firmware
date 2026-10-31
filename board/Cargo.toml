@@ -1,5 +1,5 @@
 [workspace]
-members = ["app", "rriv_board", "rriv_board_0_4_2"]
+members = ["app", "bootloader", "rriv_boot", "rriv_board", "rriv_board_0_4_2"]
 resolver = "2"
 
 [workspace.package]

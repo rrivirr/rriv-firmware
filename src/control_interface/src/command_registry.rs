@@ -44,7 +44,10 @@ pub enum CommandType {
     BoardSignal3v3BoostLow = 35,
     DeviceSetSerialNumber = 40,
     DeviceGet = 41,
-    Unknown = 42, // !!! `Unknown` needs to be the last command, its value is used to get the number of commands see CommandRegistry::new !!!
+    BoardBootloader = 42,
+    DeviceReset = 43,
+    BoardDiagnostic = 44,
+    Unknown = 45, // !!! `Unknown` needs to be the last command, its value is used to get the number of commands see CommandRegistry::new !!!
 }
 
 impl CommandType {
@@ -94,6 +97,9 @@ impl CommandType {
             ("serial","send", "") => CommandType::BoardSerialSend,
             ("device","set", "") => CommandType::DeviceSetSerialNumber,
             ("device","get", "") => CommandType::DeviceGet,
+            ("board","bootloader", "") => CommandType::BoardBootloader,
+            ("device","reset", "") => CommandType::DeviceReset,
+            ("board","diagnostic", "") => CommandType::BoardDiagnostic,
             _ => CommandType::Unknown,
         }
     }

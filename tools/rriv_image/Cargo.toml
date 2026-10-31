@@ -1,0 +1,12 @@
+[package]
+name = "rriv_image"
+version = "0.1.0"
+edition = "2021"
+description = "Sign RRIV app images for the bootloader and make signing keys"
+
+# A host tool: kept out of the board workspace, which builds for the MCU.
+[workspace]
+
+[dependencies]
+rriv_boot = { path = "../../board/rriv_boot" }
+salty = { version = "0.3", default-features = false }

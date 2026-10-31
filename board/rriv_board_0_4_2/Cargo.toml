@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 rriv_board = { path = "../rriv_board" } 
+rriv_boot = { path = "../rriv_boot" }
 util = { path = " ../../../../src/util" }
 embedded-hal = "0.2.7"
 nb = "1"

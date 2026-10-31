@@ -11,14 +11,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # The bootloader version check builds the base branch too.
+        fetch-depth: 0
     
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@nightly
       with:
         targets: thumbv7m-none-eabi
+        components: llvm-tools
 
     - name: Cargo build
       run: cargo build --release
       working-directory: board/app
-    
-        
+
+    - name: Build signed images (development key)
+      run: scripts/build-signed-release.sh all "pr-${{ github.event.pull_request.number }}" board/keys/dev.key board/keys/dev.key.pub release
+
+    - name: Check the bootloader version was bumped
+      run: scripts/check-bootloader-version.sh "$(git merge-base HEAD "origin/${{ github.base_ref }}")"

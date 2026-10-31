@@ -141,7 +141,9 @@ fn get_command_payload(
         CommandType::DataloggerGet => {
                 parse_command_to_payload!(DataloggerGetPayload, CommandPayload::DataloggerGet, command_cstr);
             }
-        CommandType::DataloggerReset => todo!(),
+        CommandType::DataloggerReset => {
+                parse_command_to_payload!(DataloggerResetPayload, CommandPayload::DataloggerReset, command_cstr);
+            },
         CommandType::DataloggerSetMode => {
                 parse_command_to_payload!(DataloggerSetModeCommandPayload, CommandPayload::DataloggerSetModeCommandPayload, command_cstr);
             },
@@ -223,6 +225,15 @@ fn get_command_payload(
             }
         CommandType::DeviceGet => {
                 parse_command_to_payload!(DeviceGetPayload, CommandPayload::DeviceGet, command_cstr);
+            }
+        CommandType::BoardBootloader => {
+                parse_command_to_payload!(BoardBootloaderPayload, CommandPayload::BoardBootloader, command_cstr);
+            }
+        CommandType::DeviceReset => {
+                parse_command_to_payload!(DeviceResetPayload, CommandPayload::DeviceReset, command_cstr);
+            }
+        CommandType::BoardDiagnostic => {
+                parse_command_to_payload!(BoardDiagnosticPayload, CommandPayload::BoardDiagnostic, command_cstr);
             }
         CommandType::Unknown => todo!(),
     }

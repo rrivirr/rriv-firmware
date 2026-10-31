@@ -18,9 +18,16 @@ fn macos_copy_memory_x() {
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    // With the `with-bootloader` feature the app is linked after the 48 KiB
+    // bootloader (see board/rriv_boot); otherwise at the start of flash.
+    let memory: &[u8] = if env::var_os("CARGO_FEATURE_WITH_BOOTLOADER").is_some() {
+        include_bytes!("memory-bootloader.x")
+    } else {
+        include_bytes!("memory.x")
+    };
     File::create(out.join("memory.x"))
         .unwrap()
-        .write_all(include_bytes!("memory.x"))
+        .write_all(memory)
         .unwrap();
     println!("cargo:rustc-link-search={}", out.display());
 
@@ -29,6 +36,7 @@ fn macos_copy_memory_x() {
     // here, we ensure the build script is only re-run when
     // `memory.x` is changed.
     println!("cargo:rerun-if-changed=memory.x");
+    println!("cargo:rerun-if-changed=memory-bootloader.x");
 
     // Specify linker arguments.
 
