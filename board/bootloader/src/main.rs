@@ -25,6 +25,10 @@
 //! - `check_app`, `jump_to_app`: check the installed app and start it.
 //!
 //! Register-level work (clock, CRC unit, flash, option bytes) is in `hw`.
+//!
+//! Changes here need a new `version` in this crate's Cargo.toml. If the app
+//! comes to rely on new behaviour here (rather than in `rriv_boot`), also
+//! raise `min_bootloader` in `board/app/Cargo.toml`.
 #![no_std]
 #![no_main]
 

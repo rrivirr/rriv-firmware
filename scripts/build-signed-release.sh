@@ -8,7 +8,9 @@
 #   rriv-bootloader.bin/.elf    the bootloader, embedding <public-key-file>
 #   rriv-firmware-combined.bin  bootloader padded to 48 KiB + signed app, for a
 #                               probe flash at 0x08000000 (migration, new boards)
-#   release.json                versions, sizes and SHA-256 of each file
+#   release.json                versions (the app's, the bootloader built with it
+#                               and the oldest bootloader the app needs), sizes
+#                               and SHA-256 of each file
 #   SHA256SUMS
 #
 # usage:
@@ -29,7 +31,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '14,18p' "$0" >&2
+  sed -n '16,20p' "$0" >&2
   exit 2
 }
 
@@ -45,10 +47,30 @@ RRIV_IMAGE="$RRIV_IMAGE_TARGET_DIR/release/rriv_image"
 # Intermediate: the unsigned app, removed by `package`.
 UNSIGNED=rriv-firmware-unsigned.bin
 
+# The bootloader's version, and the oldest bootloader the app works with.
+bootloader_version() { sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/board/bootloader/Cargo.toml" | head -n 1; }
+min_bootloader() { sed -n 's/^min_bootloader = "\(.*\)"$/\1/p' "$ROOT/board/app/Cargo.toml" | head -n 1; }
+
+# A release must not need a newer bootloader than the one it ships.
+check_min_bootloader() {
+  local min current
+  min="$(min_bootloader)"
+  current="$(bootloader_version)"
+  if ! [[ "$min" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "board/app/Cargo.toml: min_bootloader must be x.y.z (got \"$min\")" >&2
+    exit 1
+  fi
+  if [ "$(printf '%s\n%s\n' "$min" "$current" | sort -V | tail -n 1)" != "$current" ]; then
+    echo "min_bootloader $min is newer than the bootloader being built ($current)" >&2
+    exit 1
+  fi
+}
+
 build() {
   local pub out
   pub="$(abs "$1")"
   out="$(out_dir "$2")"
+  check_min_bootloader
   if [ -z "${OBJCOPY:-}" ]; then
     local llvm
     llvm="$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/^host: //p')/bin/llvm-objcopy"
@@ -101,14 +123,16 @@ package() {
     cat "$out/rriv-firmware-signed.bin"
   } >"$out/rriv-firmware-combined.bin"
 
-  local bootloader_version
-  bootloader_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/board/bootloader/Cargo.toml" | head -n 1)"
+  check_min_bootloader
+  local bootloader_version min_bootloader
+  bootloader_version="$(bootloader_version)"
+  min_bootloader="$(min_bootloader)"
   cd "$out"
   local files=(rriv-firmware-signed.bin rriv-firmware-signed.elf rriv-bootloader.bin rriv-bootloader.elf rriv-firmware-combined.bin)
   sha256sum "${files[@]}" >SHA256SUMS
   {
-    printf '{\n  "version": "%s",\n  "bootloader_version": "%s",\n  "public_key": "%s",\n  "files": {\n' \
-      "$version" "$bootloader_version" "$(tr -d '[:space:]' <"$pub")"
+    printf '{\n  "version": "%s",\n  "bootloader_version": "%s",\n  "min_bootloader": "%s",\n  "public_key": "%s",\n  "files": {\n' \
+      "$version" "$bootloader_version" "$min_bootloader" "$(tr -d '[:space:]' <"$pub")"
     local last=$((${#files[@]} - 1)) i file sep
     for i in "${!files[@]}"; do
       file=${files[$i]}

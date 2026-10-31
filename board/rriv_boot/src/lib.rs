@@ -3,6 +3,11 @@
 //! Both sides must agree on these values, so they live in one dependency-free
 //! crate whose logic is unit-tested on the host (`cargo test -p rriv_boot
 //! --target <host triple>`).
+//!
+//! Boards keep the bootloader they were flashed with. If the app comes to
+//! rely on something changed here (a value, the start-up log, the memory
+//! map), raise `min_bootloader` in `board/app/Cargo.toml` so releases aren't
+//! offered to boards whose bootloader predates it.
 #![cfg_attr(not(test), no_std)]
 
 /// STM32F103RE: 512 KiB flash in 2 KiB pages, 64 KiB RAM.

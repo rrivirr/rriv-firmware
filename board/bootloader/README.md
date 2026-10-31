@@ -286,6 +286,22 @@ pull requests run `scripts/check-bootloader-version.sh`, which builds the
 bootloader at the base and at the PR and fails if the binary differs but the
 version doesn't.
 
+Each release's `release.json` carries two bootloader versions:
+
+| Field | Meaning | Set by |
+|---|---|---|
+| `bootloader_version` | the bootloader built with this release | `version` above |
+| `min_bootloader` | the oldest bootloader the app works with | `min_bootloader` under `[package.metadata.rriv]` in `board/app/Cargo.toml` |
+
+Raise `min_bootloader` only when the app starts relying on something a newer
+bootloader does (a new boot-request value, start-up log layout, memory map),
+not whenever the bootloader changes: boards keep their bootloader, and only a
+probe can update it. A new header format doesn't need it, since older
+bootloaders refuse that image at its first block (`unsupported_header`).
+`scripts/build-signed-release.sh` refuses a `min_bootloader` newer than the
+bootloader it builds, and `board/rriv_boot/src/lib.rs` repeats when to raise
+it. rriv-api marks the releases a board's bootloader is too old for.
+
 ## Build
 
 ```sh
