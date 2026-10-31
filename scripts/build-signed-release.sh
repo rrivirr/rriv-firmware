@@ -18,6 +18,11 @@
 #   scripts/build-signed-release.sh sign <version> <key-file> <out-dir>
 #   scripts/build-signed-release.sh package <version> <public-key-file> <out-dir>
 #   scripts/build-signed-release.sh all <version> <key-file> <public-key-file> <out-dir>
+#   scripts/build-signed-release.sh verify-upload <version> <repo> <public-key-file> <out-dir>
+#
+# verify-upload runs after <out-dir> is uploaded: it downloads the release's
+# files with gh, compares each with its local copy and verifies the signed
+# image, so what rriv-api, the web app and rrivctl get is what was built.
 #
 # The stages are separate so the private key is only needed by `sign`, which
 # runs nothing but the already-built rriv_image (no compiling: build scripts
@@ -31,7 +36,7 @@
 set -euo pipefail
 
 usage() {
-  sed -n '16,20p' "$0" >&2
+  sed -n '16,21p' "$0" >&2
   exit 2
 }
 
@@ -46,6 +51,7 @@ RRIV_IMAGE_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/tools/rriv_image/target}"
 RRIV_IMAGE="$RRIV_IMAGE_TARGET_DIR/release/rriv_image"
 # Intermediate: the unsigned app, removed by `package`.
 UNSIGNED=rriv-firmware-unsigned.bin
+RELEASE_FILES=(rriv-firmware-signed.bin rriv-firmware-signed.elf rriv-bootloader.bin rriv-bootloader.elf rriv-firmware-combined.bin)
 
 # The bootloader's version, and the oldest bootloader the app works with.
 bootloader_version() { sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/board/bootloader/Cargo.toml" | head -n 1; }
@@ -128,7 +134,7 @@ package() {
   bootloader_version="$(bootloader_version)"
   min_bootloader="$(min_bootloader)"
   cd "$out"
-  local files=(rriv-firmware-signed.bin rriv-firmware-signed.elf rriv-bootloader.bin rriv-bootloader.elf rriv-firmware-combined.bin)
+  local files=("${RELEASE_FILES[@]}")
   sha256sum "${files[@]}" >SHA256SUMS
   {
     printf '{\n  "version": "%s",\n  "bootloader_version": "%s",\n  "min_bootloader": "%s",\n  "public_key": "%s",\n  "files": {\n' \
@@ -145,6 +151,25 @@ package() {
   echo "release $version (bootloader $bootloader_version) written to $out"
 }
 
+verify_upload() {
+  local version=$1 repo=$2 pub out published file
+  pub="$(abs "$3")"
+  out="$(out_dir "$4")"
+  [ -x "$RRIV_IMAGE" ] || { echo "run the build stage first ($RRIV_IMAGE missing)" >&2; exit 1; }
+  published="$(mktemp -d)"
+  # shellcheck disable=SC2064 # expanded now: it's a local, gone when the trap runs
+  trap "rm -rf '$published'" EXIT
+  for file in "${RELEASE_FILES[@]}" release.json SHA256SUMS; do
+    gh release download "$version" --repo "$repo" --dir "$published" --pattern "$file"
+    if ! cmp "$out/$file" "$published/$file"; then
+      echo "$file on release $version doesn't match the one built" >&2
+      exit 1
+    fi
+  done
+  "$RRIV_IMAGE" verify "$pub" "$published/rriv-firmware-signed.bin"
+  echo "release $version on $repo matches $out"
+}
+
 case "${1:-}" in
   build) [ "$#" -eq 3 ] || usage; build "$2" "$3" ;;
   sign) [ "$#" -eq 4 ] || usage; sign "$2" "$3" "$4" ;;
@@ -156,5 +181,6 @@ case "${1:-}" in
     (sign "$2" "$key" "$5")
     (package "$2" "$4" "$5")
     ;;
+  verify-upload) [ "$#" -eq 5 ] || usage; verify_upload "$2" "$3" "$4" "$5" ;;
   *) usage ;;
 esac

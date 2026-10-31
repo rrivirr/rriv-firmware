@@ -159,3 +159,10 @@ jobs:
           "rriv-bootloader.elf#rriv-bootloader.elf: the bootloader's ELF, for debugging" \
           "release.json#release.json: versions, sizes and SHA-256 of these files" \
           "SHA256SUMS#SHA256SUMS: checksums (sha256sum -c SHA256SUMS)"
+
+    # rriv-api and the install tools trust what's on the release, so this is
+    # where a bad upload has to be caught.
+    - name: Verify the published release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: scripts/build-signed-release.sh verify-upload "$TAG" "$GITHUB_REPOSITORY" "$RELEASE_PUBLIC_KEY" release
