@@ -21,6 +21,18 @@ pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 12;
 pub const EEPROM_TOTAL_SENSOR_SLOTS: usize = 2;
 
 
+/// How the board's last start-ups went (see `rriv_board_0_4_2::startup`).
+pub struct StartupReport {
+    /// The step the last unfinished start-up stopped at, if one didn't finish.
+    pub stopped_at: Option<&'static str>,
+    /// Start-ups in a row that didn't finish before this one.
+    pub failed_startups: u8,
+    /// What reset the board before this start-up.
+    pub reset_cause: &'static str,
+    /// This start-up ran with the start-up trace on.
+    pub traced: bool,
+}
+
 pub trait RXProcessor: Send + Sync {
     fn process_byte(&mut self, byte: u8);
 }
@@ -80,6 +92,22 @@ pub trait RRIVBoard: Send {
     fn dump_eeprom(&mut self);
     fn get_uid(&mut self) -> [u8; 12];
     fn set_serial_number(&mut self, serial_number: [u8;5]) -> bool;
+    /// Ask the bootloader to stay in update mode, then reset. Doesn't return
+    /// on hardware.
+    fn reboot_into_bootloader(&mut self);
+    /// Reset the MCU once USB has had time to deliver the last reply. Doesn't
+    /// return on hardware.
+    fn restart(&mut self);
+    /// Restart with the start-up trace on for that one start-up.
+    fn restart_with_startup_trace(&mut self);
+    fn startup_report(&mut self) -> StartupReport;
+    /// The version in the app's signed image header, when it runs behind the
+    /// RRIV bootloader; None otherwise.
+    fn image_version(&self) -> Option<&'static str> {
+        None
+    }
+    /// Blank the stored serial number (all 0xFF), so a new one can be set.
+    fn clear_serial_number(&mut self);
     fn get_serial_number(&mut self) -> [u8;5];
     
     // fn subsystem(&mut self, ...)  //TODO: custom commands to the board subsystems, use a tokenized rather than json format

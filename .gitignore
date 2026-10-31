@@ -6,3 +6,4 @@ board/target/
 node_modules
 
 src/datalogger/src/drivers/atlas_stuff/
+src/Cargo.lock

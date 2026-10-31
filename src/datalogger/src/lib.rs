@@ -62,6 +62,18 @@ pub struct DataLogger {
 const SENSOR_DRIVER_INIT_VALUE: core::option::Option<Box<dyn drivers::types::SensorDriver>> = None;
 const CALIBRATION_INIT_VALUE: core::option::Option<Box<[types::CalibrationPair]>> = None;
 
+/// Default datalogger settings and empty sensor slots in the EEPROM. Takes
+/// about 4 s; the caller restarts the board so the running state matches.
+fn reset_configuration(board: &mut impl RRIVBoard) {
+    board.run_loop_iteration();
+    board.store_datalogger_settings(&DataloggerSettings::new().get_bytes());
+    for slot in 0..EEPROM_TOTAL_SENSOR_SLOTS {
+        // Each slot takes about 0.3 s to write; keep the watchdog fed.
+        board.run_loop_iteration();
+        board.store_sensor_settings(slot as u8, &bytes::empty_sensor_settings());
+    }
+}
+
 impl DataLogger {
     pub fn new() -> Self {
         DataLogger {
@@ -1377,6 +1389,42 @@ impl DataLogger {
             #[allow(unused)] // the payload doesn't contain anything useful
             CommandPayload::DeviceGet(device_get_payload) => {
                 self.device_get(board);
+            }
+            CommandPayload::BoardBootloader(_) => {
+                responses::send_command_response_message(board, "restarting into bootloader");
+                board.reboot_into_bootloader();
+            }
+            CommandPayload::DataloggerReset(_) => {
+                // Default settings and no sensors; the serial number stays.
+                reset_configuration(board);
+                responses::send_command_response_message(board, "datalogger reset, restarting");
+                board.restart();
+            }
+            CommandPayload::DeviceReset(payload) => {
+                // A factory wipe: blank serial number, default settings, no
+                // sensors. The board then needs provisioning again.
+                let serial_number = board.get_serial_number();
+                let confirmed = match payload.serial_number {
+                    Some(Value::String(ref given)) => given.as_bytes() == serial_number,
+                    _ => false,
+                };
+                if !confirmed {
+                    responses::send_command_response_error(
+                        board,
+                        "serial_number must be this board's serial number",
+                        "",
+                    );
+                    return;
+                }
+                board.run_loop_iteration();
+                board.clear_serial_number();
+                reset_configuration(board);
+                responses::send_command_response_message(board, "device reset, restarting");
+                board.restart();
+            }
+            CommandPayload::BoardDiagnostic(_) => {
+                responses::send_command_response_message(board, "restarting with the start-up trace");
+                board.restart_with_startup_trace();
             }
         }
     }

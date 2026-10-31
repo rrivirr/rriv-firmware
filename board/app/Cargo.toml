@@ -3,6 +3,13 @@ name = "app"
 version = "0.1.0"
 edition = "2021"
 
+# The oldest bootloader (`version` in board/bootloader/Cargo.toml) this app
+# works with, published as `min_bootloader` in each release's release.json.
+# Raise it only when the app starts relying on something a newer bootloader
+# does, not whenever the bootloader changes (see board/bootloader/README.md).
+[package.metadata.rriv]
+min_bootloader = "1.0.0"
+
 [dependencies]
 embedded-hal = "0.2.7"
 nb = "1"
@@ -26,4 +33,6 @@ features = ["rt", "stm32f103", "high"]
 default = ["storage-sdcard"]
 storage-sdcard = ["rriv_board_0_4_2/storage-sdcard"] 
 storage-disabled = ["rriv_board_0_4_2/storage-disabled"] 
+# Link the app at 0x0800C200, after the RRIV bootloader and its image header (board/bootloader).
+with-bootloader = []
 
