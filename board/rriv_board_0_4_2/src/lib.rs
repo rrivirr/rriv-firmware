@@ -1466,6 +1466,12 @@ impl BoardBuilder {
 
         #[cfg(feature = "storage-sdcard")]
         let storage: Option<Storage> = {
+            // PB13 is SPI2 SCK, the SD card's clock line. sclk_led_enable reconfigured it above
+            // as a plain GPIO output for the boot LED, which overrides the alternate-function
+            // mode set in pin_groups::build, so no clock reaches the card and it is reported
+            // missing. Hand the pin back to SPI2 before talking to the card.
+            let _sck = sclk_led_enable.into_alternate_push_pull(&mut gpio_cr.gpiob_crh);
+
             watchdog.start(MilliSeconds::secs(24));
             let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
             watchdog.start(MilliSeconds::secs(6));
