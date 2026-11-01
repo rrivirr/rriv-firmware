@@ -1397,6 +1397,10 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
+        // Turn on the switched 3V rail. into_push_pull_output() leaves PC5 low, and the
+        // SD card is powered from this rail, so storage::build fails if this is skipped.
+        power_pins.enable_3v.set_high();
+
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
         
