@@ -1,3 +1,10 @@
+# [1.14.0-preview-sdi12-pwm-groundwater.18](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.17...v1.14.0-preview-sdi12-pwm-groundwater.18) (2026-11-01)
+
+
+### Bug Fixes
+
+* sdcard disable sd card not detected ([f3044d3](https://github.com/rrivirr/rriv-firmware/commit/f3044d31ed674cc2bfe4d4d19f325349c1bf25a5))
+
 # [1.14.0-preview-sdi12-pwm-groundwater.17](https://github.com/rrivirr/rriv-firmware/compare/v1.14.0-preview-sdi12-pwm-groundwater.16...v1.14.0-preview-sdi12-pwm-groundwater.17) (2026-10-09)
 
 
