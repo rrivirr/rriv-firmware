@@ -260,6 +260,11 @@ impl SensorDriver for GroundwaterFlowSDI12 {
             }
         }
     }
+    
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
 }
 
 impl GroundwaterFlowSDI12 {

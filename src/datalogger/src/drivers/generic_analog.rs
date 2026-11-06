@@ -112,6 +112,11 @@ impl SensorDriver for GenericAnalog {
         Ok(())
     }
 
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
+
 }
 
 impl GenericAnalog {

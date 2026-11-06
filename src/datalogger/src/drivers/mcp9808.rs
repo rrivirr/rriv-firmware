@@ -189,11 +189,19 @@ impl SensorDriver for MCP9808TemperatureDriver {
        defmt::println!("fit {}", self.special_config.calibration_offset);    
        Ok(())
     }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
         
 }
 
 const AMBIENT_TEMPERATURE_REGISTER_ADDRESS: u8 = 0x05;
 
+//
+// Implementation of constructors for driver objects
+//
 impl MCP9808TemperatureDriver {
     pub fn new(
         general_config: SensorDriverGeneralConfiguration,

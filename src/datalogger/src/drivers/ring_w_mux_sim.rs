@@ -378,4 +378,9 @@ impl SensorDriver for RingMuxTemperatureDriver {
 
     fn update_actuators(&mut self, _board: &mut dyn rriv_board::RRIVBoard) {
     }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
 }

@@ -6,6 +6,7 @@ compile_error!("feature \"storage-sdcard\" and feature \"storage-disabled\" cann
 extern crate alloc;
 
 use alloc::boxed::Box;
+use chrono::DateTime;
 use i2c_hung_fix::try_unhang_i2c;
 use one_wire_bus::crc::crc8;
 
@@ -31,8 +32,8 @@ use cortex_m::{
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use stm32f1xx_hal::flash::ACR;
-use stm32f1xx_hal::gpio::{Alternate, Edge, ExtiPin, Pin, PushPull};
-use stm32f1xx_hal::pac::{DWT, I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
+use stm32f1xx_hal::gpio::{Edge, ExtiPin, Pin, PushPull};
+use stm32f1xx_hal::pac::{I2C1, I2C2, TIM2, TIM4, TIM5, USART2, USB};
 use stm32f1xx_hal::serial::StopBits;
 use stm32f1xx_hal::spi::Spi;
 use stm32f1xx_hal::{
@@ -61,7 +62,7 @@ use rriv_board::{
     EEPROM_TOTAL_SENSOR_SLOTS, GPIO_INTERRUPT_FUNCTION, RRIVBoard, RXProcessor, SerialRxPeripheral
 };
 
-use ds323x::{DateTimeAccess, Ds323x, NaiveDateTime};
+use ds323x::{DateTimeAccess, Ds323x};
 use stm32f1xx_hal::rtc::Rtc;
 
 use one_wire_bus::{Address, OneWire, SearchState};
@@ -394,12 +395,10 @@ impl RRIVBoard for Board {
     fn set_epoch(&mut self, epoch: i64) {
         let i2c1 = mem::replace(&mut self.i2c1, None);
         let mut ds3231 = Ds323x::new_ds3231(i2c1.unwrap());
-        let millis = epoch * 1000;
-        // DateTime::from_timestamp_millis(micros);
-        let datetime = NaiveDateTime::from_timestamp_millis(millis);
+        let datetime = DateTime::from_timestamp(epoch, 0);
         // defmt::println!("{:?}", datetime);
         if let Some(datetime) = datetime {
-            match ds3231.set_datetime(&datetime) {
+            match ds3231.set_datetime(&datetime.naive_utc()) {
                 Ok(_) => {}
                 Err(err) => defmt::println!("Error set epoch {:?}", defmt::Debug2Format(&err)),
             }
@@ -522,15 +521,6 @@ impl RRIVBoard for Board {
 
     fn get_serial_number(&mut self) -> [u8; rriv_board::EEPROM_SERIAL_NUMBER_SIZE] {
         eeprom::read_serial_number_from_eeprom(self)
-    }
-    
-    fn rs485_send(&mut self, message: &[u8]) {
-        cortex_m::interrupt::free(|_cs| {
-            for char in message.iter() {
-            // rprintln!("char {}", char);
-            _ = nb::block!( components::uart5::write(char.clone()));   
-            }
-        });
     }
 
     fn query_internal_adc(&mut self, channel: u8) -> u16 {
@@ -984,6 +974,7 @@ fn EXTI2() {
         let now = now / SYSCLK_MHZ; // convert to microseconds
         cortex_m::interrupt::free(|_cs| {
             unsafe {
+                #[allow(static_mut_refs)]
                 if let Some(gpio_interrupt_function) = &mut GPIO_INTERRUPT_FUNCTION {
                     gpio_interrupt_function(now, gpio_state);
                 }
@@ -994,7 +985,9 @@ fn EXTI2() {
 }
 
 fn usb_interrupt(cs: &CriticalSection) {
+    #[allow(static_mut_refs)]
     let usb_dev = unsafe { USB_DEVICE.as_mut().unwrap() };
+    #[allow(static_mut_refs)]
     let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
 
     if !usb_dev.poll(&mut [serial]) {
@@ -1084,7 +1077,6 @@ impl BoardBuilder {
     pub fn build(self) -> Board {
         let mut gpio_cr = self.gpio_cr.unwrap();
 
-        let mut one_wire = None;
         let mut internal_adc = self.internal_adc.unwrap();
         let pin = internal_adc.take_port_5();
         let mut pin = pin.into_dynamic(&mut gpio_cr.gpioc_crl);
@@ -1092,11 +1084,12 @@ impl BoardBuilder {
         pin.make_open_drain_output(&mut gpio_cr.gpioc_crl);
         let pin: OneWirePin<Pin<'C', 0, Dynamic>> = OneWirePin { pin };
 
-        one_wire = match OneWire::new(pin) {
+        let one_wire = match OneWire::new(pin) {
             Ok(one_wire) => Some(one_wire),
             Err(e) => {
                 defmt::println!("{:?} bad one wire bus", defmt::Debug2Format(&e));
-                panic!("bad one wire bus");
+                None
+                // panic!("bad one wire bus");
             }
         };
 
@@ -1213,7 +1206,10 @@ impl BoardBuilder {
 
             USB_BUS = Some(bus);
 
-            USB_SERIAL = Some(SerialPort::new(USB_BUS.as_ref().unwrap()));
+            USB_SERIAL = {
+                #[allow(static_mut_refs)]
+                Some(SerialPort::new(USB_BUS.as_ref().unwrap()))
+            };
 
             let uid: [u8;12] = Uid::fetch().bytes();
             
@@ -1244,13 +1240,14 @@ impl BoardBuilder {
                         defmt::println!("{}", formatted); // TODO: this uses format!
                         uid_string = formatted;
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // doesn't matter
                     },
                 }
 
             defmt::println!("{}", uid_string);
 
+            #[allow(static_mut_refs)]
             let usb_dev = UsbDeviceBuilder::new(USB_BUS.as_ref().unwrap(), UsbVidPid(0x0483, 0x29))
                 .manufacturer("RRIV")
                 .product("RRIV Data Logger")
@@ -1343,7 +1340,6 @@ impl BoardBuilder {
 
         let mut pwr = device_peripherals.PWR;
         let mut backup_domain = rcc.bkp.constrain(device_peripherals.BKP, &mut pwr);
-
 
         let uid = Uid::fetch();
         defmt::println!("uid: {:X}", uid.bytes());
@@ -1690,9 +1686,6 @@ impl BoardBuilder {
         watchdog.feed();
 
 
-        // defmt::println!("setting up RS485 serial b");
-        // setup_serialb(device_peripherals.UART5, &clocks);
-
         self.clocks = Some(clocks);
         // setup GPIO5 as EXTI2 interrupt PD2
 
@@ -1723,6 +1716,7 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
 pub fn usb_serial_send(string: &str, delay: &mut impl DelayMs<u16>) {
     cortex_m::interrupt::free(|_cs| {
         // USB
+        #[allow(static_mut_refs)]
         let serial = unsafe { USB_SERIAL.as_mut().unwrap() };
         let bytes = string.as_bytes();
         let mut written = 0;

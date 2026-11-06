@@ -200,7 +200,7 @@ impl SensorDriver for RingTemperatureDriver {
 
         if pairs[0].values.len() < 6 {
             // TODO: check for zeros, not for len().  len is constant
-            // rprint!("not enough values to calibrate");
+            defmt::warn!("not enough values to calibrate");
             return Err(());
         }
 
@@ -221,5 +221,10 @@ impl SensorDriver for RingTemperatureDriver {
             // };
         }
         Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
     }
 }

@@ -127,6 +127,11 @@ impl SensorDriver for AtlasEC {
             self.measured_parameter_values[0] = f64::MAX;
         }
     }
+
+    #[allow(unused_variables)]
+    fn update(&mut self, values: serde_json::Value) -> Result<(),&'static str> {
+        Err("update not implemented")
+    }
 }
 
 

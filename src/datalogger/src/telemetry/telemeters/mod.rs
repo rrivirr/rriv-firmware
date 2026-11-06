@@ -4,8 +4,6 @@ use crate::drivers::resources::gpio::GpioRequest;
 
 pub mod lorawan;
 pub mod telemeter;
-pub mod modbus;
-
 
 
 pub trait Telemeter {

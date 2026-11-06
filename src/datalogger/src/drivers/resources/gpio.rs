@@ -47,8 +47,7 @@ pub struct GpioRequest {
     gpio7 : bool,
     gpio8 : bool,
     usart : bool,
-    usart_count : u8,
-    rs485: bool,
+    usart_count : u8
 }
 
 
@@ -64,9 +63,7 @@ impl GpioRequest {
             gpio7: false, 
             gpio8: false, 
             usart: false,
-            usart_count : 0,
-            rs485: false        
-        }
+            usart_count : 0        }
     }
 
     #[allow(unused)]
@@ -80,7 +77,6 @@ impl GpioRequest {
         if self.gpio7 != request.gpio7 { return true }
         if self.gpio8 != request.gpio8 { return true }
         if self.usart != request.usart { return true }
-        if self.rs485 != request.rs485 { return true }
         return false;
     }
 
@@ -95,12 +91,6 @@ impl GpioRequest {
         check_gpio!(self, gpio2, request);
         check_gpio!(self, gpio3, request);
         check_gpio!(self, gpio4, request);
-
-        if self.rs485 {
-           if request.gpio5 || request.gpio6 {
-                return Err("rs485 in use, conflicts with gpio5 and gpio6");
-            } 
-        }
 
         check_gpio!(self, gpio5, request);
         check_gpio!(self, gpio6, request);
@@ -134,14 +124,7 @@ impl GpioRequest {
             self.gpio8 = true;
         }
 
-        if request.rs485 == true {
-            if self.gpio5 || self.gpio6 {
-                return Err("gpio5 and gpio6 must both be free to use usart");
-            }
-            self.rs485 = true;
-            self.gpio5 = true;
-            self.gpio6 = true;
-        }
+
         Ok(())
     }
 
@@ -204,14 +187,6 @@ impl GpioRequest {
         self.usart = true;
     }
 
-    pub fn use_rs485(&mut self){
-        self.rs485 = true;
-    }
-
-    pub fn rs485(&self) -> bool{
-        return self.rs485;
-    }
-
     pub fn release(&mut self, request: GpioRequest) {
         release_gpio!(self, gpio1, request);
         release_gpio!(self, gpio2, request);
@@ -230,11 +205,6 @@ impl GpioRequest {
             }
         }
 
-        if request.rs485 {
-            self.rs485 = false;
-            self.gpio5 = false;
-            self.gpio6 = false;
-        }
     }
 }
 
