@@ -13,6 +13,19 @@ use stm32f1xx_hal::{flash::FlashExt, pac::TIM3, timer::DelayMs};
 
 pub mod prelude;
 
+// The storage backends are mutually exclusive. `--features storage-disabled` alone
+// still leaves the default `storage-sdcard` on, so catch that at compile time.
+#[cfg(all(feature = "storage-sdcard", feature = "storage-disabled"))]
+compile_error!(
+    "features `storage-sdcard` and `storage-disabled` are mutually exclusive; \
+     build with `--no-default-features --features storage-disabled`"
+);
+
+#[cfg(not(any(feature = "storage-sdcard", feature = "storage-disabled")))]
+compile_error!(
+    "no storage backend selected; enable either `storage-sdcard` or `storage-disabled`"
+);
+
 use stm32f1xx_hal::{pac, prelude::*};
 
 extern crate rriv_board;

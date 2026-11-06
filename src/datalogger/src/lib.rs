@@ -138,6 +138,9 @@ impl DataLogger {
         let sdi12_gpio = 5;
         self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
 
+        let sdi12_gpio = 5;
+        self.sdi12_service = Some(sdi12_service::Sdi12RxProcessor::new(sdi12_gpio));
+
         // read all the sensors from EEPROM
         let registry = get_registry();
         let mut sensor_config_bytes = bytes::empty_sensors_settings();

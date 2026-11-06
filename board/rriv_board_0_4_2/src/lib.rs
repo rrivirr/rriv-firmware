@@ -1350,7 +1350,7 @@ impl BoardBuilder {
         // get an unsafe handle on our CS pin so we can flash it
         // and an unsafe hanlde on our PWM pin so we can pass to the config functions
         // this steal has to happen before we set up the GPIO pins otherwise things get reset wrongly
-        let (mut cs, sclk_led_enable, pwm_pin) = unsafe {
+        let (mut cs, mut sclk_led_enable, pwm_pin) = unsafe {
             let device_peripherals_steal: pac::Peripherals = pac::Peripherals::steal();
             let mut gpioc = device_peripherals_steal.GPIOC.split();
             let cs = gpioc.pc8;
@@ -1393,13 +1393,9 @@ impl BoardBuilder {
             usb_pins,
         ) = pin_groups::build(pins, &mut gpio_cr);
 
+        // Turn on the switched 3V rail. into_push_pull_output() leaves PC5 low, and the
+        // SD card is powered from this rail, so storage::build fails if this is skipped.
         power_pins.enable_3v.set_high();
-        // delay.delay_ms(500_u32);
-        // power_pins.enable_3v.set_low();
-        // delay.delay_ms(500_u32);
-        // power_pins.enable_3v.set_high();
-        // delay.delay_ms(1000_u32);
-
 
         let clocks =
             BoardBuilder::setup_clocks(&mut oscillator_control_pins, rcc.cfgr, &mut flash.acr);
@@ -1466,6 +1462,12 @@ impl BoardBuilder {
 
         #[cfg(feature = "storage-sdcard")]
         let storage: Option<Storage> = {
+            // PB13 is SPI2 SCK, the SD card's clock line. sclk_led_enable reconfigured it above
+            // as a plain GPIO output for the boot LED, which overrides the alternate-function
+            // mode set in pin_groups::build, so no clock reaches the card and it is reported
+            // missing. Hand the pin back to SPI2 before talking to the card.
+            let _sck = sclk_led_enable.into_alternate_push_pull(&mut gpio_cr.gpiob_crh);
+
             watchdog.start(MilliSeconds::secs(24));
             let result = storage::build(spi2_pins, device_peripherals.SPI2, clocks, delay2);
             watchdog.start(MilliSeconds::secs(6));
