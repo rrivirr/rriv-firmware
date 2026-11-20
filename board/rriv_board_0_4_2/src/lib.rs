@@ -778,6 +778,9 @@ impl RRIVBoard for Board {
         }
     }
 
+    // Change: any gpio_pin function needs to support pin 9 and 10, which would be the remapped i2c2 pins
+    // if these pins are not available beacuse are in fact i2c2, then we have to return false.
+
     fn read_gpio_pin(&mut self, pin: u8) -> Result<bool, ()> {
         match pin {
             // 1 => {
@@ -908,6 +911,8 @@ impl RRIVBoard for Board {
     }
     
 
+    // Change: modify enable interrupt to reflect the EXTI line that I2C2 SDA is on
+    // OR make this more generic so that it's hard coded to a single EXTI line
     fn enable_interrupt(&self){
         unsafe { NVIC::unmask(pac::Interrupt::EXTI2) };
     }
@@ -963,6 +968,7 @@ fn USB_LP_CAN_RX0() {
     });
 }
 
+// Change to be handler for the right EXTI line for I2C2 sda1. i.e. EXTI1() or the right one.
 #[interrupt]
 fn EXTI2() {
     let exti = unsafe { &*pac::EXTI::ptr() };
@@ -1099,7 +1105,7 @@ impl BoardBuilder {
         Board {
             uid: self.uid.unwrap(),
             i2c1: self.i2c1,
-            i2c2: self.i2c2.unwrap(),
+            i2c2: self.i2c2.unwrap(),  // Change: allow board to have an empty i2c, and handle that in board layer.
             delay: self.delay.unwrap(),
             precise_delay: self.precise_delay.unwrap(),
             gpio: self.gpio.unwrap(),
@@ -1376,6 +1382,7 @@ impl BoardBuilder {
         let gpiod = device_peripherals.GPIOD.split();
 
         // Set up pins
+        // Change: we would like a build flag to append the pins normally in i2c2 into dynamic_gpio_pins instead
         let (pins, mut gpio_cr) = Pins::build(gpioa, gpiob, gpioc, gpiod, &mut afio.mapr);
         let (
             external_adc_pins,
@@ -1439,7 +1446,8 @@ impl BoardBuilder {
 
         watchdog.feed();
     
-
+        // Change: make this use the right pin for our I2C2 remap functionality
+        // either hard code, or make it more generic.
         dynamic_gpio_pins.gpio5.make_interrupt_source(&mut afio);
         dynamic_gpio_pins.gpio5.trigger_on_edge(&mut device_peripherals.EXTI, Edge::RisingFalling);
         dynamic_gpio_pins.gpio5.enable_interrupt(&mut device_peripherals.EXTI);
@@ -1556,6 +1564,7 @@ impl BoardBuilder {
 
         // defmt::println!("skipping unhang I2C2 if hung");
 
+        // Change: skip initialization of i2c2 (we'll need to pass an empty Option for this struct to our board because we aren't building it)
         defmt::println!("unhang I2C2 if hung");
 
         let mut scl2 = i2c2_pins
@@ -1619,6 +1628,7 @@ impl BoardBuilder {
         watchdog.feed();
         
 
+        // Change: don't scan i2c2 because we don't have it built.
         defmt::println!("i2c2 scanning...");
         for addr in 0x00_u8..0x7F {
             // Write the empty array and check the slave response.
